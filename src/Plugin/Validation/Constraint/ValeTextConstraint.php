@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\vale\Plugin\Validation\Constraint;
+
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Validation\Attribute\Constraint;
+use Symfony\Component\Validator\Constraint as SymfonyConstraint;
+
+/**
+ * Refuses a field value that has an error-level Vale finding.
+ */
+#[Constraint(
+  id: 'ValeText',
+  label: new TranslatableMarkup('Vale prose check', [], ['context' => 'Validation']),
+)]
+class ValeTextConstraint extends SymfonyConstraint {
+
+  /**
+   * The message for one finding.
+   *
+   * @var string
+   */
+  public $message = '@rule: @message (line @line: "@match")';
+
+}

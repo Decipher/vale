@@ -1,0 +1,99 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\vale\Plugin\Validation\Constraint;
+
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Field\FieldItemListInterface;
+use Drupal\vale\Alert;
+use Drupal\vale\AlertCollector;
+use Drupal\vale\FieldLinter;
+use Drupal\vale\PublishState;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\ConstraintValidator;
+
+/**
+ * Lints an opted-in field and turns error-level findings into violations.
+ */
+final class ValeTextConstraintValidator extends ConstraintValidator implements ContainerInjectionInterface {
+
+  /**
+   * Constructs a ValeTextConstraintValidator.
+   *
+   * @param \Drupal\vale\FieldLinter $fieldLinter
+   *   The field linter.
+   * @param \Drupal\vale\AlertCollector $alertCollector
+   *   The alert collector.
+   * @param \Drupal\vale\PublishState $publishState
+   *   The publish state service.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The config factory.
+   */
+  public function __construct(
+    protected FieldLinter $fieldLinter,
+    protected AlertCollector $alertCollector,
+    protected PublishState $publishState,
+    protected ConfigFactoryInterface $configFactory,
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container): static {
+    return new self(
+      $container->get('vale.field_linter'),
+      $container->get('vale.alert_collector'),
+      $container->get('vale.publish_state'),
+      $container->get('config.factory'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function validate(mixed $value, Constraint $constraint): void {
+    if (!$value instanceof FieldItemListInterface || !$constraint instanceof ValeTextConstraint) {
+      return;
+    }
+    $entity = $value->getEntity();
+    $field = $value->getFieldDefinition()->getName();
+
+    // In publish-only mode an error stops only the save that publishes, and
+    // ValeTree reports it on the entity rather than here. JSON:API drops
+    // field violations for fields a PATCH does not name, so a PATCH that only
+    // publishes would never see them. A component is never published by its
+    // own save, so its errors are reported when its host is published.
+    $publish_only = (bool) $this->configFactory->get('vale.settings')->get('publish_only');
+    $publishing = $publish_only && !$this->publishState->isComponent($entity) && $this->publishState->isBeingPublished($entity);
+
+    foreach ($this->fieldLinter->lint($value) as $delta => $result) {
+      $this->alertCollector->markLinted();
+      if (!$result->isChecked()) {
+        $this->alertCollector->addUnchecked($result->reason);
+        continue;
+      }
+      $errors = new FindingList();
+      foreach ($result->alerts as $alert) {
+        if ($alert->level !== Alert::ERROR || ($publish_only && !$publishing)) {
+          $this->alertCollector->add($entity, $field, $delta, $alert);
+        }
+        elseif (!$publish_only) {
+          $errors->add($constraint->message, [
+            '@rule' => $alert->rule,
+            '@message' => $alert->message,
+            '@line' => $alert->line,
+            '@match' => $alert->match,
+          ]);
+        }
+      }
+      if (!$errors->isEmpty()) {
+        [$template, $arguments] = $errors->message();
+        $this->context->buildViolation($template, $arguments)->atPath($delta . '.value')->addViolation();
+      }
+    }
+  }
+
+}
