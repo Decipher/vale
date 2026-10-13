@@ -1,0 +1,21 @@
+{
+  "name": "@drupal/vale",
+  "version": "0.1.0",
+  "description": "Lints the prose in text fields with the Vale style linter.",
+  "license": "GPL-2.0-or-later",
+  "contributors": [],
+  "scripts": {
+    "lint-spell": "cspell --no-progress",
+    "build": "echo Would run build"
+  },
+  "engines": {
+    "npm": ">=8.19.4",
+    "node": ">=18.20.8"
+  },
+  "dependencies": {
+    "is-positive": "^3.1.0"
+  },
+  "devDependencies": {
+    "cspell": "^8.19.4"
+  }
+}

@@ -1,0 +1,17 @@
+name-template: '$RESOLVED_VERSION'
+tag-template: '$RESOLVED_VERSION'
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
+# A resolver with no `when` condition matches every change, so this is the
+# increment applied to a release that no other category resolves.
+categories:
+  - type: 'version-resolver'
+    semver-increment: 'minor'
+template: |
+  ## What's new since $PREVIOUS_TAG
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_VERSION
+
+  $CONTRIBUTORS

@@ -1,0 +1,69 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Test
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # The checkout below names the commit that triggered the run. Only a push
+    # to this repository carries a commit meant for deployment; a pull
+    # request, fork or not, does not.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-26.04
+
+    permissions:
+      contents: read
+
+    env:
+      DEPLOY_USER_NAME: ${{ secrets.DEPLOY_USER_NAME }}
+      DEPLOY_USER_EMAIL: ${{ secrets.DEPLOY_USER_EMAIL }}
+      DEPLOY_REMOTE: ${{ secrets.DEPLOY_REMOTE }}
+      DEPLOY_PROCEED: ${{ secrets.DEPLOY_PROCEED }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # `workflow_run` resolves refs against the default branch, so the
+          # tested commit is named explicitly.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@6b84f2e793b32fa0b03a379cadadec75cc539391 # v2
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: unnecessary
+          config: |
+            Host *
+              StrictHostKeyChecking no
+
+      - name: Deploy to Remote
+        env:
+          # Optional repository variable. Falls back to the branch that
+          # triggered the build, and then to the default branch.
+          DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # A tag push reports the tag name as the head branch, which would
+          # deploy the release to a remote branch named after the tag. A
+          # branch can share a name with an unrelated tag, so match the tags
+          # on the commit that triggered the run rather than the name alone.
+          if git tag --points-at "${HEAD_SHA}" | grep -Fxq "${HEAD_BRANCH}"; then
+            HEAD_BRANCH=''
+          fi
+
+          DEPLOY_BRANCH="${DEPLOY_BRANCH:-${HEAD_BRANCH:-${DEFAULT_BRANCH}}}" .devtools/deploy

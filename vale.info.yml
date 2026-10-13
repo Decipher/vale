@@ -1,0 +1,6 @@
+name: Vale
+type: module
+description: Lints the prose in text fields with the Vale style linter.
+package: Content authoring
+core_version_requirement: ^10.3 || ^11
+php: 8.3

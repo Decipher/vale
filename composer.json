@@ -1,0 +1,21 @@
+{
+    "name": "drupal/vale",
+    "description": "Lints the prose in text fields with the Vale style linter.",
+    "type": "drupal-module",
+    "license": "GPL-2.0-or-later",
+    "homepage": "https://www.drupal.org/project/vale",
+    "support": {
+        "issues": "https://www.drupal.org/project/issues/vale",
+        "source": "https://git.drupalcode.org/project/vale"
+    },
+    "authors": [
+        {
+            "name": "Stuart Clark",
+            "homepage": "https://www.drupal.org/u/deciphered",
+            "role": "Maintainer"
+        }
+    ],
+    "require": {
+        "php": ">=8.3"
+    }
+}
