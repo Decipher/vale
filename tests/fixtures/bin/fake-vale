@@ -1,0 +1,89 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * @file
+ * Stands in for the Vale binary in tests, so tests run without Vale.
+ *
+ * It flags "very" as an error (Demo.Very), "delve" as a warning (Demo.Delve)
+ * and "really" as a suggestion (Demo.Really), like the Demo style beside it.
+ * Marker words change how it behaves:
+ * - FAKE_TIMEOUT: sleeps past any time limit.
+ * - FAKE_CRASH: fails the way Vale fails, with exit code 2.
+ * - FAKE_GARBAGE: prints output that is not JSON.
+ *
+ * Each lint run appends the --path value to calls.log beside the
+ * configuration, so a test can count runs.
+ */
+
+declare(strict_types=1);
+
+$options = [];
+$command = NULL;
+foreach (array_slice($argv, 1) as $argument) {
+  if (preg_match('/^--([A-Za-z-]+)(?:=(.*))?$/s', $argument, $matches)) {
+    $options[$matches[1]] = $matches[2] ?? TRUE;
+  }
+  else {
+    $command = $argument;
+  }
+}
+
+if (isset($options['version'])) {
+  print "vale version 0.0.0-fake\n";
+  exit(0);
+}
+
+$config = is_string($options['config'] ?? NULL) ? $options['config'] : '.vale.ini';
+$styles = dirname($config) . '/styles';
+
+if ($command === 'ls-config') {
+  print json_encode(['Paths' => [$styles]]);
+  exit(0);
+}
+
+$path = is_string($options['path'] ?? NULL) ? $options['path'] : 'stdin.txt';
+$text = stream_get_contents(STDIN);
+file_put_contents(dirname($config) . '/calls.log', $path . "\n", FILE_APPEND);
+
+if (str_contains($text, 'FAKE_TIMEOUT')) {
+  sleep(30);
+}
+if (str_contains($text, 'FAKE_CRASH')) {
+  print json_encode(['Line' => 0, 'Path' => $path, 'Text' => 'Fake failure.', 'Code' => 'E100', 'Span' => 0]);
+  exit(2);
+}
+if (str_contains($text, 'FAKE_GARBAGE')) {
+  print "This is not JSON.\n";
+  exit(0);
+}
+
+$rules = [
+  'very' => ['Demo.Very', 'error', "Avoid '%s'.", 'Intensifiers weaken prose.', 'https://example.com/very'],
+  'delve' => ['Demo.Delve', 'warning', "'%s' is an AI tell.", '', ''],
+  'really' => ['Demo.Really', 'suggestion', "Consider removing '%s'.", '', ''],
+];
+$alerts = [];
+$errors = FALSE;
+foreach (explode("\n", $text) as $index => $line) {
+  preg_match_all('/\b(very|delve|really)\b/i', $line, $found, PREG_OFFSET_CAPTURE);
+  foreach ($found[1] as [$match, $offset]) {
+    [$check, $severity, $message, $description, $link] = $rules[strtolower($match)];
+    $alerts[] = [
+      'Action' => ['Name' => '', 'Params' => NULL],
+      // Vale counts columns in characters, not bytes.
+      'Span' => [mb_strlen(substr($line, 0, $offset)) + 1, mb_strlen(substr($line, 0, $offset)) + mb_strlen($match)],
+      'Check' => $check,
+      'Description' => $description,
+      'Link' => $link,
+      'Message' => sprintf($message, $match),
+      'Severity' => $severity,
+      'Match' => $match,
+      'Line' => $index + 1,
+    ];
+    $errors = $errors || $severity === 'error';
+  }
+}
+
+print json_encode($alerts ? [$path => $alerts] : new stdClass(), JSON_PRETTY_PRINT);
+exit($errors ? 1 : 0);

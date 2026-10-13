@@ -1,0 +1,33 @@
+services:
+  cache.vale:
+    class: Drupal\Core\Cache\CacheBackendInterface
+    tags:
+      - { name: cache.bin }
+    factory: ['@cache_factory', 'get']
+    arguments: [vale]
+  logger.channel.vale:
+    parent: logger.channel_base
+    arguments: ['vale']
+  # What the site has installed: the binary, its version, the configuration
+  # and the rules it loads. The runner and the status report both read it.
+  vale.environment:
+    class: Drupal\vale\ValeEnvironment
+    arguments:
+      - '@cache.vale'
+      - '@config.factory'
+      - '@datetime.time'
+  Drupal\vale\ValeEnvironment: '@vale.environment'
+  vale.runner:
+    class: Drupal\vale\ValeRunner
+    arguments:
+      - '@vale.environment'
+      - '@cache.vale'
+      - '@config.factory'
+      - '@datetime.time'
+      - '@logger.channel.vale'
+  Drupal\vale\ValeRunnerInterface: '@vale.runner'
+  # Hook classes. Drupal 11.1 and later register these by themselves.
+  # Drupal 10 does not, and its procedural hooks in vale.module and
+  # vale.install fetch them from here.
+  Drupal\vale\Hook\ValeRequirements:
+    autowire: true

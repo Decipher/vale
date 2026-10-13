@@ -1,0 +1,6 @@
+extends: existence
+message: "'%s' is an AI tell."
+level: warning
+ignorecase: true
+tokens:
+  - delve

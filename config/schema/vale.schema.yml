@@ -1,0 +1,22 @@
+vale.settings:
+  type: config_object
+  label: 'Vale settings'
+  mapping:
+    formats:
+      type: sequence
+      label: 'File extension for each text format'
+      sequence:
+        type: string
+        label: 'Extension'
+    default_extension:
+      type: string
+      label: 'File extension for text formats that are not listed'
+    timeout:
+      type: integer
+      label: 'Time limit for one Vale run, in seconds'
+    publish_only:
+      type: boolean
+      label: 'Refuse error-level findings only when content is published'
+    workspace_mode:
+      type: string
+      label: 'Workspace publish check: block, advise or off'
