@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Traits;
 
+use Drupal\KernelTests\KernelTestBase;
+use Drupal\user\UserInterface;
+
 /**
  * Points a test site at a Vale binary and a copy of the Demo style.
  *
@@ -30,8 +33,28 @@ trait ValeTestTrait {
     $fixtures = dirname(__DIR__, 2) . '/fixtures';
     $this->valeDirectory = sys_get_temp_dir() . '/vale-test-' . bin2hex(random_bytes(6));
     $this->copyDirectory($fixtures . '/vale', $this->valeDirectory);
-    $this->setSetting('vale_binary', $binary ?? $fixtures . '/bin/fake-vale');
-    $this->setSetting('vale_config', $this->valeDirectory . '/.vale.ini');
+    $this->setValeSetting('vale_binary', $binary ?? $fixtures . '/bin/fake-vale');
+    $this->setValeSetting('vale_config', $this->valeDirectory . '/.vale.ini');
+  }
+
+  /**
+   * Sets a setting for the code under test.
+   *
+   * A kernel test runs that code in its own process. A functional test runs
+   * it on the test site, which reads settings.php. Call setUpVale() after
+   * drupalLogin(): rewriting settings.php first makes the login check fail.
+   *
+   * @param string $name
+   *   The setting.
+   * @param mixed $value
+   *   Its value.
+   */
+  protected function setValeSetting(string $name, mixed $value): void {
+    if ($this instanceof KernelTestBase) {
+      $this->setSetting($name, $value);
+      return;
+    }
+    $this->writeSettings(['settings' => [$name => (object) ['value' => $value, 'required' => TRUE]]]);
   }
 
   /**
@@ -59,6 +82,25 @@ trait ValeTestTrait {
   protected function valeRuns(): array {
     $log = $this->valeDirectory . '/calls.log';
     return is_file($log) ? array_values(array_filter(explode("\n", (string) file_get_contents($log)))) : [];
+  }
+
+  /**
+   * Narrows a created user to a user.
+   *
+   * Drupal 10 types drupalCreateUser() as User|false and Drupal 11 types it
+   * as UserInterface, so a plain assertion fails static analysis on one.
+   *
+   * @param mixed $account
+   *   The created user.
+   *
+   * @return \Drupal\user\UserInterface
+   *   The user.
+   */
+  protected function asAccount(mixed $account): UserInterface {
+    if (!$account instanceof UserInterface) {
+      throw new \LogicException('The user was not created.');
+    }
+    return $account;
   }
 
   /**

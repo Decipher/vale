@@ -31,3 +31,5 @@ services:
   # vale.install fetch them from here.
   Drupal\vale\Hook\ValeRequirements:
     autowire: true
+  Drupal\vale\Hook\ValeFieldUiHooks:
+    autowire: true
