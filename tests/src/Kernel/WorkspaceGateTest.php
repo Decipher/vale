@@ -249,6 +249,8 @@ class WorkspaceGateTest extends KernelTestBase {
       'field_text' => 'FAKE_CRASH',
       'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.'])],
     ])->save();
+    // The report describes Live, so it refuses to be written here.
+    $this->assertSame('Switch to Live to check content for the report.', $this->container->get('vale.report_refresher')->refusal());
     $this->switchToLive();
 
     $this->publish();

@@ -214,6 +214,8 @@ class ValeRunnerTest extends KernelTestBase {
     $this->assertStringContainsString('not executable', $this->runner()->lint('Very.')->reason);
 
     $this->setUpVale();
+    $this->setSetting('vale_config', NULL);
+    $this->assertStringContainsString("\$settings['vale_config']", $this->runner()->lint('Very.')->reason);
     $this->setSetting('vale_config', $this->valeDirectory . '/missing.ini');
     $this->assertStringContainsString('cannot be read', $this->runner()->lint('Very.')->reason);
     $this->assertSame([], $this->valeRuns());
