@@ -88,3 +88,15 @@ services:
       - '@logger.channel.vale'
     tags:
       - { name: event_subscriber }
+  vale.finding_storage:
+    class: Drupal\vale\FindingStorage
+    arguments:
+      - '@database'
+      - '@datetime.time'
+  Drupal\vale\FindingStorage: '@vale.finding_storage'
+  Drupal\vale\Hook\ValeReportHooks:
+    arguments:
+      - '@vale.content_walker'
+      - '@vale.finding_storage'
+      - '@vale.publish_state'
+      - '@?workspaces.manager'

@@ -87,9 +87,10 @@ return RectorConfig::configure()
     '*/node_modules/*',
   ])
   ->withSkip([
-    // Form callbacks are stored with the form, and the form cache cannot
-    // serialize a closure, so they stay array callables.
-    ArrayToFirstClassCallableRector::class => ['*/src/Hook/ValeFormHooks.php'],
+    // Form and batch callbacks are stored, with the form or in the batch
+    // table, and a closure cannot be serialized, so they stay array
+    // callables.
+    ArrayToFirstClassCallableRector::class => ['*/src/Hook/ValeFormHooks.php', '*/src/ScanBatch.php'],
   ])
   // PHP version upgrade sets - modernizes syntax to PHP 8.3.
   // Includes all rules from PHP 5.3 through 8.3.

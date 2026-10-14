@@ -15,6 +15,7 @@ use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\FieldLinter;
 use Drupal\vale\Finding;
+use Drupal\vale\FindingStorage;
 use Drupal\vale\ValeEnvironment;
 use Drupal\vale\ValeInstaller;
 use Drush\Attributes as CLI;
@@ -41,6 +42,8 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    *   The entity field manager.
    * @param \Drupal\vale\ValeInstaller $valeInstaller
    *   The Vale installer.
+   * @param \Drupal\vale\FindingStorage $findingStorage
+   *   The finding storage for the content report.
    */
   public function __construct(
     private readonly ContentWalker $contentWalker,
@@ -48,6 +51,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     private readonly FieldLinter $fieldLinter,
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly ValeInstaller $valeInstaller,
+    private readonly FindingStorage $findingStorage,
   ) {
     parent::__construct();
   }
@@ -68,6 +72,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       $container->get('vale.field_linter'),
       $container->get('entity_field.manager'),
       $container->get('vale.installer'),
+      $container->get('vale.finding_storage'),
     );
   }
 
@@ -91,9 +96,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
   #[CLI\Command(name: 'vale:lint')]
   #[CLI\Argument(name: 'scope', description: 'An entity type and bundle, such as node:page. Leave it out to lint all content.')]
   #[CLI\Option(name: 'workspace', description: 'Lint only the revisions this workspace tracks, as they read in it.')]
+  #[CLI\Option(name: 'save', description: "Store the findings in the content report, replacing that scope's rows. Not with --workspace.")]
   #[CLI\Usage(name: 'drush vale:lint node:page', description: 'Lint the latest revision of every page, with its paragraphs.')]
   #[CLI\Usage(name: 'drush vale:lint --workspace=stage', description: 'Lint what the stage workspace would publish.')]
   #[CLI\Usage(name: 'drush vale:lint --format=json', description: 'Lint all content and print one JSON record per finding.')]
+  #[CLI\Usage(name: 'drush vale:lint --save', description: 'Lint all content and store the findings in the content report.')]
   #[CLI\FieldLabels(labels: [
     'host' => 'Host',
     'entity' => 'Entity',
@@ -115,7 +122,10 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     'text' => 'Text',
   ])]
   #[CLI\DefaultTableFields(fields: ['host', 'entity', 'field', 'line', 'level', 'rule', 'text'])]
-  public function lint(?string $scope = NULL, array $options = ['workspace' => self::REQ, 'format' => 'table']): CommandResult {
+  public function lint(
+    ?string $scope = NULL,
+    array $options = ['workspace' => self::REQ, 'save' => FALSE, 'format' => 'table'],
+  ): CommandResult {
     $reason = $this->valeEnvironment->unavailableReason();
     if ($reason !== NULL) {
       $this->logger()?->error('Vale could not be run. ' . $reason);
@@ -127,15 +137,26 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       if ($workspace !== NULL && $scope !== NULL) {
         throw new \InvalidArgumentException('Give either a bundle or --workspace, not both.');
       }
+      if ($workspace !== NULL && !empty($options['save'])) {
+        throw new \InvalidArgumentException('The report describes Live, so --save cannot be used with --workspace.');
+      }
       if ($workspace !== NULL) {
         $findings = $this->contentWalker->workspace($workspace);
       }
       elseif ($scope !== NULL) {
         [$entity_type, $bundle] = explode(':', $scope, 2) + [1 => ''];
         $findings = $this->contentWalker->bundle($entity_type, $bundle);
+        if (!empty($options['save'])) {
+          $this->findingStorage->clearBundle($entity_type, $bundle);
+          $this->findingStorage->add($findings);
+        }
       }
       else {
         $findings = $this->contentWalker->all();
+        if (!empty($options['save'])) {
+          $this->findingStorage->clearAll();
+          $this->findingStorage->add($findings);
+        }
       }
     }
     catch (\InvalidArgumentException $e) {
