@@ -1,2 +1,7 @@
 use vale check:
   title: 'Use the Vale check endpoint'
+view vale report:
+  title: 'View the prose findings report'
+scan content with vale:
+  title: 'Scan content with Vale'
+  restrict access: true

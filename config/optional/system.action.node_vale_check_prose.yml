@@ -1,0 +1,11 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - vale
+id: node_vale_check_prose
+label: 'Check prose with Vale'
+type: node
+plugin: vale_check_prose
+configuration: {  }

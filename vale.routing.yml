@@ -8,3 +8,23 @@ vale.check:
     _csrf_request_header_token: 'TRUE'
   options:
     no_cache: TRUE
+
+vale.report_scan:
+  path: '/admin/reports/vale/scan'
+  defaults:
+    _form: '\Drupal\vale\Form\ScanForm'
+    _title: 'Check content'
+  requirements:
+    _permission: 'scan content with vale'
+  options:
+    _admin_route: TRUE
+
+vale.report_export:
+  path: '/admin/reports/vale/export'
+  defaults:
+    _controller: '\Drupal\vale\Controller\ReportExportController::export'
+  requirements:
+    _permission: 'view vale report'
+  options:
+    _admin_route: TRUE
+    no_cache: TRUE

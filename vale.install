@@ -26,3 +26,60 @@ function vale_requirements(string $phase): array {
   $requirement['severity'] = $requirement['severity'] ? 0 : 1;
   return ['vale' => $requirement];
 }
+
+/**
+ * Implements hook_schema().
+ */
+function vale_schema(): array {
+  $string = static fn (string $description, int $length = 128): array => [
+    'type' => 'varchar',
+    'length' => $length,
+    'not null' => TRUE,
+    'default' => '',
+    'description' => $description,
+  ];
+  $integer = static fn (string $description): array => [
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => $description,
+  ];
+  return [
+    'vale_finding' => [
+      'description' => 'Findings for the Vale content report, one row per finding.',
+      'fields' => [
+        'fid' => ['type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'The row id.'],
+        'root_type' => $string('The entity type of the top-level entity the finding is in.', 32),
+        'root_id' => $string('The id of the top-level entity.'),
+        'root_bundle' => $string('The bundle of the top-level entity.'),
+        'root_label' => $string('The label of the top-level entity.', 255),
+        'entity_type' => $string('The entity type of the entity that holds the value.', 32),
+        'entity_id' => $string('The id of the entity that holds the value.'),
+        'bundle' => $string('The bundle of the entity that holds the value.'),
+        'label' => $string('The label of the entity that holds the value.', 255),
+        'field' => $string('The field name.'),
+        'delta' => $integer('The delta of the value.'),
+        'rule' => $string('The Vale rule, such as Microsoft.Contractions.', 255),
+        'level' => $string('error, warning, suggestion, or unchecked.', 16),
+        'message' => [
+          'type' => 'text',
+          'size' => 'normal',
+          'not null' => FALSE,
+          'description' => "The rule's message, or why the value was not checked.",
+        ],
+        'matched' => $string('The flagged text.', 255),
+        'line' => $integer('The line of the match.'),
+        'span_start' => $integer('The first column of the match.'),
+        'span_end' => $integer('The last column of the match.'),
+        'scanned' => $integer('When the finding was recorded, as a Unix timestamp.'),
+      ],
+      'primary key' => ['fid'],
+      'indexes' => [
+        'root' => ['root_type', 'root_id'],
+        'root_bundle' => ['root_type', 'root_bundle'],
+        'level' => ['level'],
+        'rule' => ['rule'],
+      ],
+    ],
+  ];
+}

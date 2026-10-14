@@ -10,12 +10,14 @@
 
 declare(strict_types=1);
 
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\LegacyHook;
 use Drupal\vale\Hook\ValeEntityHooks;
 use Drupal\vale\Hook\ValeFieldUiHooks;
 use Drupal\vale\Hook\ValeFormHooks;
+use Drupal\vale\Hook\ValeReportHooks;
 
 /**
  * Implements hook_form_FORM_ID_alter() for field_config_edit_form.
@@ -47,4 +49,28 @@ function vale_entity_bundle_field_info_alter(array &$fields, EntityTypeInterface
 #[LegacyHook]
 function vale_form_alter(array &$form, FormStateInterface $form_state, string $form_id): void {
   \Drupal::service(ValeFormHooks::class)->formAlter($form, $form_state, $form_id);
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+#[LegacyHook]
+function vale_entity_insert(EntityInterface $entity): void {
+  \Drupal::service(ValeReportHooks::class)->entityInsert($entity);
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+#[LegacyHook]
+function vale_entity_update(EntityInterface $entity): void {
+  \Drupal::service(ValeReportHooks::class)->entityUpdate($entity);
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+#[LegacyHook]
+function vale_entity_delete(EntityInterface $entity): void {
+  \Drupal::service(ValeReportHooks::class)->entityDelete($entity);
 }
