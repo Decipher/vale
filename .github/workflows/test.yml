@@ -169,6 +169,9 @@ jobs:
           php-version: ${{ matrix.php-version }}
           extensions: gd, sqlite, pdo_sqlite
           coverage: pcov
+          # setup-php loads php.ini-production, which compiles assert() out.
+          # Tests run with assertions, as Drupal's own CI does.
+          ini-values: zend.assertions=1
 
       # Disable Symfony deprecations helper for PHP 8.4+ until minor
       # versions of Drupal 10 and 11 fully support newer PHP versions.
