@@ -143,7 +143,8 @@ final readonly class CheckController implements ContainerInjectionInterface {
       return $this->error('This field is not checked by Vale.', 400);
     }
 
-    $result = $this->fieldLinter->lintText($field, $body['text'], $format);
+    // Text in an editor changes with every check, so the result is not kept.
+    $result = $this->fieldLinter->lintText($field, $body['text'], $format, FALSE);
     $rules = $result->alerts ? $this->valeEnvironment->rules() : [];
     $alerts = [];
     foreach ($result->alerts as $alert) {

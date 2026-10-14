@@ -40,36 +40,24 @@ class FindingStorage {
   ) {}
 
   /**
-   * Removes the rows of a bundle, before it is scanned again.
+   * Removes the rows that a scan did not refresh.
    *
-   * @param string $entity_type
-   *   The root entity type.
-   * @param string $bundle
-   *   The root bundle.
-   */
-  public function clearBundle(string $entity_type, string $bundle): void {
-    $this->database->delete(self::TABLE)
-      ->condition('root_type', $entity_type)
-      ->condition('root_bundle', $bundle)
-      ->execute();
-  }
-
-  /**
-   * Removes the rows of a bundle that a scan did not refresh.
-   *
-   * @param string $entity_type
-   *   The root entity type.
-   * @param string $bundle
-   *   The root bundle.
+   * @param string|null $entity_type
+   *   The root entity type, or NULL for every type.
+   * @param string|null $bundle
+   *   The root bundle, or NULL for every bundle.
    * @param int $before
    *   When the scan started, as a Unix timestamp.
    */
-  public function clearStale(string $entity_type, string $bundle, int $before): void {
-    $this->database->delete(self::TABLE)
-      ->condition('root_type', $entity_type)
-      ->condition('root_bundle', $bundle)
-      ->condition('scanned', $before, '<')
-      ->execute();
+  public function clearStale(?string $entity_type, ?string $bundle, int $before): void {
+    $delete = $this->database->delete(self::TABLE)->condition('scanned', $before, '<');
+    if ($entity_type !== NULL) {
+      $delete->condition('root_type', $entity_type);
+    }
+    if ($bundle !== NULL) {
+      $delete->condition('root_bundle', $bundle);
+    }
+    $delete->execute();
   }
 
   /**
@@ -169,27 +157,31 @@ class FindingStorage {
   }
 
   /**
-   * Gives the stored rows, newest scan first.
+   * Gives the stored rows, one at a time.
+   *
+   * The filters match as the report's do: the bundle and the level exactly,
+   * and the rule as part of its name.
    *
    * @param array{root_bundle?: string, level?: string, rule?: string} $filters
-   *   Exact values to filter on.
+   *   Values to filter on.
    *
-   * @return list<array<string, mixed>>
-   *   The rows.
+   * @return \Generator<int, array<string, mixed>>
+   *   The rows, ordered by root.
    */
-  public function rows(array $filters = []): array {
+  public function rows(array $filters = []): \Generator {
     $query = $this->database->select(self::TABLE, 'f')->fields('f');
-    foreach (array_intersect_key($filters, array_flip(['root_bundle', 'level', 'rule'])) as $column => $value) {
-      if ($value !== '') {
-        $query->condition('f.' . $column, $value);
+    foreach (['root_bundle', 'level'] as $column) {
+      if (($filters[$column] ?? '') !== '') {
+        $query->condition('f.' . $column, $filters[$column]);
       }
     }
-    $query->orderBy('f.root_type')->orderBy('f.root_id')->orderBy('f.fid');
-    $rows = [];
-    foreach ($query->execute() as $record) {
-      $rows[] = (array) $record;
+    if (($filters['rule'] ?? '') !== '') {
+      $query->condition('f.rule', '%' . $this->database->escapeLike($filters['rule']) . '%', 'LIKE');
     }
-    return $rows;
+    $query->orderBy('f.root_type')->orderBy('f.root_id')->orderBy('f.fid');
+    foreach ($query->execute() as $record) {
+      yield (array) $record;
+    }
   }
 
   /**

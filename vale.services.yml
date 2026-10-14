@@ -98,4 +98,15 @@ services:
       - '@vale.content_walker'
       - '@vale.finding_storage'
       - '@vale.publish_state'
+      - '@vale.report_refresher'
       - '@?workspaces.manager'
+  vale.report_refresher:
+    class: Drupal\vale\ReportRefresher
+    arguments:
+      - '@vale.content_walker'
+      - '@vale.finding_storage'
+      - '@vale.environment'
+      - '@queue'
+    tags:
+      - { name: needs_destruction }
+  Drupal\vale\ReportRefresher: '@vale.report_refresher'

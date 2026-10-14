@@ -185,6 +185,26 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests that fail_closed refuses a save Vale could not check.
+   */
+  public function testFailClosed(): void {
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $this->setSetting('vale_binary', NULL);
+    $violations = $this->violations($this->page(['field_text' => 'Fine.']));
+    $this->assertSame(['field_text.0.value'], array_keys($violations));
+    $this->assertStringStartsWith('Vale could not check this text.', $violations['field_text.0.value'][0]);
+
+    // In publish-only mode, a draft saves and publishing is refused.
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->assertSame([], $this->violations($this->page(['field_text' => 'Fine.', 'status' => FALSE])));
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $violations = $this->violations($this->page(['field_text' => 'Fine.', 'status' => TRUE, 'field_content' => [$paragraph]]));
+    $this->assertSame([''], array_keys($violations));
+    $this->assertStringContainsString('Text: Vale could not check this text.', $violations[''][0]);
+    $this->assertStringContainsString('Paragraph "Docs text", Text: Vale could not check this text.', $violations[''][0]);
+  }
+
+  /**
    * Tests a paragraph validated by itself, without its host.
    */
   public function testParagraph(): void {
@@ -373,6 +393,13 @@ class FieldValidationTest extends KernelTestBase {
       ['Components nested more than 10 levels deep were not checked.'],
       $this->container->get('vale.alert_collector')->unchecked(),
     );
+
+    // With fail_closed, the deep text refuses the publishing save.
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $this->container->get('vale.alert_collector')->reset();
+    $violations = $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]]));
+    $this->assertStringContainsString('Components nested more than 10 levels deep were not checked.', $violations[''][0]);
+    $this->config('vale.settings')->set('fail_closed', FALSE)->save();
 
     // An empty section at the limit leaves nothing unchecked.
     $this->container->get('vale.alert_collector')->reset();
