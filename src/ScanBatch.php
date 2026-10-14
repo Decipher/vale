@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
-use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\PluralTranslatableMarkup;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Url;
 
 /**
@@ -14,8 +15,6 @@ use Drupal\Core\Url;
  * services from the container.
  */
 final class ScanBatch {
-
-  use StringTranslationTrait;
 
   /**
    * How many entities are linted per request.
@@ -37,7 +36,7 @@ final class ScanBatch {
       $operations[] = [[self::class, 'scan'], explode(':', $bundle, 2)];
     }
     return [
-      'title' => t('Checking content with Vale'),
+      'title' => new TranslatableMarkup('Checking content with Vale'),
       'operations' => $operations,
       'finished' => [self::class, 'finished'],
     ];
@@ -72,7 +71,7 @@ final class ScanBatch {
     $context['results']['findings'] = ($context['results']['findings'] ?? 0) + count($findings);
     $context['results']['entities'] = ($context['results']['entities'] ?? 0) + count($keys);
     $total = max($context['sandbox']['total'], $context['sandbox']['done']);
-    $context['message'] = t('Checked @done of @total in @bundle.', [
+    $context['message'] = new TranslatableMarkup('Checked @done of @total in @bundle.', [
       '@done' => $context['sandbox']['done'],
       '@total' => $total,
       '@bundle' => $entity_type_id . ':' . $bundle,
@@ -98,12 +97,12 @@ final class ScanBatch {
   public static function finished(bool $success, array $results): void {
     $messenger = \Drupal::messenger();
     if (!$success) {
-      $messenger->addError(t('The scan did not finish. The report holds what it checked.'));
+      $messenger->addError(new TranslatableMarkup('The scan did not finish. The report holds what it checked.'));
       return;
     }
-    $messenger->addStatus(t('Checked @entities items and found @findings findings.', [
-      '@entities' => $results['entities'] ?? 0,
-      '@findings' => $results['findings'] ?? 0,
+    $messenger->addStatus(new TranslatableMarkup('@checked and found @findings.', [
+      '@checked' => new PluralTranslatableMarkup($results['entities'] ?? 0, 'Checked 1 item', 'Checked @count items'),
+      '@findings' => new PluralTranslatableMarkup($results['findings'] ?? 0, '1 finding', '@count findings'),
     ]));
   }
 

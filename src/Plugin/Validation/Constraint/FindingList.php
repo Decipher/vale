@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\vale\Plugin\Validation\Constraint;
 
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
 /**
  * Joins several findings into one violation message.
  *
@@ -46,8 +48,10 @@ final class FindingList {
   /**
    * Gives the joined template and its arguments.
    *
-   * Each finding's placeholders get its index, so "@rule" in the second
-   * finding becomes "@rule1". Findings are separated by a line break, and a
+   * Each finding's template is translated first, with its placeholders kept.
+   * Then its placeholders get its index, so "@rule" in the second finding
+   * becomes "@rule1". The validator translates the joined template again,
+   * which leaves it as it is. Findings are separated by a line break, and a
    * newline keeps them apart where the markup is stripped, as in JSON:API.
    *
    * @return array{0: string, 1: array<string, string|int>}
@@ -57,6 +61,10 @@ final class FindingList {
     $templates = [];
     $arguments = [];
     foreach ($this->lines as $index => [$template, $values]) {
+      // Each template is a constraint message, a literal string. With no
+      // arguments, the translation keeps its placeholders.
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      $translated = (string) new TranslatableMarkup($template);
       $renames = [];
       foreach ($values as $name => $value) {
         $renames[$name] = $name . $index;
@@ -64,7 +72,7 @@ final class FindingList {
       }
       // Longest names first, so "@rule" never replaces part of "@rules".
       uksort($renames, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
-      $templates[] = strtr($template, $renames);
+      $templates[] = strtr($translated, $renames);
     }
     return [implode("<br>\n", $templates), $arguments];
   }

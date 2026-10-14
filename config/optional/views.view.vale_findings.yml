@@ -39,7 +39,7 @@ display:
           table: vale_finding
           field: label
           plugin_id: standard
-          label: In
+          label: 'Found in'
         langcode:
           id: langcode
           table: vale_finding
@@ -189,6 +189,7 @@ display:
           info: {  }
           override: true
           sticky: true
+          caption: 'Prose findings'
           summary: ''
           empty_table: false
       row:

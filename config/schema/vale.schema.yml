@@ -1,6 +1,8 @@
 vale.settings:
   type: config_object
   label: 'Vale settings'
+  constraints:
+    FullyValidatable: ~
   mapping:
     formats:
       type: sequence
@@ -8,12 +10,24 @@ vale.settings:
       sequence:
         type: string
         label: 'Extension'
+        constraints:
+          Regex:
+            pattern: '/^[A-Za-z0-9]+$/'
+            message: 'An extension holds only letters and digits.'
     default_extension:
       type: string
       label: 'File extension for text formats that are not listed'
+      constraints:
+        Regex:
+          pattern: '/^[A-Za-z0-9]+$/'
+          message: 'An extension holds only letters and digits.'
     timeout:
       type: integer
       label: 'Time limit for one Vale run, in seconds'
+      constraints:
+        Range:
+          min: 1
+          max: 300
     publish_only:
       type: boolean
       label: 'Refuse error-level findings only when content is published'
@@ -23,12 +37,23 @@ vale.settings:
     workspace_mode:
       type: string
       label: 'Workspace publish check: block, advise or off'
+      constraints:
+        Choice:
+          - block
+          - advise
+          - 'off'
     check_limit:
       type: integer
       label: 'Requests to the check endpoint each user may make in one window'
+      constraints:
+        Range:
+          min: 1
     check_window:
       type: integer
       label: 'Length of the check endpoint window, in seconds'
+      constraints:
+        Range:
+          min: 1
 
 field.field.*.*.*.third_party.vale:
   type: mapping
@@ -40,6 +65,11 @@ field.field.*.*.*.third_party.vale:
     min_level:
       type: string
       label: 'Lowest level to report'
+      constraints:
+        Choice:
+          - error
+          - warning
+          - suggestion
     disabled_rules:
       type: sequence
       label: 'Rules turned off'
@@ -59,9 +89,18 @@ field.field.*.*.*.third_party.vale:
           level:
             type: string
             label: 'New level'
+            constraints:
+              Choice:
+                - error
+                - warning
+                - suggestion
     profile:
       type: string
       label: 'Name the values are linted under'
+      constraints:
+        Regex:
+          pattern: '/^[A-Za-z0-9_.-]*$/'
+          message: 'Use only letters, digits, dots, hyphens and underscores.'
 
 action.configuration.vale_check_prose:
   type: action_configuration_default

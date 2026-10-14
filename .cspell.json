@@ -12,6 +12,7 @@
     "words": [
         "Destructable",
         "Synchronizable",
+        "Validatable",
         "ahoy",
         "ansiutf",
         "ansiutf8",

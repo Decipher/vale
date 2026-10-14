@@ -176,4 +176,27 @@ class FieldSettingsTest extends KernelTestBase {
     $this->assertSame([], $settings->filter($alerts));
   }
 
+  /**
+   * Tests that the site settings are validated against their schema.
+   */
+  public function testSettingsValidation(): void {
+    $this->installConfig(['vale']);
+    $typed = $this->container->get('config.typed');
+    $settings = $this->config('vale.settings')->get();
+    $this->assertCount(0, $typed->createFromNameAndData('vale.settings', $settings)->validate());
+
+    $invalid = [
+      'workspace_mode' => 'sometimes',
+      'timeout' => 0,
+      'default_extension' => '../md',
+      'formats' => ['markdown' => 'm d'],
+    ] + $settings;
+    $paths = [];
+    foreach ($typed->createFromNameAndData('vale.settings', $invalid)->validate() as $violation) {
+      $paths[] = $violation->getPropertyPath();
+    }
+    sort($paths);
+    $this->assertSame(['default_extension', 'formats.markdown', 'timeout', 'workspace_mode'], $paths);
+  }
+
 }

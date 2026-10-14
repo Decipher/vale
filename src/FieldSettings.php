@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
-use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\field\FieldConfigInterface;
 
 /**
  * The Vale settings of one field.
@@ -57,11 +57,11 @@ final readonly class FieldSettings {
    *   The field.
    *
    * @return self
-   *   Its settings. A field that cannot hold prose, or has no third-party
-   *   settings, is not enabled.
+   *   Its settings. A field that cannot hold prose, or is not a configurable
+   *   field, is not enabled.
    */
   public static function forField(FieldDefinitionInterface $field): self {
-    if (!in_array($field->getType(), self::FIELD_TYPES, TRUE) || !$field instanceof ThirdPartySettingsInterface) {
+    if (!in_array($field->getType(), self::FIELD_TYPES, TRUE) || !$field instanceof FieldConfigInterface) {
       return new self();
     }
     return self::fromArray($field->getThirdPartySettings('vale'));
