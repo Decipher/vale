@@ -1,0 +1,29 @@
+<?php
+
+/**
+ * @file
+ * Hooks for testing Vale.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Access\AccessResultInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Field\FieldItemListInterface;
+use Drupal\Core\Session\AccountInterface;
+
+/**
+ * Implements hook_entity_field_access().
+ *
+ * Nobody may edit the text of a page titled "Locked". The rule needs the
+ * entity's values, so it only applies when access is checked with them.
+ *
+ * @phpstan-param \Drupal\Core\Field\FieldItemListInterface<\Drupal\Core\Field\FieldItemInterface>|null $items
+ */
+function vale_test_entity_field_access(string $operation, FieldDefinitionInterface $field_definition, AccountInterface $account, ?FieldItemListInterface $items = NULL): AccessResultInterface {
+  $locked = $operation === 'edit'
+    && $field_definition->getName() === 'field_text'
+    && $items?->getEntity()->label() === 'Locked';
+  return AccessResult::forbiddenIf($locked);
+}

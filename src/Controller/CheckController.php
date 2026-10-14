@@ -152,19 +152,23 @@ final readonly class CheckController implements ContainerInjectionInterface {
     // content they cannot write.
     $access = $this->entityTypeManager->getAccessControlHandler($body['entity_type']);
     $field = $this->entityFieldManager->getFieldDefinitions($body['entity_type'], $body['bundle'])[$body['field']] ?? NULL;
+    // For an existing entity, field access sees its values, so access hooks
+    // that depend on the entity can refuse.
+    $items = NULL;
     if ($id !== NULL) {
       $entity = $this->entityTypeManager->getStorage($body['entity_type'])->load($id);
-      if (!$entity || $entity->bundle() !== $body['bundle']) {
+      if (!$entity instanceof FieldableEntityInterface || $entity->bundle() !== $body['bundle']) {
         // The same answer as for an entity the user may not edit, so the
         // endpoint does not say which ids exist.
         return $this->error('You may not check text for this bundle.', 403);
       }
       $allowed = $entity->access('update', $this->account);
+      $items = $field && $entity->hasField($body['field']) ? $entity->get($body['field']) : NULL;
     }
     else {
       $allowed = $access->createAccess($body['bundle'], $this->account);
     }
-    if (!$allowed || ($field && !$access->fieldAccess('edit', $field, $this->account))) {
+    if (!$allowed || ($field && !$access->fieldAccess('edit', $field, $this->account, $items))) {
       return $this->error('You may not check text for this bundle.', 403);
     }
     if (!$field || !$this->fieldLinter->isEnabled($field)) {
