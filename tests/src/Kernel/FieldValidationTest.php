@@ -5,15 +5,24 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Form\FormBase;
+use Drupal\Core\Form\FormState;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\Tests\content_moderation\Traits\ContentModerationTestTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
+use Drupal\user\Entity\User;
 use Drupal\vale\Alert;
+use Drupal\vale\Hook\ValeFormHooks;
+use Drupal\vale\Plugin\Validation\Constraint\ValeTextConstraint;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -240,6 +249,12 @@ class FieldValidationTest extends KernelTestBase {
 
     // A new entity with no state takes the workflow's initial state, draft.
     $this->assertSame([], $this->violations($this->page(['field_text' => 'This is very good.'])));
+
+    // A state the workflow does not have is read as the initial state.
+    $publish_state = $this->container->get('vale.publish_state');
+    $this->assertFalse($publish_state->isBeingPublished($this->page(['moderation_state' => 'gone'])));
+    // An entity with no published state is always being published.
+    $this->assertTrue($publish_state->isBeingPublished(User::create(['name' => 'someone'])));
   }
 
   /**
@@ -275,6 +290,129 @@ class FieldValidationTest extends KernelTestBase {
     $published = $this->page(['status' => TRUE, 'field_content' => [$paragraph]]);
     $this->assertSame([], $this->violations($published));
     $this->assertSame([], $this->valeRuns());
+  }
+
+  /**
+   * Tests that blank values are not linted.
+   */
+  public function testBlank(): void {
+    $this->assertSame([], $this->violations($this->page(['field_text' => " \n "])));
+    $this->assertSame([], $this->valeRuns());
+  }
+
+  /**
+   * Tests that the text validator ignores what it cannot check.
+   */
+  public function testTextValidatorIgnoresOtherValues(): void {
+    $validator = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeTextConstraint::class . 'Validator');
+    $validator->validate('Not a field.', new ValeTextConstraint());
+    $this->assertSame([], $this->valeRuns());
+  }
+
+  /**
+   * Tests that entity forms get the handler that shows the findings.
+   */
+  public function testFormAlter(): void {
+    $hooks = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeFormHooks::class);
+    $form_state = new FormState();
+    $form_state->setFormObject($this->container->get('entity_type.manager')->getFormObject('node', 'default')->setEntity($this->page()));
+    $form = [];
+    $hooks->formAlter($form, $form_state, 'node_page_form');
+    $this->assertCount(1, $form['#validate']);
+    $this->assertSame($hooks, $form['#validate'][0][0]);
+    $this->assertSame('showAlerts', $form['#validate'][0][1]);
+
+    // The Layout Paragraphs component form is not an entity form.
+    $other = new FormState();
+    $other->setFormObject(new class() extends FormBase {
+
+      /**
+       * {@inheritdoc}
+       */
+      public function getFormId(): string {
+        return 'other';
+      }
+
+      /**
+       * {@inheritdoc}
+       *
+       * @param array<string, mixed> $form
+       *   The form.
+       * @param \Drupal\Core\Form\FormStateInterface $form_state
+       *   The form state.
+       *
+       * @return array<string, mixed>
+       *   The form.
+       */
+      public function buildForm(array $form, FormStateInterface $form_state): array {
+        return $form;
+      }
+
+      /**
+       * {@inheritdoc}
+       *
+       * @param array<string, mixed> $form
+       *   The form.
+       * @param \Drupal\Core\Form\FormStateInterface $form_state
+       *   The form state.
+       */
+      public function submitForm(array &$form, FormStateInterface $form_state): void {}
+
+    });
+    $form = [];
+    $hooks->formAlter($form, $other, 'layout_paragraphs_component_form');
+    $this->assertCount(1, $form['#validate']);
+
+    $form = [];
+    $hooks->formAlter($form, $other, 'other');
+    $this->assertArrayNotHasKey('#validate', $form);
+  }
+
+  /**
+   * Tests publishing a host whose paragraph Vale could not check.
+   */
+  public function testParagraphTreeUnchecked(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'FAKE_CRASH']);
+    $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
+    $unchecked = $this->container->get('vale.alert_collector')->unchecked();
+    $this->assertNotEmpty($unchecked);
+    $this->assertStringContainsString('Fake failure.', end($unchecked));
+  }
+
+  /**
+   * Tests that paragraphs nested too deep are reported as not checked.
+   */
+  public function testParagraphTreeDepth(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    ParagraphsType::create(['id' => 'docs_section', 'label' => 'Docs section'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_children',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'cardinality' => -1,
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_children', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
+
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    for ($i = 0; $i < 11; $i++) {
+      $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    }
+    $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
+    $this->assertSame(
+      ['Components nested more than 10 levels deep were not checked.'],
+      $this->container->get('vale.alert_collector')->unchecked(),
+    );
+
+    // An empty section at the limit leaves nothing unchecked.
+    $this->container->get('vale.alert_collector')->reset();
+    $paragraph = Paragraph::create(['type' => 'docs_section']);
+    for ($i = 0; $i < 9; $i++) {
+      $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    }
+    $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
+    $this->assertSame([], $this->container->get('vale.alert_collector')->unchecked());
   }
 
 }
