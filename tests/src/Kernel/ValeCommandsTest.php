@@ -15,6 +15,7 @@ use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Drush\Commands\ValeCommands;
 use Drupal\vale\ValeInstaller;
+use Drush\Attributes\Command;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -209,6 +210,31 @@ class ValeCommandsTest extends KernelTestBase {
     $this->assertSame(0, $result->getExitCode());
     $this->assertTrue(is_executable($this->valeDirectory . '/bin/vale'));
     $this->assertStringContainsString("\$settings['vale_binary'] = '" . $this->valeDirectory . "/bin/vale';", $output->fetch());
+  }
+
+  /**
+   * Tests that every command's attributes and defaults are well formed.
+   *
+   * Drush reads them through reflection when it discovers the commands, so
+   * a mistake here breaks every command, not one.
+   */
+  public function testCommandDefinitions(): void {
+    $commands = [];
+    foreach ((new \ReflectionClass(ValeCommands::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+      foreach ($method->getAttributes() as $attribute) {
+        $instance = $attribute->newInstance();
+        if ($instance instanceof Command) {
+          $commands[] = $instance->name;
+        }
+      }
+      foreach ($method->getParameters() as $parameter) {
+        if ($parameter->isDefaultValueAvailable()) {
+          $parameter->getDefaultValue();
+        }
+      }
+    }
+    sort($commands);
+    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status'], $commands);
   }
 
 }
