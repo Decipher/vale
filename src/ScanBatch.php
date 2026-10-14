@@ -61,6 +61,12 @@ final class ScanBatch {
       $context['sandbox']['done'] = 0;
       $context['sandbox']['started'] = \Drupal::time()->getRequestTime();
     }
+    // Once one bundle has stopped, the scan has stopped: later bundles do
+    // not run either.
+    if (isset($context['results']['error'])) {
+      $context['finished'] = 1;
+      return;
+    }
     // Each chunk runs in a request of its own, so check again that the report
     // can be written: it describes Live, and needs Vale to replace its rows.
     $error = \Drupal::service('vale.report_refresher')->refusal();

@@ -284,6 +284,13 @@ class ContentReportTest extends KernelTestBase {
     $errors = array_map(strval(...), $this->container->get('messenger')->messagesByType('error'));
     $this->assertStringStartsWith('The scan stopped:', $errors[0]);
 
+    // Later bundles stay stopped, even once Vale is back.
+    $this->setUpVale();
+    $context['sandbox'] = [];
+    ScanBatch::scan('node', 'page', $context);
+    $this->assertSame(1, $context['finished']);
+    $this->assertSame($before, $this->report());
+
     // So does the bulk action.
     $this->setUpCurrentUser([], ['access content', 'scan content with vale']);
     $action = $this->container->get('plugin.manager.action')->createInstance('vale_check_prose');

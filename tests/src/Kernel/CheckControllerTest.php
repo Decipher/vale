@@ -186,6 +186,20 @@ class CheckControllerTest extends KernelTestBase {
   }
 
   /**
+   * Tests that field access sees the entity's values.
+   */
+  public function testFieldAccessWithValues(): void {
+    $this->enableModules(['vale_test']);
+    $owner = $this->setUpCurrentUser([], ['access content', 'create page content', 'edit own page content']);
+    $page = Node::create(['type' => 'page', 'title' => 'Locked', 'uid' => $owner->id()]);
+    $page->save();
+    // The page's own text field may not be edited, so it is not checked.
+    $this->assertSame(403, $this->check(['id' => $page->id()] + $this->body('Very.'))[0]);
+    // New content has no values, so the rule does not apply.
+    $this->assertSame(200, $this->check($this->body('Very.'))[0]);
+  }
+
+  /**
    * Tests that only a few checks run Vale at once.
    */
   public function testBusy(): void {
