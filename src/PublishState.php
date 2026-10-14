@@ -10,6 +10,8 @@ use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 
 /**
  * Decides whether an entity is being published by the save in progress.
@@ -89,6 +91,33 @@ class PublishState {
    */
   public static function isComponentType(EntityTypeInterface $entity_type): bool {
     return (bool) $entity_type->get('entity_revision_parent_id_field');
+  }
+
+  /**
+   * Gives a referenced component in its host's language.
+   *
+   * Entity Reference Revisions loads the referenced revision in its default
+   * language, so a translation's components read in the wrong language
+   * unless they are switched.
+   *
+   * @param mixed $target
+   *   The referenced entity.
+   * @param string $langcode
+   *   The host's language.
+   *
+   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
+   *   The component, in that language when it has the translation. NULL when
+   *   the target is not a component, such as a node referenced through an
+   *   entity_reference_revisions field.
+   */
+  public function component(mixed $target, string $langcode): ?FieldableEntityInterface {
+    if (!$target instanceof FieldableEntityInterface || !$this->isComponent($target)) {
+      return NULL;
+    }
+    if ($target instanceof TranslatableInterface && $target->hasTranslation($langcode)) {
+      $target = $target->getTranslation($langcode);
+    }
+    return $target;
   }
 
 }

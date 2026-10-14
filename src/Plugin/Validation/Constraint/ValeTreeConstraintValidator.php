@@ -122,8 +122,10 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     }
     foreach ($this->componentFields($entity) as $name) {
       foreach ($entity->get($name) as $item) {
-        $component = $item->get('entity')->getValue();
-        if ($component instanceof FieldableEntityInterface) {
+        // Only components are published with the entity. A translation's
+        // components are checked in its language.
+        $component = $this->publishState->component($item->get('entity')->getValue(), $entity->language()->getId());
+        if ($component) {
           $this->checkComponent($component, $constraint, $errors);
           $this->checkComponents($component, $constraint, $errors, $depth + 1);
         }

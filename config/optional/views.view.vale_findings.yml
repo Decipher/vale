@@ -40,6 +40,13 @@ display:
           field: label
           plugin_id: standard
           label: In
+        langcode:
+          id: langcode
+          table: vale_finding
+          field: langcode
+          plugin_id: language
+          label: Language
+          native_language: false
         field:
           id: field
           table: vale_finding
@@ -171,6 +178,7 @@ display:
             root_link: root_link
             root_bundle: root_bundle
             label: label
+            langcode: langcode
             field: field
             line: line
             level: level
