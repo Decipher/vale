@@ -121,6 +121,12 @@ class ContentReportUiTest extends KernelTestBase {
     $html = (string) $this->container->get('renderer')->renderInIsolation($build);
     $this->assertStringNotContainsString('/admin/reports/vale/export', $html);
 
+    // With no rows, the export link is not shown.
+    $view = Views::getView('vale_findings');
+    $view->setExposedInput(['level' => 'suggestion']);
+    $build = $view->preview('page_1');
+    $this->assertStringNotContainsString('/admin/reports/vale/export', (string) $this->container->get('renderer')->renderInIsolation($build));
+
     $this->assertSame(['page' => 'page'], FindingStorage::bundleOptions());
     $this->assertSame(['error', 'warning', 'suggestion', 'unchecked'], array_keys(FindingStorage::levelOptions()));
   }
