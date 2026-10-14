@@ -7,7 +7,10 @@ namespace Drupal\Tests\vale\Kernel;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
@@ -44,11 +47,13 @@ class ContentWalkerTest extends KernelTestBase {
    * {@inheritdoc}
    */
   protected static $modules = [
+    'content_translation',
     'entity_reference_revisions',
     'entity_test',
     'field',
     'file',
     'filter',
+    'language',
     'node',
     'paragraphs',
     'system',
@@ -192,6 +197,7 @@ class ContentWalkerTest extends KernelTestBase {
     // Live sees only Live's revisions: the page the workspace made is not
     // there, and the changed page is linted as Live has it.
     $this->assertSame(['node.field_text:Demo.Very'], $this->summarise($walker->bundle('node', 'page')));
+    $this->assertSame('Fine.', $walker->latest('node', $changed->id())?->get('field_text')->value);
 
     $this->expectException(\InvalidArgumentException::class);
     $walker->workspace('nope');
@@ -214,6 +220,87 @@ class ContentWalkerTest extends KernelTestBase {
     $container = new ContainerBuilder();
     (new ValeServiceProvider())->alter($container);
     $this->assertFalse($container->hasDefinition('vale.content_walker'));
+  }
+
+  /**
+   * Tests that every translation is linted, with its own paragraphs.
+   */
+  public function testTranslations(): void {
+    $this->installConfig(['language']);
+    ConfigurableLanguage::createFromLangcode('fr')->save();
+    $manager = $this->container->get('content_translation.manager');
+    $manager->setEnabled('node', 'page', TRUE);
+    $manager->setEnabled('paragraph', 'docs_text', TRUE);
+    // Paragraphs translates the paragraphs, not the reference to them.
+    FieldConfig::loadByName('node', 'page', 'field_content')?->set('translatable', FALSE)->save();
+
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $page = $this->savePage([
+      'title' => 'Guide',
+      'field_text' => 'Fine.',
+      'field_content' => [$paragraph],
+    ]);
+    // Saving a paragraph makes a new revision, which the page then points at.
+    $paragraph->addTranslation('fr', ['field_text' => 'This is very good.'])->save();
+    $page->addTranslation('fr', [
+      'title' => 'Guide FR',
+      'field_text' => 'We delve.',
+      'field_content' => [$paragraph],
+    ])->save();
+
+    $findings = $this->container->get('vale.content_walker')->bundle('node', 'page');
+    // Re-saving field_content above moved it ahead of field_text.
+    $this->assertSame([
+      'node Guide FR > paragraph.field_text:Demo.Very',
+      'node.field_text:Demo.Delve',
+    ], $this->summarise($findings));
+    $this->assertSame(['fr', 'fr'], array_map(static fn (Finding $finding): string => $finding->langcode, $findings));
+    $this->assertSame('Guide FR', $findings[1]->label);
+  }
+
+  /**
+   * Tests that shared values are linted once, not once per translation.
+   */
+  public function testTranslationsShareValues(): void {
+    $this->installConfig(['language']);
+    ConfigurableLanguage::createFromLangcode('fr')->save();
+    $manager = $this->container->get('content_translation.manager');
+    $manager->setEnabled('node', 'page', TRUE);
+    $manager->setEnabled('paragraph', 'docs_text', TRUE);
+    FieldConfig::loadByName('node', 'page', 'field_content')?->set('translatable', FALSE)->save();
+    // The page's text is the same in every language.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->set('translatable', FALSE)->save();
+
+    $page = $this->savePage([
+      'title' => 'Guide',
+      'field_text' => 'We delve.',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.'])],
+    ]);
+    // A French page whose paragraph has no French translation.
+    $page->addTranslation('fr', ['title' => 'Guide FR'])->save();
+
+    $findings = $this->container->get('vale.content_walker')->bundle('node', 'page');
+    $this->assertCount(2, $findings);
+    $this->assertSame(['en', 'en'], array_map(static fn (Finding $finding): string => $finding->langcode, $findings));
+  }
+
+  /**
+   * Tests that only components are followed, not any revision reference.
+   */
+  public function testOnlyComponents(): void {
+    FieldStorageConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'node',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_related', 'entity_type' => 'node', 'bundle' => 'page'])->save();
+
+    $other = $this->savePage(['title' => 'Other', 'field_text' => 'We delve.']);
+    $this->savePage(['title' => 'Guide', 'field_text' => 'Fine.', 'field_related' => [$other]]);
+
+    // The other page is a page of its own, linted once, with no host.
+    $this->assertSame(['node.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('node', 'page')));
   }
 
 }

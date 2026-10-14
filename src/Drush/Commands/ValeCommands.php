@@ -108,6 +108,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     'id' => 'ID',
     'bundle' => 'Bundle',
     'label' => 'Label',
+    'language' => 'Language',
     'host_type' => 'Host type',
     'host_id' => 'Host ID',
     'host_label' => 'Host label',
@@ -121,7 +122,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     'message' => 'Message',
     'text' => 'Text',
   ])]
-  #[CLI\DefaultTableFields(fields: ['host', 'entity', 'field', 'line', 'level', 'rule', 'text'])]
+  #[CLI\DefaultTableFields(fields: ['host', 'entity', 'language', 'field', 'line', 'level', 'rule', 'text'])]
   public function lint(
     ?string $scope = NULL,
     array $options = ['workspace' => self::REQ, 'save' => FALSE, 'format' => 'table'],
@@ -387,6 +388,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       'id' => $finding->entityId,
       'bundle' => $finding->bundle,
       'label' => $finding->label,
+      'language' => $finding->langcode,
       'host_type' => $host['entity_type'] ?? '',
       'host_id' => $host['id'] ?? '',
       'host_label' => $host['label'] ?? '',
