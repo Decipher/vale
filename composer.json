@@ -17,5 +17,8 @@
     ],
     "require": {
         "php": ">=8.3"
+    },
+    "require-dev": {
+        "drupal/paragraphs": "^1.19"
     }
 }

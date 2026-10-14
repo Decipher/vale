@@ -33,3 +33,29 @@ services:
     autowire: true
   Drupal\vale\Hook\ValeFieldUiHooks:
     autowire: true
+  vale.field_linter:
+    class: Drupal\vale\FieldLinter
+    arguments:
+      - '@vale.runner'
+  Drupal\vale\FieldLinter: '@vale.field_linter'
+  # Findings that did not stop a save, kept for the rest of the request.
+  vale.alert_collector:
+    class: Drupal\vale\AlertCollector
+    arguments:
+      - '@entity_type.bundle.info'
+  Drupal\vale\AlertCollector: '@vale.alert_collector'
+  vale.publish_state:
+    class: Drupal\vale\PublishState
+    arguments:
+      - '@?content_moderation.moderation_information'
+  Drupal\vale\PublishState: '@vale.publish_state'
+  vale.jsonapi_alerts_subscriber:
+    class: Drupal\vale\EventSubscriber\JsonApiAlertsSubscriber
+    arguments:
+      - '@vale.alert_collector'
+    tags:
+      - { name: event_subscriber }
+  Drupal\vale\Hook\ValeEntityHooks:
+    autowire: true
+  Drupal\vale\Hook\ValeFormHooks:
+    autowire: true
