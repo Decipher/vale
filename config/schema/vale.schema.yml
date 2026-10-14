@@ -20,3 +20,36 @@ vale.settings:
     workspace_mode:
       type: string
       label: 'Workspace publish check: block, advise or off'
+
+field.field.*.*.*.third_party.vale:
+  type: mapping
+  label: 'Vale prose checks'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Check the prose in this field'
+    min_level:
+      type: string
+      label: 'Lowest level to report'
+    disabled_rules:
+      type: sequence
+      label: 'Rules turned off'
+      sequence:
+        type: string
+        label: 'Rule'
+    level_overrides:
+      type: sequence
+      label: 'Level changes'
+      sequence:
+        type: mapping
+        label: 'Level change'
+        mapping:
+          rule:
+            type: string
+            label: 'Rule'
+          level:
+            type: string
+            label: 'New level'
+    profile:
+      type: string
+      label: 'Name the values are linted under'

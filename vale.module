@@ -3,6 +3,21 @@
 /**
  * @file
  * Hook implementations for the Vale module.
+ *
+ * Drupal 11.1 and later call the hook classes in src/Hook directly and skip
+ * the functions marked #[LegacyHook]. Drupal 10 calls these functions.
  */
 
 declare(strict_types=1);
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Hook\Attribute\LegacyHook;
+use Drupal\vale\Hook\ValeFieldUiHooks;
+
+/**
+ * Implements hook_form_FORM_ID_alter() for field_config_edit_form.
+ */
+#[LegacyHook]
+function vale_form_field_config_edit_form_alter(array &$form, FormStateInterface $form_state): void {
+  \Drupal::service(ValeFieldUiHooks::class)->fieldConfigEditFormAlter($form, $form_state);
+}
