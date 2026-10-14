@@ -45,6 +45,7 @@
         "headful",
         "hookspec",
         "icanon",
+        "ignorecase",
         "initialisation",
         "initialised",
         "jangregor",

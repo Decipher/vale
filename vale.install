@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Vale module.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
+use Drupal\vale\Hook\ValeRequirements;
+
+/**
+ * Implements hook_requirements().
+ *
+ * Drupal 11.3 and later run ValeRequirements::runtime() instead.
+ */
+#[LegacyRequirementsHook]
+function vale_requirements(string $phase): array {
+  if ($phase !== 'runtime') {
+    return [];
+  }
+  $requirement = \Drupal::classResolver(ValeRequirements::class)->requirement();
+  // REQUIREMENT_OK is 0 and REQUIREMENT_WARNING is 1. The constants are
+  // deprecated from Drupal 11.2, so their values are used.
+  $requirement['severity'] = $requirement['severity'] ? 0 : 1;
+  return ['vale' => $requirement];
+}

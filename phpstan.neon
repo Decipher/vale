@@ -43,5 +43,14 @@ parameters:
       messages:
         - '#^Attribute class PHPUnit\\Framework\\Attributes\\.+ does not exist\.$#'
       reportUnmatched: false
+    -
+      # Hook classes use Drupal 11's #[Hook] attribute, and Drupal 10 calls
+      # them through the #[LegacyHook] functions instead. The attribute is
+      # resolved lazily, and RequirementSeverity is only read on Drupal 11.2
+      # and later, where hook_runtime_requirements() runs.
+      messages:
+        - '#^Attribute class Drupal\\Core\\Hook\\Attribute\\(Hook|LegacyHook|LegacyRequirementsHook) does not exist\.$#'
+        - '#^Access to constant (OK|Warning) on an unknown class Drupal\\Core\\Extension\\Requirement\\RequirementSeverity\.$#'
+      reportUnmatched: false
 
   reportUnmatchedIgnoredErrors: false
