@@ -133,7 +133,8 @@ class FindingStorage {
         $finding->field, $finding->delta,
         $alert->rule ?? '',
         $alert->level ?? 'unchecked',
-        $alert->message ?? $finding->reason,
+        // A text column holds 64 KB, and a character can take four bytes.
+        mb_substr($alert->message ?? $finding->reason, 0, 16000),
         mb_substr($alert->match ?? '', 0, 255),
         $alert->line ?? 0, $alert->start ?? 0, $alert->end ?? 0,
         $now,

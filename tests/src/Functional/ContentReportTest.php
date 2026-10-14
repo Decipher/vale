@@ -98,6 +98,10 @@ class ContentReportTest extends BrowserTestBase {
     $this->assertSession()->pageTextContains('Demo.Very');
     $this->assertSession()->pageTextContains('Demo.Delve');
 
+    // An array in the query string does not break the export link.
+    $this->drupalGet('admin/reports/vale', ['query' => ['rule' => ['Demo.Very']]]);
+    $this->assertSession()->statusCodeEquals(200);
+
     // Filter to errors, and export what the filter shows.
     $this->drupalGet('admin/reports/vale', ['query' => ['level' => 'error']]);
     $this->assertSession()->pageTextContains('Demo.Very');

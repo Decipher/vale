@@ -25,8 +25,10 @@ final class ExportLink extends AreaPluginBase {
     if ($empty && empty($this->options['empty'])) {
       return [];
     }
-    $query = array_intersect_key($this->view->getExposedInput(), array_flip(['root_bundle', 'level', 'rule']));
-    $url = Url::fromRoute('vale.report_export', [], ['query' => array_filter($query, static fn (string $value): bool => $value !== '' && $value !== 'All')]);
+    // The exposed form's accepted values, not the raw query string.
+    $query = array_intersect_key($this->view->exposed_raw_input, array_flip(['root_bundle', 'level', 'rule']));
+    $query = array_filter($query, static fn (mixed $value): bool => is_string($value) && $value !== '' && $value !== 'All');
+    $url = Url::fromRoute('vale.report_export', [], ['query' => $query]);
     $link = Link::fromTextAndUrl($this->t('Export these findings as CSV'), $url)->toRenderable();
     $link['#access'] = $url->access();
     return $link;

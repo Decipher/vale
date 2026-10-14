@@ -213,10 +213,11 @@ class ValeEnvironment {
    * Gives a fingerprint of everything that decides Vale's results.
    *
    * It covers the configuration file, every file under the styles
-   * directories and the Vale version. Any change gives a new fingerprint, so
-   * a cached result that depends on the old one is never used again. File
-   * contents are hashed only when a style file's size or modification time
-   * changes, or a file is added or removed.
+   * directories and the Vale version. A changed fingerprint means a cached
+   * result that depends on the old one is never used again. File contents
+   * are hashed only when a style file's size or modification time changes,
+   * or a file is added or removed. An edit that keeps a file's size within
+   * the same second is missed until the fingerprint expires.
    *
    * @return string
    *   The fingerprint.
