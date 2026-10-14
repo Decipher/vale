@@ -155,6 +155,10 @@ class FieldSettingsFormTest extends KernelTestBase {
     [, $errors] = $this->submit(['enabled' => 1, 'profile' => '../docs']);
     $this->assertSame(['Use only letters, digits, dots, hyphens and underscores.'], array_values($errors));
 
+    // A level that does not exist falls back to suggestion.
+    [$value] = $this->submit(['enabled' => 1, 'min_level' => 'loud']);
+    $this->assertSame('suggestion', $value['min_level']);
+
     // Not checked: nothing is stored.
     [$value] = $this->submit(['enabled' => 0]);
     $this->assertNull($value);

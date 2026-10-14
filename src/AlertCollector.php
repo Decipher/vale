@@ -110,11 +110,12 @@ class AlertCollector {
   }
 
   /**
-   * Names the entity that holds a finding.
+   * Names the entity that holds a finding, during validation.
    *
    * A component such as a paragraph takes its label from its host, which an
    * unsaved component does not have yet during validation. So a component is
-   * named by its bundle.
+   * named by its bundle. The validators use this too, so a finding is named
+   * the same way wherever it is shown.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
@@ -122,7 +123,7 @@ class AlertCollector {
    * @return string
    *   The label.
    */
-  protected function label(FieldableEntityInterface $entity): string {
+  public function label(FieldableEntityInterface $entity): string {
     if (PublishState::isComponentType($entity->getEntityType())) {
       return (string) ($this->entityTypeBundleInfo->getBundleInfo($entity->getEntityTypeId())[$entity->bundle()]['label'] ?? $entity->bundle());
     }

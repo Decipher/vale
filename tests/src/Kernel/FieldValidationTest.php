@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormState;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
@@ -344,9 +346,7 @@ class FieldValidationTest extends KernelTestBase {
     $this->config('vale.settings')->set('publish_only', TRUE)->save();
     $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'FAKE_CRASH']);
     $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
-    $unchecked = $this->container->get('vale.alert_collector')->unchecked();
-    $this->assertNotEmpty($unchecked);
-    $this->assertStringContainsString('Fake failure.', end($unchecked));
+    $this->assertSame(['Vale failed with exit code 2: Fake failure.'], $this->container->get('vale.alert_collector')->unchecked());
   }
 
   /**
@@ -382,6 +382,68 @@ class FieldValidationTest extends KernelTestBase {
     }
     $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
     $this->assertSame([], $this->container->get('vale.alert_collector')->unchecked());
+  }
+
+  /**
+   * Tests a form that validates an entity in its own way, end to end.
+   *
+   * The form is no entity form. Any module's form that validates an entity
+   * shows the findings the same way.
+   */
+  public function testCustomForm(): void {
+    $form = new class() extends FormBase {
+
+      /**
+       * {@inheritdoc}
+       */
+      public function getFormId(): string {
+        return 'vale_test_custom_form';
+      }
+
+      /**
+       * {@inheritdoc}
+       *
+       * @param array<string, mixed> $form
+       *   The form.
+       * @param \Drupal\Core\Form\FormStateInterface $form_state
+       *   The form state.
+       *
+       * @return array<string, mixed>
+       *   The form.
+       */
+      public function buildForm(array $form, FormStateInterface $form_state): array {
+        $form['submit'] = ['#type' => 'submit', '#value' => 'Save'];
+        return $form;
+      }
+
+      /**
+       * {@inheritdoc}
+       *
+       * @param array<string, mixed> $form
+       *   The form.
+       * @param \Drupal\Core\Form\FormStateInterface $form_state
+       *   The form state.
+       */
+      public function validateForm(array &$form, FormStateInterface $form_state): void {
+        Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.'])->validate();
+      }
+
+      /**
+       * {@inheritdoc}
+       *
+       * @param array<string, mixed> $form
+       *   The form.
+       * @param \Drupal\Core\Form\FormStateInterface $form_state
+       *   The form state.
+       */
+      public function submitForm(array &$form, FormStateInterface $form_state): void {}
+
+    };
+    $form_state = new FormState();
+    $this->container->get('form_builder')->submitForm($form, $form_state);
+    $warnings = array_map(strval(...), $this->container->get('messenger')->messagesByType('warning'));
+    $this->assertCount(1, $warnings);
+    $this->assertStringStartsWith('Docs text, Text: Demo.Delve:', $warnings[0]);
   }
 
 }
