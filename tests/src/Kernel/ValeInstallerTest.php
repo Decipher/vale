@@ -67,7 +67,8 @@ class ValeInstallerTest extends KernelTestBase {
    *   The archive's contents.
    */
   protected function archive(string $binary = "#!/bin/sh\necho 'vale version 9.9.9'\n", string $name = 'vale'): string {
-    $tar = $this->directory . '/build.tar';
+    // A name of its own, since PharData keeps an archive it opened.
+    $tar = $this->directory . '/build-' . bin2hex(random_bytes(4)) . '.tar';
     $phar = new \PharData($tar);
     $phar->addFromString($name, $binary);
     $phar->addFromString('README.md', 'Vale');
@@ -87,7 +88,7 @@ class ValeInstallerTest extends KernelTestBase {
     // ArrayObject is shared through a local variable all the same.
     $history = $this->requests;
     $stack->push(Middleware::history($history));
-    return new ValeInstaller(new Client(['handler' => $stack]));
+    return new ValeInstaller(new Client(['handler' => $stack]), $this->container->get('file_system'));
   }
 
   /**
@@ -170,6 +171,80 @@ class ValeInstallerTest extends KernelTestBase {
     $this->assertSame('macOS_arm64', $installer->platform('Darwin', 'arm64'));
     $this->expectException(\RuntimeException::class);
     $installer->platform('Windows NT', 'AMD64');
+  }
+
+  /**
+   * Tests a machine Vale publishes no release for.
+   */
+  public function testUnsupportedMachine(): void {
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('Vale has no release for Linux on mips.');
+    $this->installer()->platform('Linux', 'mips');
+  }
+
+  /**
+   * Tests a checksum that is not a SHA-256.
+   */
+  public function testInvalidChecksum(): void {
+    $this->expectException(\InvalidArgumentException::class);
+    $this->expectExceptionMessage('No valid SHA-256 for Linux_64-bit.');
+    $this->installer()->install($this->directory . '/bin', '9.9.9', 'not-a-checksum', 'Linux_64-bit');
+  }
+
+  /**
+   * Tests a target that cannot be created or written.
+   */
+  public function testTargetNotWritable(): void {
+    $archive = $this->archive();
+    // A file where the directory should be.
+    file_put_contents($this->directory . '/blocked', '');
+    $this->assertInstallRefused($archive, $this->directory . '/blocked/bin');
+
+    // A directory that cannot be written. Root writes to it anyway, so the
+    // case only holds for an unprivileged user.
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+      return;
+    }
+    mkdir($this->directory . '/readonly', 0555);
+    try {
+      $this->assertInstallRefused($archive, $this->directory . '/readonly');
+    }
+    finally {
+      chmod($this->directory . '/readonly', 0755);
+    }
+  }
+
+  /**
+   * Asserts that an install into a directory is refused as not writable.
+   *
+   * @param string $archive
+   *   The release archive.
+   * @param string $directory
+   *   The target directory.
+   */
+  protected function assertInstallRefused(string $archive, string $directory): void {
+    $error = NULL;
+    try {
+      $this->installer(new Response(200, [], $archive))->install($directory, '9.9.9', hash('sha256', $archive), 'Linux_64-bit');
+    }
+    catch (\RuntimeException $e) {
+      $error = $e->getMessage();
+    }
+    $this->assertNotNull($error, 'Vale was installed into ' . $directory . '.');
+    $this->assertStringContainsString('cannot be written', $error);
+  }
+
+  /**
+   * Tests that installing again replaces the binary.
+   */
+  public function testReplace(): void {
+    $archive = $this->archive("#!/bin/sh\necho 'vale version 9.9.8'\n");
+    $this->installer(new Response(200, [], $archive))->install($this->directory . '/bin', '9.9.8', hash('sha256', $archive), 'Linux_64-bit');
+    $archive = $this->archive();
+    $binary = $this->installer(new Response(200, [], $archive))->install($this->directory . '/bin', '9.9.9', hash('sha256', $archive), 'Linux_64-bit');
+    exec(escapeshellarg($binary), $output);
+    $this->assertSame(['vale version 9.9.9'], $output);
+    $this->assertSame(['vale'], array_values(array_diff(scandir($this->directory . '/bin') ?: [], ['.', '..'])));
   }
 
 }

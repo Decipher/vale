@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
+use Drupal\Core\File\Exception\FileException;
+use Drupal\Core\File\FileExists;
+use Drupal\Core\File\FileSystemInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
@@ -37,9 +40,12 @@ class ValeInstaller {
    *
    * @param \GuzzleHttp\ClientInterface $httpClient
    *   The HTTP client.
+   * @param \Drupal\Core\File\FileSystemInterface $fileSystem
+   *   The file system service.
    */
   public function __construct(
     protected ClientInterface $httpClient,
+    protected FileSystemInterface $fileSystem,
   ) {}
 
   /**
@@ -106,8 +112,10 @@ class ValeInstaller {
 
     $name = sprintf('vale_%s_%s.tar.gz', $version, $platform);
     $url = sprintf('https://github.com/errata-ai/vale/releases/download/v%s/%s', $version, $name);
-    $work = sys_get_temp_dir() . '/vale-install-' . bin2hex(random_bytes(6));
-    mkdir($work, 0700, TRUE);
+    $work = $this->fileSystem->getTempDirectory() . '/vale-install-' . bin2hex(random_bytes(6));
+    if (!$this->fileSystem->mkdir($work, 0700, TRUE)) {
+      throw new \RuntimeException(sprintf('The temporary directory %s could not be created.', $work));
+    }
     try {
       $archive = $work . '/' . $name;
       try {
@@ -132,39 +140,32 @@ class ValeInstaller {
         throw new \RuntimeException(sprintf('%s has no vale binary in it.', $name));
       }
 
-      if (!is_dir($directory) && !mkdir($directory, 0755, TRUE) && !is_dir($directory)) {
-        throw new \RuntimeException(sprintf('The directory %s could not be created.', $directory));
+      if (!$this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+        throw new \RuntimeException(sprintf('The directory %s does not exist or cannot be written.', $directory));
       }
       $binary = rtrim($directory, '/') . '/vale';
-      if (!rename($work . '/vale', $binary) && !copy($work . '/vale', $binary)) {
-        throw new \RuntimeException(sprintf('Vale could not be written to %s.', $binary));
+      // Copy next to the target, then move it into place. A move in one
+      // directory is a rename, which is atomic, so a Vale run never reads a
+      // part-written file. move() gives the file the site's default mode, so
+      // it is made executable after.
+      try {
+        $staged = $this->fileSystem->copy($work . '/vale', $binary . '.new', FileExists::Rename);
+        $binary = $this->fileSystem->move($staged, $binary, FileExists::Replace);
+        if (!$this->fileSystem->chmod($binary, 0755)) {
+          throw new FileException(sprintf('%s could not be made executable.', $binary));
+        }
+        return $binary;
       }
-      chmod($binary, 0755);
-      return $binary;
+      catch (FileException $e) {
+        if (isset($staged) && file_exists($staged)) {
+          $this->fileSystem->delete($staged);
+        }
+        throw new \RuntimeException(sprintf('Vale could not be written to %s.', $binary), 0, $e);
+      }
     }
     finally {
-      $this->removeDirectory($work);
+      $this->fileSystem->deleteRecursive($work);
     }
-  }
-
-  /**
-   * Removes a directory and everything in it.
-   *
-   * @param string $directory
-   *   The directory.
-   */
-  protected function removeDirectory(string $directory): void {
-    if (!is_dir($directory)) {
-      return;
-    }
-    $iterator = new \RecursiveIteratorIterator(
-      new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
-      \RecursiveIteratorIterator::CHILD_FIRST,
-    );
-    foreach ($iterator as $file) {
-      $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
-    }
-    rmdir($directory);
   }
 
 }

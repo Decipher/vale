@@ -76,4 +76,5 @@ services:
     class: Drupal\vale\ValeInstaller
     arguments:
       - '@http_client'
+      - '@file_system'
   Drupal\vale\ValeInstaller: '@vale.installer'

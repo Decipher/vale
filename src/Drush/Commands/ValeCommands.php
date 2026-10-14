@@ -6,6 +6,8 @@ namespace Drupal\vale\Drush\Commands;
 
 use Drupal\vale\Alert;
 use Consolidation\AnnotatedCommand\CommandResult;
+use Consolidation\AnnotatedCommand\Input\StdinAwareInterface;
+use Consolidation\AnnotatedCommand\Input\StdinAwareTrait;
 use Consolidation\OutputFormatters\StructuredData\PropertyList;
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
@@ -22,7 +24,9 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Lints stored content from the command line.
  */
-final class ValeCommands extends DrushCommands {
+final class ValeCommands extends DrushCommands implements StdinAwareInterface {
+
+  use StdinAwareTrait;
 
   /**
    * Constructs a ValeCommands.
@@ -269,7 +273,7 @@ final class ValeCommands extends DrushCommands {
    */
   #[CLI\Command(name: 'vale:check')]
   #[CLI\Argument(name: 'field', description: 'The field, as entity_type.bundle.field_name.')]
-  #[CLI\Argument(name: 'text', description: 'The text. Leave it out to read standard input.')]
+  #[CLI\Argument(name: 'text', description: 'The text. Leave it out, or give -, to read standard input.')]
   #[CLI\Option(name: 'text-format', description: 'The text format the text is in, which decides how Vale reads it.')]
   #[CLI\Usage(name: 'drush vale:check node.page.field_text "Some text."', description: "Lint a sentence as a page's text would be linted.")]
   #[CLI\Usage(name: 'drush vale:check paragraph.docs_text.field_text --text-format=docs_markdown < draft.md', description: 'Lint a Markdown file as a docs_text paragraph.')]
@@ -303,14 +307,14 @@ final class ValeCommands extends DrushCommands {
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
 
-    if ($text === NULL) {
+    if ($text === NULL || $text === '-') {
       $stdin = $this->stdin();
       // Reading a terminal would wait for input with no prompt.
-      if (stream_isatty($stdin)) {
+      if (!$stdin->hasPath() && stream_isatty($stdin->getStream())) {
         $this->logger()?->error('Give the text as an argument, or pipe it in.');
         return CommandResult::exitCode(self::EXIT_FAILURE);
       }
-      $text = (string) stream_get_contents($stdin);
+      $text = (string) $stdin->contents();
     }
     $format = is_string($options['text-format'] ?? NULL) ? $options['text-format'] : NULL;
     $result = $this->fieldLinter->lintText($definition, $text, $format);
@@ -334,20 +338,6 @@ final class ValeCommands extends DrushCommands {
       ];
     }
     return CommandResult::dataWithExitCode(new RowsOfFields($rows), $failed ? self::EXIT_FAILURE : self::EXIT_SUCCESS);
-  }
-
-  /**
-   * Opens standard input.
-   *
-   * @return resource
-   *   The stream.
-   */
-  private function stdin() {
-    $stream = fopen('php://stdin', 'r');
-    if ($stream === FALSE) {
-      throw new \RuntimeException('Standard input could not be read.');
-    }
-    return $stream;
   }
 
   /**
