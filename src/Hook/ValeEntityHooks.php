@@ -13,9 +13,8 @@ use Drupal\vale\FieldSettings;
 /**
  * Adds the Vale constraints to entities and fields.
  *
- * The constraints run in entity validation, so forms, Layout Paragraphs
- * dialogs, JSON:API and REST writes and Workspaces Deploy imports are all
- * checked the same way.
+ * The constraints run in entity validation, so every form, JSON:API and
+ * REST write, and import that validates an entity is checked the same way.
  */
 class ValeEntityHooks {
 

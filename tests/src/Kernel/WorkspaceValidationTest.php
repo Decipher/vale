@@ -79,8 +79,8 @@ class WorkspaceValidationTest extends KernelTestBase {
   /**
    * Tests a paragraph saved with findings while its host is in a workspace.
    *
-   * This is what a Layout Paragraphs dialog does: it validates the edited
-   * paragraph by itself. Reporting the findings must not disturb the
+   * Some forms validate the edited paragraph by itself, without its host.
+   * Reporting the findings must not disturb the
    * workspace's own checks on that paragraph.
    */
   public function testParagraphInWorkspace(): void {

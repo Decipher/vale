@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\Core\Entity\ContentEntityInterface;
-use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormState;
-use Drupal\Core\Form\FormStateInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
@@ -185,7 +183,7 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
-   * Tests a paragraph validated by itself, as in a Layout Paragraphs dialog.
+   * Tests a paragraph validated by itself, without its host.
    */
   public function testParagraph(): void {
     $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.']);
@@ -310,62 +308,33 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
-   * Tests that entity forms get the handler that shows the findings.
+   * Tests that any form that validates an entity shows its findings.
    */
-  public function testFormAlter(): void {
+  public function testFormMessages(): void {
     $hooks = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeFormHooks::class);
-    $form_state = new FormState();
-    $form_state->setFormObject($this->container->get('entity_type.manager')->getFormObject('node', 'default')->setEntity($this->page()));
+    $messenger = $this->container->get('messenger');
+
+    // Every form gets the handler, whatever it is.
     $form = [];
-    $hooks->formAlter($form, $form_state, 'node_page_form');
+    $hooks->formAlter($form, new FormState(), 'any_form');
     $this->assertCount(1, $form['#validate']);
     $this->assertSame($hooks, $form['#validate'][0][0]);
     $this->assertSame('showAlerts', $form['#validate'][0][1]);
 
-    // The Layout Paragraphs component form is not an entity form.
-    $other = new FormState();
-    $other->setFormObject(new class() extends FormBase {
+    // A form that checked no prose shows nothing.
+    $form_state = new FormState();
+    $hooks->showAlerts($form, $form_state);
+    $this->assertSame([], $messenger->all());
 
-      /**
-       * {@inheritdoc}
-       */
-      public function getFormId(): string {
-        return 'other';
-      }
-
-      /**
-       * {@inheritdoc}
-       *
-       * @param array<string, mixed> $form
-       *   The form.
-       * @param \Drupal\Core\Form\FormStateInterface $form_state
-       *   The form state.
-       *
-       * @return array<string, mixed>
-       *   The form.
-       */
-      public function buildForm(array $form, FormStateInterface $form_state): array {
-        return $form;
-      }
-
-      /**
-       * {@inheritdoc}
-       *
-       * @param array<string, mixed> $form
-       *   The form.
-       * @param \Drupal\Core\Form\FormStateInterface $form_state
-       *   The form state.
-       */
-      public function submitForm(array &$form, FormStateInterface $form_state): void {}
-
-    });
-    $form = [];
-    $hooks->formAlter($form, $other, 'layout_paragraphs_component_form');
-    $this->assertCount(1, $form['#validate']);
-
-    $form = [];
-    $hooks->formAlter($form, $other, 'other');
-    $this->assertArrayNotHasKey('#validate', $form);
+    // A form that validated a paragraph by itself shows that paragraph's
+    // findings.
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.']);
+    $this->assertSame([], $this->violations($paragraph));
+    $hooks->showAlerts($form, $form_state);
+    $warnings = array_map(strval(...), $messenger->messagesByType('warning'));
+    $this->assertCount(1, $warnings);
+    $this->assertStringContainsString('Demo.Delve', $warnings[0]);
+    $this->assertSame([], $this->container->get('vale.alert_collector')->alerts());
   }
 
   /**

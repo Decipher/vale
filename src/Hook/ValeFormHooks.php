@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\vale\Hook;
 
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
-use Drupal\Core\Entity\ContentEntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Messenger\MessengerInterface;
@@ -37,8 +36,9 @@ class ValeFormHooks {
   /**
    * Implements hook_form_alter().
    *
-   * Entity forms and the Layout Paragraphs component form validate their
-   * entity in their own validateForm(). This handler runs after it.
+   * Any form can validate an entity, so the handler is added to every form.
+   * It runs after the form's own validation, and shows nothing unless that
+   * validation checked prose.
    *
    * @param array<string, mixed> $form
    *   The form.
@@ -49,9 +49,7 @@ class ValeFormHooks {
    */
   #[Hook('form_alter')]
   public function formAlter(array &$form, FormStateInterface $form_state, string $form_id): void {
-    if ($form_state->getFormObject() instanceof ContentEntityFormInterface || $form_id === 'layout_paragraphs_component_form') {
-      $form['#validate'][] = [$this, 'showAlerts'];
-    }
+    $form['#validate'][] = [$this, 'showAlerts'];
   }
 
   /**

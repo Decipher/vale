@@ -76,9 +76,9 @@ class AlertCollector {
     ]);
     // Nothing is loaded here. This runs inside entity validation, and on a
     // site whose workspace manager is decorated, loading an entity at this
-    // point made core's workspace conflict check refuse the paragraph being
-    // saved in a Layout Paragraphs dialog. Labels are worked out in
-    // alerts(), once validation has finished.
+    // point made core's workspace conflict check refuse a paragraph that a
+    // form validated by itself. Labels are worked out in alerts(), once
+    // validation has finished.
     $this->alerts[$key] = [
       'entity' => $entity,
       'field' => $field,
