@@ -41,6 +41,8 @@ services:
   # Findings that did not stop a save, kept for the rest of the request.
   vale.alert_collector:
     class: Drupal\vale\AlertCollector
+    arguments:
+      - '@entity_type.bundle.info'
   Drupal\vale\AlertCollector: '@vale.alert_collector'
   vale.publish_state:
     class: Drupal\vale\PublishState

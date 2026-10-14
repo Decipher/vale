@@ -8,6 +8,7 @@ use Drupal\content_moderation\ContentModerationState;
 use Drupal\content_moderation\ModerationInformationInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
 
 /**
@@ -68,10 +69,26 @@ class PublishState {
    *   The entity.
    *
    * @return bool
-   *   TRUE for an entity that has a parent entity.
+   *   TRUE for an entity of a component type.
    */
   public function isComponent(EntityInterface $entity): bool {
-    return method_exists($entity, 'getParentEntity');
+    return self::isComponentType($entity->getEntityType());
+  }
+
+  /**
+   * Says whether an entity type holds components.
+   *
+   * Entity Reference Revisions marks such a type with the
+   * "entity_revision_parent_id_field" key, as Paragraphs does.
+   *
+   * @param \Drupal\Core\Entity\EntityTypeInterface $entity_type
+   *   The entity type.
+   *
+   * @return bool
+   *   TRUE when entities of the type belong to a parent.
+   */
+  public static function isComponentType(EntityTypeInterface $entity_type): bool {
+    return (bool) $entity_type->get('entity_revision_parent_id_field');
   }
 
 }

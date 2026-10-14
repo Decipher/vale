@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 
 /**
@@ -28,6 +29,16 @@ class AlertCollector {
    * @var array<string, string>
    */
   protected array $unchecked = [];
+
+  /**
+   * Constructs an AlertCollector.
+   *
+   * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entityTypeBundleInfo
+   *   The bundle info service, which names a component by its bundle.
+   */
+  public function __construct(
+    protected EntityTypeBundleInfoInterface $entityTypeBundleInfo,
+  ) {}
 
   /**
    * Whether any opted-in value was linted in this request.
@@ -99,6 +110,26 @@ class AlertCollector {
   }
 
   /**
+   * Names the entity that holds a finding.
+   *
+   * A component such as a paragraph takes its label from its host, which an
+   * unsaved component does not have yet during validation. So a component is
+   * named by its bundle.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity.
+   *
+   * @return string
+   *   The label.
+   */
+  protected function label(FieldableEntityInterface $entity): string {
+    if (PublishState::isComponentType($entity->getEntityType())) {
+      return (string) ($this->entityTypeBundleInfo->getBundleInfo($entity->getEntityTypeId())[$entity->bundle()]['label'] ?? $entity->bundle());
+    }
+    return (string) $entity->label();
+  }
+
+  /**
    * Gives the findings.
    *
    * @return list<array{entity_type: string, bundle: string, uuid: string, label: string, field: string, field_label: string, delta: int, alert: \Drupal\vale\Alert}>
@@ -112,7 +143,7 @@ class AlertCollector {
         'entity_type' => $entity->getEntityTypeId(),
         'bundle' => $entity->bundle(),
         'uuid' => (string) $entity->uuid(),
-        'label' => EntityLabel::of($entity),
+        'label' => $this->label($entity),
         'field' => $finding['field'],
         'field_label' => (string) $entity->getFieldDefinition($finding['field'])?->getLabel(),
         'delta' => $finding['delta'],

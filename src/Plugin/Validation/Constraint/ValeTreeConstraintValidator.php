@@ -6,10 +6,10 @@ namespace Drupal\vale\Plugin\Validation\Constraint;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
-use Drupal\vale\EntityLabel;
 use Drupal\vale\FieldLinter;
 use Drupal\vale\PublishState;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -41,12 +41,15 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
    *   The publish state service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The config factory.
+   * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entityTypeBundleInfo
+   *   The bundle info service.
    */
   public function __construct(
     protected FieldLinter $fieldLinter,
     protected AlertCollector $alertCollector,
     protected PublishState $publishState,
     protected ConfigFactoryInterface $configFactory,
+    protected EntityTypeBundleInfoInterface $entityTypeBundleInfo,
   ) {}
 
   /**
@@ -58,6 +61,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       $container->get('vale.alert_collector'),
       $container->get('vale.publish_state'),
       $container->get('config.factory'),
+      $container->get('entity_type.bundle.info'),
     );
   }
 
@@ -157,7 +161,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
           }
           $errors->add($constraint->message, [
             '@type' => (string) $component->getEntityType()->getLabel(),
-            '@bundle' => EntityLabel::bundle($component),
+            '@bundle' => (string) ($this->entityTypeBundleInfo->getBundleInfo($component->getEntityTypeId())[$component->bundle()]['label'] ?? $component->bundle()),
             '@field' => (string) $definition->getLabel(),
             '@rule' => $alert->rule,
             '@message' => $alert->message,
