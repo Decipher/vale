@@ -141,6 +141,9 @@ class ContentWalkerTest extends KernelTestBase {
     $this->assertSame('First', $findings[0]->label);
     $this->assertNull($findings[0]->host);
     $this->assertSame('docs_text', $findings[1]->bundle);
+    // Saved content uses the entity's own label, which Paragraphs takes from
+    // its host and field.
+    $this->assertSame('First > Content', $findings[1]->label);
     $this->assertSame('field_text', $findings[1]->field);
     $this->assertSame('delve', $findings[1]->alert?->match);
 

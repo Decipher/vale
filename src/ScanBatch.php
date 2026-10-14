@@ -61,6 +61,14 @@ final class ScanBatch {
       $context['sandbox']['done'] = 0;
       $context['sandbox']['started'] = \Drupal::time()->getRequestTime();
     }
+    // Each chunk runs in a request of its own, so check again that the report
+    // can be written: it describes Live, and needs Vale to replace its rows.
+    $error = \Drupal::service('vale.report_refresher')->refusal();
+    if ($error !== NULL) {
+      $context['results']['error'] = $error;
+      $context['finished'] = 1;
+      return;
+    }
     // Page by id, so content added during the scan does not shift the pages.
     $keys = $walker->idsAfter($entity_type_id, $bundle, $context['sandbox']['after'], self::CHUNK);
     $findings = $keys ? $walker->lintKeys($entity_type_id, array_keys($keys)) : [];
@@ -91,11 +99,15 @@ final class ScanBatch {
    *
    * @param bool $success
    *   Whether every operation ran.
-   * @param array<string, int> $results
-   *   The totals.
+   * @param array{entities?: int, findings?: int, error?: string} $results
+   *   The totals, and an error when the scan stopped.
    */
   public static function finished(bool $success, array $results): void {
     $messenger = \Drupal::messenger();
+    if (isset($results['error'])) {
+      $messenger->addError(new TranslatableMarkup('The scan stopped: @error The report holds what it checked.', ['@error' => $results['error']]));
+      return;
+    }
     if (!$success) {
       $messenger->addError(new TranslatableMarkup('The scan did not finish. The report holds what it checked.'));
       return;
