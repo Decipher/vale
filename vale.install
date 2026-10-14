@@ -7,6 +7,7 @@
 
 declare(strict_types=1);
 
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
 use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
 use Drupal\vale\Hook\ValeRequirements;
 
@@ -21,9 +22,14 @@ function vale_requirements(string $phase): array {
     return [];
   }
   $requirement = \Drupal::classResolver(ValeRequirements::class)->requirement();
-  // REQUIREMENT_OK is 0 and REQUIREMENT_WARNING is 1. The constants are
-  // deprecated from Drupal 11.2, so their values are used.
-  $requirement['severity'] = $requirement['severity'] ? 0 : 1;
+  // Drupal 11.2 replaced the severity constants with an enum. Before it,
+  // REQUIREMENT_OK is 0 and REQUIREMENT_WARNING is 1.
+  if (enum_exists(RequirementSeverity::class)) {
+    $requirement['severity'] = $requirement['severity'] ? RequirementSeverity::OK : RequirementSeverity::Warning;
+  }
+  else {
+    $requirement['severity'] = $requirement['severity'] ? 0 : 1;
+  }
   return ['vale' => $requirement];
 }
 

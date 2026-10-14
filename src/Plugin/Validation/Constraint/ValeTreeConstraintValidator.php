@@ -7,6 +7,7 @@ namespace Drupal\vale\Plugin\Validation\Constraint;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
 use Drupal\vale\FieldLinter;
@@ -122,7 +123,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     if ($depth > self::MAX_DEPTH) {
       foreach ($this->componentFields($entity) as $name) {
         if (!$entity->get($name)->isEmpty()) {
-          $reason = sprintf('Components nested more than %d levels deep were not checked.', self::MAX_DEPTH);
+          $reason = (string) new TranslatableMarkup('Components nested more than @depth levels deep were not checked.', ['@depth' => self::MAX_DEPTH]);
           // With fail_closed, unchecked text refuses the save, however deep.
           if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
             $errors->add($constraint->uncheckedFieldMessage, [

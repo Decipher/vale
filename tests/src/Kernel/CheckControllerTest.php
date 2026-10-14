@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Kernel;
 
+use Drupal\Core\Lock\DatabaseLockBackend;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\node\Entity\Node;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -117,7 +119,8 @@ class CheckControllerTest extends KernelTestBase {
     [$status, $response] = $this->check($this->body('Very.'));
     $this->assertSame(200, $status);
     $this->assertFalse($response['checked']);
-    $this->assertStringContainsString('vale_binary', $response['reason']);
+    // The reason names no server paths.
+    $this->assertSame('Vale could not check the text.', $response['reason']);
   }
 
   /**
@@ -128,9 +131,11 @@ class CheckControllerTest extends KernelTestBase {
 
     $refusals = [
       ['not json', 400, 'The request body must be a JSON object.'],
-      [$this->body('Very.') + ['config' => '/etc/x.ini'], 400, 'Unknown keys: config. Only entity_type, bundle, field, format, text are accepted.'],
+      [$this->body('Very.') + ['config' => '/etc/x.ini'], 400, 'Unknown keys: config. Only entity_type, bundle, id, field, format, text are accepted.'],
       [['text' => 5] + $this->body(''), 400, '"text" must be a string.'],
       [['format' => 5] + $this->body('Very.'), 400, '"format" must be a string or null.'],
+      [['id' => [1]] + $this->body('Very.'), 400, '"id" must be a string, an integer or null.'],
+      [['id' => 99] + $this->body('Very.'), 403, 'You may not check text for this bundle.'],
       [$this->body(str_repeat('a', 100001)), 400, '"text" is longer than 100000 characters.'],
       [['bundle' => 'nope'] + $this->body('Very.'), 400, 'Unknown entity type or bundle.'],
       [['entity_type' => 'nope'] + $this->body('Very.'), 400, 'Unknown entity type or bundle.'],
@@ -161,6 +166,46 @@ class CheckControllerTest extends KernelTestBase {
     $response = CheckController::create($this->container)->check($request);
     $this->assertSame(429, $response->getStatusCode());
     $this->assertSame('30', $response->headers->get('Retry-After'));
+  }
+
+  /**
+   * Tests checking text for an entity that exists.
+   */
+  public function testExistingEntity(): void {
+    $owner = $this->setUpCurrentUser([], ['access content', 'edit own page content']);
+    $page = Node::create(['type' => 'page', 'title' => 'Mine', 'uid' => $owner->id()]);
+    $page->save();
+    // Editing an existing page needs no right to create pages.
+    [$status, $response] = $this->check(['id' => $page->id()] + $this->body('Very.'));
+    $this->assertSame(200, $status);
+    $this->assertTrue($response['checked']);
+
+    $this->setUpCurrentUser([], ['access content', 'edit own page content']);
+    [$status] = $this->check(['id' => (string) $page->id()] + $this->body('Very.'));
+    $this->assertSame(403, $status);
+  }
+
+  /**
+   * Tests that only a few checks run Vale at once.
+   */
+  public function testBusy(): void {
+    $this->setUpCurrentUser([], ['access content', 'create page content']);
+    // Kernel tests use a lock backend that always grants the lock, so use
+    // real locks. Another request holds every slot: a lock backend of its
+    // own has its own lock id, as another request would.
+    $this->container->set('lock', new DatabaseLockBackend($this->container->get('database')));
+    $lock = new DatabaseLockBackend($this->container->get('database'));
+    for ($i = 0; $i < 4; $i++) {
+      $this->assertTrue($lock->acquire('vale.check.' . $i));
+    }
+    [$status, $response] = $this->check($this->body('Very.'));
+    $this->assertSame([503, 'Vale is busy. Try again shortly.'], [$status, $response['message']]);
+    $this->assertSame([], $this->valeRuns());
+
+    $lock->release('vale.check.2');
+    $this->assertSame(200, $this->check($this->body('Very.'))[0]);
+    // The slot is free again after the check.
+    $this->assertTrue($lock->acquire('vale.check.2'));
   }
 
 }

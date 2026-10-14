@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\vale\Hook;
 
+use Drupal\Core\Entity\ContentEntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\field\FieldConfigInterface;
 use Drupal\vale\FieldSettings;
 
 /**
@@ -27,7 +28,7 @@ class ValeEntityHooks {
   #[Hook('entity_type_alter')]
   public function entityTypeAlter(array &$entity_types): void {
     foreach ($entity_types as $entity_type) {
-      if ($entity_type->entityClassImplements(FieldableEntityInterface::class)) {
+      if ($entity_type instanceof ContentEntityTypeInterface && $entity_type->entityClassImplements(FieldableEntityInterface::class)) {
         $entity_type->addConstraint('ValeTree');
       }
     }

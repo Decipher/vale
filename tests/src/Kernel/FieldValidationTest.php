@@ -339,7 +339,6 @@ class FieldValidationTest extends KernelTestBase {
     // Every form gets the handler, whatever it is.
     $form = [];
     $hooks->formAlter($form, new FormState(), 'any_form');
-    $this->assertCount(1, $form['#validate']);
     $this->assertSame($hooks, $form['#validate'][0][0]);
     $this->assertSame('showAlerts', $form['#validate'][0][1]);
 

@@ -38,7 +38,8 @@ class ValeFormHooks {
    *
    * Any form can validate an entity, so the handler is added to every form.
    * It runs after the form's own validation, and shows nothing unless that
-   * validation checked prose.
+   * validation checked prose. The form cache stores this object with the
+   * form, and DependencySerializationTrait stores its services by id.
    *
    * @param array<string, mixed> $form
    *   The form.

@@ -57,6 +57,8 @@ services:
       - { name: event_subscriber }
   Drupal\vale\Hook\ValeEntityHooks:
     autowire: true
+  Drupal\vale\Hook\ValeHelpHooks:
+    autowire: true
   Drupal\vale\Hook\ValeFormHooks:
     autowire: true
   vale.content_walker:
