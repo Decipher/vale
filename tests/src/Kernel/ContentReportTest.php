@@ -15,6 +15,7 @@ use Drupal\vale\Alert;
 use Drupal\vale\Drush\Commands\ValeCommands;
 use Drupal\vale\Finding;
 use Drupal\vale\Plugin\Action\CheckProseAction;
+use Drupal\vale\ReportRefresher;
 use Drupal\vale\ScanBatch;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -78,9 +79,11 @@ class ContentReportTest extends KernelTestBase {
    *   The summaries.
    */
   protected function report(array $filters = []): array {
+    // Saves refresh the report at the end of the request.
+    $this->container->get('vale.report_refresher')->destruct();
     return array_map(
       static fn (array $row): string => $row['root_label'] . ' > ' . $row['entity_type'] . '.' . $row['field'] . ':' . $row['rule'] . ':' . $row['level'],
-      $this->container->get('vale.finding_storage')->rows($filters),
+      iterator_to_array($this->container->get('vale.finding_storage')->rows($filters), FALSE),
     );
   }
 
@@ -179,6 +182,8 @@ class ContentReportTest extends KernelTestBase {
    */
   public function testAction(): void {
     $page = $this->savePage('Guide', 'Fine.');
+    // The save's own refresh runs first.
+    $this->assertSame([], $this->report());
     // Change the text without a save hook, as an import would.
     foreach (['node__field_text', 'node_revision__field_text'] as $table) {
       $this->container->get('database')->update($table)->fields(['field_text_value' => 'This is very good.'])->execute();
@@ -210,6 +215,45 @@ class ContentReportTest extends KernelTestBase {
     $this->container->get('vale.finding_storage')->add($findings);
     $count = $this->container->get('database')->select('vale_finding')->countQuery()->execute()->fetchField();
     $this->assertSame(1200, (int) $count);
+  }
+
+  /**
+   * Tests that a save Vale cannot check waits in the queue.
+   */
+  public function testRefreshQueue(): void {
+    $page = $this->savePage('Guide', 'This is very good.');
+    $this->assertSame(['Guide > node.field_text:Demo.Very:error'], $this->report());
+
+    // Vale is down: the checked row stays, and the refresh is queued.
+    $this->setValeSetting('vale_binary', NULL);
+    $this->container->get('cache.vale')->deleteAll();
+    $page->set('field_text', 'We delve.')->save();
+    $this->assertSame(['Guide > node.field_text:Demo.Very:error'], $this->report());
+    $queue = $this->container->get('queue')->get(ReportRefresher::QUEUE);
+    $this->assertSame(1, $queue->numberOfItems());
+
+    // Cron leaves it queued until Vale is back.
+    $this->container->get('cron')->run();
+    $this->assertSame(1, $queue->numberOfItems());
+
+    $this->setUpVale();
+    $this->container->get('cron')->run();
+    $this->assertSame(0, $queue->numberOfItems());
+    $this->assertSame(['Guide > node.field_text:Demo.Delve:warning'], $this->report());
+
+    // A syncing save, such as a migration, is left to cron.
+    $page->set('field_text', 'Fine.')->setSyncing(TRUE)->save();
+    $this->assertSame(['Guide > node.field_text:Demo.Delve:warning'], $this->report());
+    $this->assertSame(1, $queue->numberOfItems());
+  }
+
+  /**
+   * Tests the report's rule filter, which matches part of a name.
+   */
+  public function testRuleFilter(): void {
+    $this->savePage('Guide', 'We delve.', 'This is very good.');
+    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report(['rule' => 'Ver']));
+    $this->assertSame([], $this->report(['rule' => '%']));
   }
 
 }

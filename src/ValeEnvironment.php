@@ -29,6 +29,11 @@ class ValeEnvironment {
   protected const PROBE_LIFETIME = 3600;
 
   /**
+   * How long a fingerprint or rule catalogue is kept, in seconds.
+   */
+  protected const ENTRY_LIFETIME = 604800;
+
+  /**
    * The fingerprint for this request, once it has been worked out.
    */
   protected ?string $fingerprint = NULL;
@@ -252,7 +257,9 @@ class ValeEnvironment {
       }
     }
     $this->fingerprint = hash_final($context);
-    $this->cache->set($cid, $this->fingerprint);
+    // A changed file gives a new key, so the old entry is only left to
+    // expire.
+    $this->cache->set($cid, $this->fingerprint, $this->time->getRequestTime() + static::ENTRY_LIFETIME);
     return $this->fingerprint;
   }
 
@@ -297,7 +304,7 @@ class ValeEnvironment {
       }
     }
     ksort($rules);
-    $this->cache->set($cid, $rules);
+    $this->cache->set($cid, $rules, $this->time->getRequestTime() + static::ENTRY_LIFETIME);
     return $rules;
   }
 

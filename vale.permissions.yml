@@ -2,6 +2,8 @@ use vale check:
   title: 'Use the Vale check endpoint'
 view vale report:
   title: 'View the prose findings report'
+  description: 'The report quotes text from all content, published or not.'
+  restrict access: true
 scan content with vale:
   title: 'Scan content with Vale'
   restrict access: true

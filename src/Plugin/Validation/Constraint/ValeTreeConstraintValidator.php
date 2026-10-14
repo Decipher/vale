@@ -78,6 +78,14 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     $errors = new FindingList();
     foreach ($value->getFieldDefinitions() as $name => $definition) {
       foreach ($this->fieldLinter->lint($value->get($name)) as $result) {
+        // ValeText has already noted unchecked text in the entity's own
+        // fields, unless it refuses the save.
+        if (!$result->isChecked() && $this->configFactory->get('vale.settings')->get('fail_closed')) {
+          $errors->add($constraint->uncheckedFieldMessage, [
+            '@field' => (string) $definition->getLabel(),
+            '@reason' => $result->reason,
+          ]);
+        }
         foreach ($result->isChecked() ? $result->alerts : [] as $alert) {
           if ($alert->level === Alert::ERROR) {
             $errors->add($constraint->fieldMessage, [
@@ -114,7 +122,17 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     if ($depth > self::MAX_DEPTH) {
       foreach ($this->componentFields($entity) as $name) {
         if (!$entity->get($name)->isEmpty()) {
-          $this->alertCollector->addUnchecked(sprintf('Components nested more than %d levels deep were not checked.', self::MAX_DEPTH));
+          $reason = sprintf('Components nested more than %d levels deep were not checked.', self::MAX_DEPTH);
+          // With fail_closed, unchecked text refuses the save, however deep.
+          if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
+            $errors->add($constraint->uncheckedFieldMessage, [
+              '@field' => $this->alertCollector->label($entity),
+              '@reason' => $reason,
+            ]);
+          }
+          else {
+            $this->alertCollector->addUnchecked($reason);
+          }
           return;
         }
       }
@@ -148,7 +166,17 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       foreach ($this->fieldLinter->lint($component->get($name)) as $delta => $result) {
         $this->alertCollector->markLinted();
         if (!$result->isChecked()) {
-          $this->alertCollector->addUnchecked($result->reason);
+          if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
+            $errors->add($constraint->uncheckedMessage, [
+              '@type' => (string) $component->getEntityType()->getLabel(),
+              '@bundle' => $this->alertCollector->label($component),
+              '@field' => (string) $definition->getLabel(),
+              '@reason' => $result->reason,
+            ]);
+          }
+          else {
+            $this->alertCollector->addUnchecked($result->reason);
+          }
           continue;
         }
         foreach ($result->alerts as $alert) {
