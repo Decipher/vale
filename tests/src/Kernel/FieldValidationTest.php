@@ -248,9 +248,9 @@ class FieldValidationTest extends KernelTestBase {
     // A new entity with no state takes the workflow's initial state, draft.
     $this->assertSame([], $this->violations($this->page(['field_text' => 'This is very good.'])));
 
-    // A state the workflow does not have is read as the initial state.
+    // A new entity given a published state is being published.
     $publish_state = $this->container->get('vale.publish_state');
-    $this->assertFalse($publish_state->isBeingPublished($this->page(['moderation_state' => 'gone'])));
+    $this->assertTrue($publish_state->isBeingPublished($this->page(['moderation_state' => 'published'])));
     // An entity with no published state is always being published.
     $this->assertTrue($publish_state->isBeingPublished(User::create(['name' => 'someone'])));
   }

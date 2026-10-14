@@ -6,7 +6,6 @@ namespace Drupal\vale;
 
 use Drupal\content_moderation\ContentModerationState;
 use Drupal\content_moderation\ModerationInformationInterface;
-use Drupal\content_moderation\Plugin\WorkflowType\ContentModerationInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
@@ -14,9 +13,10 @@ use Drupal\Core\Entity\EntityPublishedInterface;
 /**
  * Decides whether an entity is being published by the save in progress.
  *
- * Validation runs before presave, where Content Moderation sets the status.
- * So for a moderated entity the target moderation state decides, not
- * isPublished().
+ * Setting an entity's moderation state also sets its published status, so
+ * isPublished() is correct during validation. The exception is a new entity
+ * saved without a state: Content Moderation applies the initial state in
+ * presave, after validation. So for that entity the state decides.
  */
 class PublishState {
 
@@ -41,24 +41,21 @@ class PublishState {
    *   state at all.
    */
   public function isBeingPublished(EntityInterface $entity): bool {
-    if ($this->moderation && $entity instanceof ContentEntityInterface && $this->moderation->isModeratedEntity($entity)) {
-      $workflow = $this->moderation->getWorkflowForEntity($entity);
-      if ($workflow) {
-        $type = $workflow->getTypePlugin();
-        $state_id = $entity->hasField('moderation_state') ? $entity->get('moderation_state')->value : NULL;
-        $state = is_string($state_id) && $type->hasState($state_id) ? $type->getState($state_id) : NULL;
-        if ($state === NULL) {
-          $state = $type instanceof ContentModerationInterface ? $type->getInitialState($entity) : $type->getInitialState();
-        }
+    if (!$entity instanceof EntityPublishedInterface) {
+      return TRUE;
+    }
+    if ($entity->isNew() && $entity instanceof ContentEntityInterface && $this->moderation?->isModeratedEntity($entity)) {
+      // Without a state set, the field computes the initial one.
+      $state_id = $entity->get('moderation_state')->value;
+      $type = $this->moderation->getWorkflowForEntity($entity)?->getTypePlugin();
+      if (is_string($state_id) && $type?->hasState($state_id)) {
+        $state = $type->getState($state_id);
         if ($state instanceof ContentModerationState) {
           return $state->isPublishedState();
         }
       }
     }
-    if ($entity instanceof EntityPublishedInterface) {
-      return $entity->isPublished();
-    }
-    return TRUE;
+    return $entity->isPublished();
   }
 
   /**
