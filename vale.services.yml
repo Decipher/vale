@@ -59,3 +59,22 @@ services:
     autowire: true
   Drupal\vale\Hook\ValeFormHooks:
     autowire: true
+  vale.content_walker:
+    class: Drupal\vale\ContentWalker
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_type.bundle.info'
+      - '@entity_field.manager'
+      - '@vale.field_linter'
+      - '@vale.publish_state'
+      - '@?workspaces.manager'
+      # The workspace tracker is set by ValeServiceProvider.
+      - null
+      - '@entity.memory_cache'
+  Drupal\vale\ContentWalker: '@vale.content_walker'
+  vale.installer:
+    class: Drupal\vale\ValeInstaller
+    arguments:
+      - '@http_client'
+      - '@file_system'
+  Drupal\vale\ValeInstaller: '@vale.installer'
