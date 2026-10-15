@@ -22,6 +22,11 @@ class FindingStorage {
   public const string TABLE = 'vale_finding';
 
   /**
+   * How many findings one insert holds.
+   */
+  private const int INSERT_BATCH = 500;
+
+  /**
    * Constructs a FindingStorage.
    *
    * @param \Drupal\Core\Database\Connection $database
@@ -90,6 +95,22 @@ class FindingStorage {
       return;
     }
     $now = $this->time->getRequestTime();
+    // Each row binds 18 values, and a database caps the values in one
+    // query, so a large scan is inserted in batches.
+    foreach (array_chunk($findings, self::INSERT_BATCH) as $batch) {
+      $this->insert($batch, $now);
+    }
+  }
+
+  /**
+   * Inserts one batch of findings.
+   *
+   * @param \Drupal\vale\Finding[] $findings
+   *   The findings.
+   * @param int $now
+   *   When they were found, as a Unix timestamp.
+   */
+  protected function insert(array $findings, int $now): void {
     $insert = $this->database->insert(self::TABLE)->fields([
       'root_type', 'root_id', 'root_bundle', 'root_label',
       'entity_type', 'entity_id', 'bundle', 'label',
