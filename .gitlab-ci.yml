@@ -40,3 +40,21 @@ phpcs:
   allow_failure: false
 phpstan:
   allow_failure: false
+
+# RealValeTest runs only where VALE_BINARY points at Vale, so the phpunit jobs
+# install a pinned release first, verified by its published checksum.
+.install-vale: &install-vale
+  - |
+    VALE_VERSION=3.18.0
+    VALE_SHA256=a6f71a75a12fe689345b754f2412b90367fe33648abb7d200fa19eaadc2dbf6d
+    curl -fsSL --retry 3 -o /tmp/vale.tar.gz "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+    echo "${VALE_SHA256}  /tmp/vale.tar.gz" | sha256sum -c -
+    mkdir -p "$CI_PROJECT_DIR/.vale-bin"
+    tar -xzf /tmp/vale.tar.gz -C "$CI_PROJECT_DIR/.vale-bin" vale
+    chmod 755 "$CI_PROJECT_DIR/.vale-bin/vale"
+    "$CI_PROJECT_DIR/.vale-bin/vale" --version
+
+phpunit:
+  before_script: *install-vale
+  variables:
+    VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale
