@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Kernel;
 
+use Drupal\Core\File\Exception\FileWriteException;
+use Drupal\Core\File\FileExists;
+use Drupal\Core\File\FileSystem;
+use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Site\Settings;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\vale\ValeInstaller;
 use GuzzleHttp\Client;
@@ -245,6 +250,85 @@ class ValeInstallerTest extends KernelTestBase {
     exec(escapeshellarg($binary), $output);
     $this->assertSame(['vale version 9.9.9'], $output);
     $this->assertSame(['vale'], array_values(array_diff(scandir($this->directory . '/bin') ?: [], ['.', '..'])));
+  }
+
+  /**
+   * Tests each file system step that can fail.
+   */
+  public function testFileSystemFailures(): void {
+    $archive = $this->archive();
+    $expected = [
+      'mkdir' => 'temporary directory',
+      'move' => 'could not be written',
+      'chmod' => 'could not be written',
+    ];
+    foreach ($expected as $step => $message) {
+      $stack = HandlerStack::create(new MockHandler([new Response(200, [], $archive)]));
+      $installer = new ValeInstaller(new Client(['handler' => $stack]), $this->failingFileSystem($step));
+      $error = NULL;
+      try {
+        $installer->install($this->directory . '/bin-' . $step, '9.9.9', hash('sha256', $archive), 'Linux_64-bit');
+      }
+      catch (\RuntimeException $e) {
+        $error = $e->getMessage();
+      }
+      $this->assertNotNull($error, "A failed $step was not reported.");
+      $this->assertStringContainsString($message, $error);
+      // Nothing is left half-installed.
+      $this->assertFileDoesNotExist($this->directory . '/bin-' . $step . '/vale.new');
+    }
+  }
+
+  /**
+   * Makes a file system whose given step fails.
+   *
+   * @param string $step
+   *   The step that fails: mkdir, move or chmod.
+   *
+   * @return \Drupal\Core\File\FileSystemInterface
+   *   The file system.
+   */
+  protected function failingFileSystem(string $step): FileSystemInterface {
+    // Drupal 10.3 also takes a logger. A third argument is ignored on 11.
+    return new class($step, $this->container->get('stream_wrapper_manager'), Settings::getInstance(), $this->container->get('logger.channel.file')) extends FileSystem {
+
+      /**
+       * Constructs the file system.
+       *
+       * @param string $step
+       *   The step that fails.
+       * @param mixed ...$arguments
+       *   The core file system's arguments.
+       */
+      public function __construct(private readonly string $step, mixed ...$arguments) {
+        parent::__construct(...$arguments);
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function mkdir($uri, $mode = NULL, $recursive = FALSE, $context = NULL) {
+        return $this->step === 'mkdir' && str_contains($uri, 'vale-install-') ? FALSE : parent::mkdir($uri, $mode, $recursive, $context);
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function move($source, $destination, $fileExists = FileExists::Rename) {
+        if ($this->step === 'move') {
+          throw new FileWriteException('Move failed.');
+        }
+        return parent::move($source, $destination, $fileExists);
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function chmod($uri, $mode = NULL) {
+        return $this->step === 'chmod' ? FALSE : parent::chmod($uri, $mode);
+      }
+
+    };
   }
 
 }

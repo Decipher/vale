@@ -210,6 +210,20 @@ class ValeCommandsTest extends KernelTestBase {
     $this->assertSame(0, $result->getExitCode());
     $this->assertTrue(is_executable($this->valeDirectory . '/bin/vale'));
     $this->assertStringContainsString("\$settings['vale_binary'] = '" . $this->valeDirectory . "/bin/vale';", $output->fetch());
+    // Beside the web root, the setting is given from $app_root.
+    $directory = 'vale-test-' . bin2hex(random_bytes(4));
+    $client = new Client(['handler' => HandlerStack::create(new MockHandler([new Response(200, [], $archive)]))]);
+    $this->container->set('vale.installer', new ValeInstaller($client, $this->container->get('file_system')));
+    $commands = $this->commands();
+    $commands->setInput(new ArrayInput([]));
+    $commands->setOutput($output);
+    try {
+      $commands->install(['dir' => dirname(DRUPAL_ROOT) . '/' . $directory, 'vale-version' => '9.9.9', 'sha256' => hash('sha256', $archive)]);
+      $this->assertStringContainsString("\$settings['vale_binary'] = \$app_root . '/../$directory/vale';", $output->fetch());
+    }
+    finally {
+      $this->container->get('file_system')->deleteRecursive(dirname(DRUPAL_ROOT) . '/' . $directory);
+    }
   }
 
   /**

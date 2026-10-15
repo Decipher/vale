@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\entity_test\Entity\EntityTest;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
@@ -14,6 +16,7 @@ use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
 use Drupal\vale\Finding;
+use Drupal\vale\ValeServiceProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -42,6 +45,7 @@ class ContentWalkerTest extends KernelTestBase {
    */
   protected static $modules = [
     'entity_reference_revisions',
+    'entity_test',
     'field',
     'file',
     'filter',
@@ -191,6 +195,25 @@ class ContentWalkerTest extends KernelTestBase {
 
     $this->expectException(\InvalidArgumentException::class);
     $walker->workspace('nope');
+  }
+
+  /**
+   * Tests linting an entity type without revisions.
+   */
+  public function testWithoutRevisions(): void {
+    $this->installEntitySchema('entity_test');
+    $this->createValeTextField('entity_test', 'entity_test', 'field_text', TRUE);
+    EntityTest::create(['name' => 'Test', 'field_text' => 'We delve.'])->save();
+    $this->assertSame(['entity_test.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('entity_test', 'entity_test')));
+  }
+
+  /**
+   * Tests that the service provider leaves a container without Vale alone.
+   */
+  public function testServiceProviderWithoutVale(): void {
+    $container = new ContainerBuilder();
+    (new ValeServiceProvider())->alter($container);
+    $this->assertFalse($container->hasDefinition('vale.content_walker'));
   }
 
 }
