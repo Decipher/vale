@@ -146,6 +146,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       elseif ($scope !== NULL) {
         [$entity_type, $bundle] = explode(':', $scope, 2) + [1 => ''];
         $findings = $this->contentWalker->bundle($entity_type, $bundle);
+        // The report keeps rows by top-level content. A paragraph's findings
+        // belong to the page that holds it, so its bundle cannot be saved.
+        if (!empty($options['save']) && !isset($this->contentWalker->scannableBundles()[$entity_type . ':' . $bundle])) {
+          throw new \InvalidArgumentException(sprintf('The report holds top-level content, so --save cannot be used with %s. Save the bundle that holds it instead.', $scope));
+        }
         if (!empty($options['save'])) {
           $this->findingStorage->clearBundle($entity_type, $bundle);
           $this->findingStorage->add($findings);

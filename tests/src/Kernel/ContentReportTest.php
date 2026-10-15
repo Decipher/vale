@@ -11,7 +11,9 @@ use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
+use Drupal\vale\Alert;
 use Drupal\vale\Drush\Commands\ValeCommands;
+use Drupal\vale\Finding;
 use Drupal\vale\Plugin\Action\CheckProseAction;
 use Drupal\vale\ScanBatch;
 use PHPUnit\Framework\Attributes\Group;
@@ -134,6 +136,9 @@ class ContentReportTest extends KernelTestBase {
     $this->assertSame(0, $commands->lint('node:page', ['workspace' => NULL, 'save' => TRUE])->getExitCode());
     $this->assertSame(['First > node.field_text:Demo.Delve:warning'], $this->report());
 
+    // A paragraph's findings belong to its page, so its bundle is not saved.
+    $this->assertSame(1, $commands->lint('paragraph:docs_text', ['workspace' => NULL, 'save' => TRUE])->getExitCode());
+
     $this->container->get('database')->update('vale_finding')->fields(['rule' => 'Stale.Rule'])->execute();
     $commands->lint(NULL, ['workspace' => NULL, 'save' => TRUE]);
     $this->assertSame(['First > node.field_text:Demo.Delve:warning'], $this->report());
@@ -185,6 +190,20 @@ class ContentReportTest extends KernelTestBase {
 
     $this->setUpCurrentUser([], ['access content']);
     $this->assertFalse($action->access($page));
+  }
+
+  /**
+   * Tests storing more findings than one insert can hold.
+   */
+  public function testManyFindings(): void {
+    $alert = new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 1, 4, 'very');
+    $findings = [];
+    for ($i = 1; $i <= 1200; $i++) {
+      $findings[] = new Finding('node', (string) $i, "Page $i", 'page', 'field_text', 0, $alert);
+    }
+    $this->container->get('vale.finding_storage')->add($findings);
+    $count = $this->container->get('database')->select('vale_finding')->countQuery()->execute()->fetchField();
+    $this->assertSame(1200, (int) $count);
   }
 
 }
