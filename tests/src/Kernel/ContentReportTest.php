@@ -243,6 +243,16 @@ class ContentReportTest extends KernelTestBase {
   }
 
   /**
+   * Tests that the queue worker drops an item it cannot read.
+   */
+  public function testMalformedQueueItem(): void {
+    $worker = $this->container->get('plugin.manager.queue_worker')->createInstance(ReportRefresher::QUEUE);
+    $worker->processItem('not an item');
+    $worker->processItem(['node']);
+    $this->assertSame([], $this->report());
+  }
+
+  /**
    * Tests that a save Vale cannot check waits in the queue.
    */
   public function testRefreshQueue(): void {
