@@ -174,26 +174,31 @@ class ValeRunnerTest extends KernelTestBase {
     $this->assertEquals($first, $second);
     $this->assertCount(1, $this->valeRuns());
 
+    // A result that is not stored is linted again next time.
+    $this->runner()->lint('Not kept.', 'md', 'node.page.field_text', FALSE);
+    $this->runner()->lint('Not kept.', 'md', 'node.page.field_text', FALSE);
+    $this->assertCount(3, $this->valeRuns());
+
     // Another name or another extension is another result.
     $this->runner()->lint('This is very good.', 'md', 'node.page.field_callout');
     $this->runner()->lint('This is very good.', 'html', 'node.page.field_text');
-    $this->assertCount(3, $this->valeRuns());
+    $this->assertCount(5, $this->valeRuns());
 
     // A changed style file changes the fingerprint. The fingerprint is
     // worked out once per request, so new services stand in for a new
     // request.
     file_put_contents($this->valeDirectory . '/styles/Demo/Very.yml', "\n# Edited.\n", FILE_APPEND);
     $this->freshRunner()->lint('This is very good.', 'md', 'node.page.field_text');
-    $this->assertCount(4, $this->valeRuns());
+    $this->assertCount(6, $this->valeRuns());
 
     // So does a changed .vale.ini.
     file_put_contents($this->valeDirectory . '/.vale.ini', "\n# Edited.\n", FILE_APPEND);
     $this->freshRunner()->lint('This is very good.', 'md', 'node.page.field_text');
-    $this->assertCount(5, $this->valeRuns());
+    $this->assertCount(7, $this->valeRuns());
 
     // An unchanged configuration still hits the cache in a new request.
     $this->freshRunner()->lint('This is very good.', 'md', 'node.page.field_text');
-    $this->assertCount(5, $this->valeRuns());
+    $this->assertCount(7, $this->valeRuns());
   }
 
   /**

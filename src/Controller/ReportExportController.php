@@ -59,7 +59,7 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
   }
 
   /**
-   * Streams the filtered findings as CSV.
+   * Streams the filtered findings as CSV, a row at a time.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request, with optional root_bundle, level and rule filters.

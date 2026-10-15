@@ -6,18 +6,21 @@ namespace Drupal\vale\Hook;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\SynchronizableInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\FindingStorage;
 use Drupal\vale\PublishState;
+use Drupal\vale\ReportRefresher;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
  * Keeps the content report current as content changes.
  *
  * The report describes Live. Saving a top-level entity outside a workspace
- * replaces its rows with those of its newest revision, and deleting it removes
- * them. A component, such as a paragraph, is reported through its host's save.
+ * refreshes its rows from its newest revision, through ReportRefresher, and
+ * deleting it removes them. A component, such as a paragraph, is reported
+ * through its host's save.
  */
 class ValeReportHooks {
 
@@ -30,6 +33,8 @@ class ValeReportHooks {
    *   The finding storage.
    * @param \Drupal\vale\PublishState $publishState
    *   The publish state service, which knows what a component is.
+   * @param \Drupal\vale\ReportRefresher $reportRefresher
+   *   The report refresher.
    * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
    *   The workspace manager, when Workspaces is on.
    */
@@ -37,6 +42,7 @@ class ValeReportHooks {
     protected ContentWalker $contentWalker,
     protected FindingStorage $findingStorage,
     protected PublishState $publishState,
+    protected ReportRefresher $reportRefresher,
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
   ) {}
 
@@ -62,12 +68,13 @@ class ValeReportHooks {
   #[Hook('entity_delete')]
   public function entityDelete(EntityInterface $entity): void {
     if ($entity instanceof FieldableEntityInterface && !$this->publishState->isComponent($entity) && $entity->id() !== NULL) {
+      $this->reportRefresher->remove($entity->getEntityTypeId(), $entity->id());
       $this->findingStorage->delete($entity->getEntityTypeId(), $entity->id());
     }
   }
 
   /**
-   * Replaces a top-level entity's rows with its current findings.
+   * Notes that a top-level entity's rows need refreshing.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The saved entity.
@@ -82,11 +89,7 @@ class ValeReportHooks {
     ) {
       return;
     }
-    // The report shows the newest revision outside any workspace, which is
-    // not always the one saved: saving an older revision as the default
-    // leaves a newer draft in place.
-    $latest = $this->contentWalker->latest($entity->getEntityTypeId(), $entity->id());
-    $this->findingStorage->replace($entity->getEntityTypeId(), [$entity->id()], $latest ? $this->contentWalker->entity($latest) : []);
+    $this->reportRefresher->add($entity->getEntityTypeId(), $entity->id(), $entity instanceof SynchronizableInterface && $entity->isSyncing());
   }
 
 }

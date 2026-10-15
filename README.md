@@ -131,6 +131,7 @@ There is no settings form. Set these in `settings.php`, such as
 | `formats` | none | The extension for a text format, such as `markdown: md`, so Vale reads it as Markdown |
 | `default_extension` | `html` | The extension for every other text format |
 | `publish_only` | `FALSE` | When `FALSE`, any save with an error is refused. When `TRUE`, drafts save with their errors, and only the save that publishes is refused |
+| `fail_closed` | `FALSE` | A save is refused when Vale cannot check its text, as it is for an error. Off, the save goes through with a notice |
 | `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the findings, `off` skips the check |
 | `timeout` | `10` | Seconds one Vale run may take |
 | `check_limit`, `check_window` | `120`, `60` | Check endpoint requests allowed per user, per this many seconds |
@@ -225,7 +226,15 @@ overuse, and the module applies them like any other rule.
 is missing or its configuration cannot be read, the status report also shows
 a warning for the server it ran on. A timeout or a failed run shows only to
 the author. `drush vale:lint` and the workspace `block` mode fail instead, so
-an unchecked deploy does not pass.
+an unchecked deploy does not pass. To refuse the save instead, set
+`fail_closed`.
+
+**Q: How much does the result cache hold?**
+
+**A:** Results are kept in the `vale` cache bin for a week. On the database
+cache backend, cron trims each bin to 5,000 rows, so a large site checks
+some text again. Set `$settings['database_cache_max_rows']`, or put the bin
+on Redis or Memcache.
 
 ## Maintainers
 

@@ -11,6 +11,7 @@ use Consolidation\AnnotatedCommand\Input\StdinAwareTrait;
 use Consolidation\OutputFormatters\StructuredData\PropertyList;
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\FieldLinter;
@@ -30,6 +31,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
   use StdinAwareTrait;
 
   /**
+   * How many entities --save lints before it writes to the report.
+   */
+  private const int CHUNK = 50;
+
+  /**
    * Constructs a ValeCommands.
    *
    * @param \Drupal\vale\ContentWalker $contentWalker
@@ -44,6 +50,8 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    *   The Vale installer.
    * @param \Drupal\vale\FindingStorage $findingStorage
    *   The finding storage for the content report.
+   * @param \Drupal\Component\Datetime\TimeInterface $time
+   *   The time service.
    */
   public function __construct(
     private readonly ContentWalker $contentWalker,
@@ -52,6 +60,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly ValeInstaller $valeInstaller,
     private readonly FindingStorage $findingStorage,
+    private readonly TimeInterface $time,
   ) {
     parent::__construct();
   }
@@ -73,6 +82,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       $container->get('entity_field.manager'),
       $container->get('vale.installer'),
       $container->get('vale.finding_storage'),
+      $container->get('datetime.time'),
     );
   }
 
@@ -146,23 +156,20 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       }
       elseif ($scope !== NULL) {
         [$entity_type, $bundle] = explode(':', $scope, 2) + [1 => ''];
-        $findings = $this->contentWalker->bundle($entity_type, $bundle);
-        // The report keeps rows by top-level content. A paragraph's findings
-        // belong to the page that holds it, so its bundle cannot be saved.
-        if (!empty($options['save']) && !isset($this->contentWalker->scannableBundles()[$entity_type . ':' . $bundle])) {
-          throw new \InvalidArgumentException(sprintf('The report holds top-level content, so --save cannot be used with %s. Save the bundle that holds it instead.', $scope));
-        }
-        if (!empty($options['save'])) {
-          $this->findingStorage->clearBundle($entity_type, $bundle);
-          $this->findingStorage->add($findings);
-        }
+        $findings = empty($options['save'])
+          ? $this->contentWalker->bundle($entity_type, $bundle)
+          : $this->saveBundle($entity_type, $bundle);
+      }
+      elseif (empty($options['save'])) {
+        $findings = $this->contentWalker->all();
       }
       else {
-        $findings = $this->contentWalker->all();
-        if (!empty($options['save'])) {
-          $this->findingStorage->clearAll();
-          $this->findingStorage->add($findings);
+        $findings = [];
+        foreach (array_keys($this->contentWalker->scannableBundles()) as $key) {
+          array_push($findings, ...$this->saveBundle(...explode(':', $key, 2)));
         }
+        // Rows of bundles that no longer hold prose are stale too.
+        $this->findingStorage->clearStale(NULL, NULL, $this->time->getRequestTime());
       }
     }
     catch (\InvalidArgumentException $e) {
@@ -366,6 +373,40 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       ];
     }
     return CommandResult::dataWithExitCode(new RowsOfFields($rows), $failed ? self::EXIT_FAILURE : self::EXIT_SUCCESS);
+  }
+
+  /**
+   * Lints a bundle into the content report, a chunk at a time.
+   *
+   * @param string $entity_type
+   *   The entity type.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return \Drupal\vale\Finding[]
+   *   The findings.
+   *
+   * @throws \InvalidArgumentException
+   *   When the entity type or the bundle does not exist.
+   */
+  private function saveBundle(string $entity_type, string $bundle): array {
+    // The first page also checks that the bundle exists.
+    $keys = $this->contentWalker->idsAfter($entity_type, $bundle, NULL, self::CHUNK);
+    // The report keeps rows by top-level content. A paragraph's findings
+    // belong to the page that holds it, so its bundle cannot be saved.
+    if (!isset($this->contentWalker->scannableBundles()[$entity_type . ':' . $bundle])) {
+      throw new \InvalidArgumentException(sprintf('The report holds top-level content, so --save cannot be used with %s:%s. Save the bundle that holds it instead.', $entity_type, $bundle));
+    }
+    $findings = [];
+    $after = NULL;
+    for (; $keys; $keys = $this->contentWalker->idsAfter($entity_type, $bundle, $after, self::CHUNK)) {
+      $chunk = $this->contentWalker->lintKeys($entity_type, array_keys($keys));
+      $this->findingStorage->replace($entity_type, array_values($keys), $chunk);
+      array_push($findings, ...$chunk);
+      $after = end($keys);
+    }
+    $this->findingStorage->clearStale($entity_type, $bundle, $this->time->getRequestTime());
+    return $findings;
   }
 
   /**

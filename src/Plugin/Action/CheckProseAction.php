@@ -15,6 +15,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\FindingStorage;
+use Drupal\workspaces\WorkspaceManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -43,6 +44,8 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
    *   The messenger.
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The current user.
+   * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
+   *   The workspace manager, when Workspaces is on.
    */
   public function __construct(
     array $configuration,
@@ -52,6 +55,7 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
     protected FindingStorage $findingStorage,
     MessengerInterface $messenger,
     protected AccountInterface $account,
+    protected ?WorkspaceManagerInterface $workspaceManager = NULL,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->setMessenger($messenger);
@@ -69,6 +73,7 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
       $container->get('vale.finding_storage'),
       $container->get('messenger'),
       $container->get('current_user'),
+      $container->get('workspaces.manager', ContainerInterface::NULL_ON_INVALID_REFERENCE),
     );
   }
 
@@ -79,6 +84,12 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
    *   The selected entities.
    */
   public function executeMultiple(array $entities): void {
+    // The report describes Live. A workspace's content is checked when the
+    // workspace is published.
+    if ($this->workspaceManager?->hasActiveWorkspace()) {
+      $this->messenger()->addError($this->t('Switch to Live to check content for the report.'));
+      return;
+    }
     $errors = 0;
     $others = 0;
     foreach ($entities as $entity) {

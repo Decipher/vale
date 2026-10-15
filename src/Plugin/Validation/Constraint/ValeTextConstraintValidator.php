@@ -68,11 +68,18 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     // own save, so its errors are reported when its host is published.
     $publish_only = (bool) $this->configFactory->get('vale.settings')->get('publish_only');
     $publishing = $publish_only && !$this->publishState->isComponent($entity) && $this->publishState->isBeingPublished($entity);
+    // With fail_closed, text Vale could not check is refused as an error is.
+    $fail_closed = (bool) $this->configFactory->get('vale.settings')->get('fail_closed');
 
     foreach ($this->fieldLinter->lint($value) as $delta => $result) {
       $this->alertCollector->markLinted();
       if (!$result->isChecked()) {
-        $this->alertCollector->addUnchecked($result->reason);
+        if (!$fail_closed || ($publish_only && !$publishing)) {
+          $this->alertCollector->addUnchecked($result->reason);
+        }
+        elseif (!$publish_only) {
+          $this->context->buildViolation($constraint->uncheckedMessage, ['@reason' => $result->reason])->atPath($delta . '.value')->addViolation();
+        }
         continue;
       }
       $errors = new FindingList();

@@ -36,4 +36,18 @@ class ValeTreeConstraint extends SymfonyConstraint {
    */
   public $fieldMessage = '@field: @rule: @message (line @line: "@match")';
 
+  /**
+   * The message for text in a component that Vale could not check.
+   *
+   * @var string
+   */
+  public $uncheckedMessage = '@type "@bundle", @field: Vale could not check this text. @reason';
+
+  /**
+   * The message for text in the entity's own field that Vale could not check.
+   *
+   * @var string
+   */
+  public $uncheckedFieldMessage = '@field: Vale could not check this text. @reason';
+
 }

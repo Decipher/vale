@@ -24,4 +24,11 @@ class ValeTextConstraint extends SymfonyConstraint {
    */
   public $message = '@rule: @message (line @line: "@match")';
 
+  /**
+   * The message for text Vale could not check, when that refuses the save.
+   *
+   * @var string
+   */
+  public $uncheckedMessage = 'Vale could not check this text. @reason';
+
 }
