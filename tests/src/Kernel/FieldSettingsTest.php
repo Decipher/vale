@@ -6,13 +6,16 @@ namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\Core\Routing\RouteMatch;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Alert;
 use Drupal\vale\FieldSettings;
+use Drupal\vale\Hook\ValeHelpHooks;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Routing\Route;
 
 /**
  * Tests the per-field settings and how they narrow the alerts.
@@ -174,6 +177,39 @@ class FieldSettingsTest extends KernelTestBase {
     // never add one.
     $alerts = $this->container->get('vale.runner')->lint('Fine text.')->alerts;
     $this->assertSame([], $settings->filter($alerts));
+  }
+
+  /**
+   * Tests that the site settings are validated against their schema.
+   */
+  public function testSettingsValidation(): void {
+    $this->installConfig(['vale']);
+    $typed = $this->container->get('config.typed');
+    $settings = $this->config('vale.settings')->get();
+    $this->assertCount(0, $typed->createFromNameAndData('vale.settings', $settings)->validate());
+
+    $invalid = [
+      'workspace_mode' => 'sometimes',
+      'timeout' => 0,
+      'default_extension' => '../md',
+      'formats' => ['markdown' => 'm d'],
+    ] + $settings;
+    $paths = [];
+    foreach ($typed->createFromNameAndData('vale.settings', $invalid)->validate() as $violation) {
+      $paths[] = $violation->getPropertyPath();
+    }
+    sort($paths);
+    $this->assertSame(['default_extension', 'formats.markdown', 'timeout', 'workspace_mode'], $paths);
+  }
+
+  /**
+   * Tests the help page.
+   */
+  public function testHelp(): void {
+    $hooks = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeHelpHooks::class);
+    $route_match = new RouteMatch('help.page.vale', new Route('/admin/help/vale'));
+    $this->assertStringContainsString('<em>Prose checks</em>', $hooks->help('help.page.vale', $route_match));
+    $this->assertSame('', $hooks->help('system.status', $route_match));
   }
 
 }

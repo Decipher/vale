@@ -214,6 +214,8 @@ class ValeRunnerTest extends KernelTestBase {
     $this->assertStringContainsString('not executable', $this->runner()->lint('Very.')->reason);
 
     $this->setUpVale();
+    $this->setSetting('vale_config', NULL);
+    $this->assertStringContainsString("\$settings['vale_config']", $this->runner()->lint('Very.')->reason);
     $this->setSetting('vale_config', $this->valeDirectory . '/missing.ini');
     $this->assertStringContainsString('cannot be read', $this->runner()->lint('Very.')->reason);
     $this->assertSame([], $this->valeRuns());
@@ -245,17 +247,17 @@ class ValeRunnerTest extends KernelTestBase {
     $this->assertSame('0.0.0-fake', $requirement['value']);
     $this->assertStringContainsString('Its styles hold 3 rules.', $requirement['description']);
 
-    // The OOP hook gives the enum, the legacy hook the integer, and the
-    // legacy hook says nothing outside the runtime phase.
+    // Both hooks give the enum where it exists, and the integer before it.
+    // The legacy hook says nothing outside the runtime phase.
     $this->container->get('module_handler')->loadInclude('vale', 'install');
     $this->assertSame([], vale_requirements('install'));
-    $this->assertSame(0, vale_requirements('runtime')['vale']['severity']);
+    $this->assertSame(enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : 0, vale_requirements('runtime')['vale']['severity']);
     if (class_exists(RequirementSeverity::class)) {
       $hooks = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class);
       $this->assertSame(RequirementSeverity::OK, $hooks->runtime()['vale']['severity']);
     }
     $this->setSetting('vale_binary', NULL);
-    $this->assertSame(1, vale_requirements('runtime')['vale']['severity']);
+    $this->assertSame(enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : 1, vale_requirements('runtime')['vale']['severity']);
   }
 
   /**

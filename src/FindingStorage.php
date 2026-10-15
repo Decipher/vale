@@ -6,6 +6,7 @@ namespace Drupal\vale;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
  * Stores findings for the content report.
@@ -132,7 +133,8 @@ class FindingStorage {
         $finding->field, $finding->delta,
         $alert->rule ?? '',
         $alert->level ?? 'unchecked',
-        $alert->message ?? $finding->reason,
+        // A text column holds 64 KB, and a character can take four bytes.
+        mb_substr($alert->message ?? $finding->reason, 0, 16000),
         mb_substr($alert->match ?? '', 0, 255),
         $alert->line ?? 0, $alert->start ?? 0, $alert->end ?? 0,
         $now,
@@ -192,10 +194,10 @@ class FindingStorage {
    */
   public static function levelOptions(): array {
     return [
-      Alert::ERROR => t('Error'),
-      Alert::WARNING => t('Warning'),
-      Alert::SUGGESTION => t('Suggestion'),
-      'unchecked' => t('Not checked'),
+      Alert::ERROR => new TranslatableMarkup('Error'),
+      Alert::WARNING => new TranslatableMarkup('Warning'),
+      Alert::SUGGESTION => new TranslatableMarkup('Suggestion'),
+      'unchecked' => new TranslatableMarkup('Not checked'),
     ];
   }
 

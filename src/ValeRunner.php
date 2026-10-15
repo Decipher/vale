@@ -7,6 +7,7 @@ namespace Drupal\vale;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -19,6 +20,8 @@ use Symfony\Component\Process\Exception\ProcessTimedOutException;
  * No file is written.
  */
 class ValeRunner implements ValeRunnerInterface {
+
+  use StringTranslationTrait;
 
   /**
    * How long a cached result is kept, in seconds.
@@ -87,10 +90,15 @@ class ValeRunner implements ValeRunnerInterface {
       $process->run();
     }
     catch (ProcessTimedOutException) {
-      return $this->failed('Vale ran out of time after @seconds seconds.', ['@seconds' => $this->environment->timeout()]);
+      $seconds = $this->environment->timeout();
+      return $this->failed(
+        'Vale ran out of time after @seconds seconds.',
+        ['@seconds' => $seconds],
+        (string) $this->formatPlural($seconds, 'Vale ran out of time after 1 second.', 'Vale ran out of time after @count seconds.'),
+      );
     }
     catch (ProcessException $e) {
-      return $this->failed('Vale could not be run: @message', ['@message' => $e->getMessage()]);
+      return $this->failed('Vale could not be run: @message', ['@message' => $e->getMessage()], $this->t('Vale could not be run:') . ' ' . $e->getMessage());
     }
 
     $output = json_decode($process->getOutput(), TRUE);
@@ -100,15 +108,17 @@ class ValeRunner implements ValeRunnerInterface {
     // own.
     if (!in_array($process->getExitCode(), [0, 1], TRUE)) {
       $detail = is_array($output) && is_string($output['Text'] ?? NULL) ? $output['Text'] : trim($process->getErrorOutput());
-      return $this->failed('Vale failed with exit code @code: @detail', [
-        '@code' => (string) $process->getExitCode(),
-        '@detail' => $detail,
-      ]);
+      $code = (string) $process->getExitCode();
+      return $this->failed(
+        'Vale failed with exit code @code: @detail',
+        ['@code' => $code, '@detail' => $detail],
+        $this->t('Vale failed with exit code @code:', ['@code' => $code]) . ' ' . $detail,
+      );
     }
 
     $alerts = $this->readAlerts($output);
     if ($alerts === NULL) {
-      return $this->failed('Vale gave output that could not be read.', []);
+      return $this->failed('Vale gave output that could not be read.', [], (string) $this->t('Vale gave output that could not be read.'));
     }
     if ($html) {
       $alerts = $this->unwrap($alerts, count(preg_split('/\R/', $text) ?: []));
@@ -205,13 +215,15 @@ class ValeRunner implements ValeRunnerInterface {
    *   The message, with placeholders.
    * @param array<string, string|int> $context
    *   The placeholder values.
+   * @param string $reason
+   *   The reason to show, translated, with Vale's own output as plain text.
    *
    * @return \Drupal\vale\LintResult
    *   The failed result.
    */
-  protected function failed(string $message, array $context): LintResult {
+  protected function failed(string $message, array $context, string $reason): LintResult {
     $this->logger->warning($message, $context);
-    return LintResult::failed(strtr($message, array_map(strval(...), $context)));
+    return LintResult::failed($reason);
   }
 
 }

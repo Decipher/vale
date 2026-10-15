@@ -7,10 +7,10 @@ CLAUDE.md          export-ignore
 .circleci          export-ignore
 .cspell.json       export-ignore
 .devtools          export-ignore
-docs               export-ignore
 .editorconfig      export-ignore
 .gitattributes     export-ignore
 .github            export-ignore
+.gitlab-ci.yml     export-ignore
 .gitignore         export-ignore
 .skip_npm_build    export-ignore
 Makefile           export-ignore
@@ -21,8 +21,10 @@ patches            export-ignore
 phpcs.xml          export-ignore
 phpstan.neon       export-ignore
 phpunit.d10.xml    export-ignore
+phpunit.gitlab-ci.xml export-ignore
 phpunit.xml        export-ignore
 rector.php         export-ignore
 renovate.json      export-ignore
 scripts            export-ignore
+tests/fixtures/bin export-ignore
 

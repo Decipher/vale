@@ -11,6 +11,7 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Flood\FloodInterface;
+use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\vale\FieldLinter;
 use Drupal\vale\SentenceContext;
@@ -32,7 +33,12 @@ final readonly class CheckController implements ContainerInjectionInterface {
   /**
    * The keys a request may hold.
    */
-  private const array KEYS = ['entity_type', 'bundle', 'field', 'format', 'text'];
+  private const array KEYS = ['entity_type', 'bundle', 'id', 'field', 'format', 'text'];
+
+  /**
+   * How many checks may run Vale at once, across the site.
+   */
+  private const int SLOTS = 4;
 
   /**
    * The longest text that is checked, in characters.
@@ -58,6 +64,8 @@ final readonly class CheckController implements ContainerInjectionInterface {
    *   The config factory.
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The current user.
+   * @param \Drupal\Core\Lock\LockBackendInterface $lockBackend
+   *   The lock backend, which limits how many checks run at once.
    */
   public function __construct(
     private EntityTypeManagerInterface $entityTypeManager,
@@ -68,6 +76,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
     private FloodInterface $flood,
     private ConfigFactoryInterface $configFactory,
     private AccountInterface $account,
+    private LockBackendInterface $lockBackend,
   ) {}
 
   /**
@@ -83,6 +92,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
       $container->get('flood'),
       $container->get('config.factory'),
       $container->get('current_user'),
+      $container->get('lock'),
     );
   }
 
@@ -100,7 +110,8 @@ final readonly class CheckController implements ContainerInjectionInterface {
     $settings = $this->configFactory->get('vale.settings');
     $limit = (int) ($settings->get('check_limit') ?: 120);
     $window = (int) ($settings->get('check_window') ?: 60);
-    $identifier = 'user:' . $this->account->id();
+    // Anonymous users share one account, so they are counted by IP address.
+    $identifier = $this->account->isAnonymous() ? NULL : 'user:' . $this->account->id();
     if (!$this->flood->isAllowed('vale.check', $limit, $window, $identifier)) {
       return new JsonResponse(['message' => 'Too many checks. Try again shortly.'], 429, ['Retry-After' => (string) $window]);
     }
@@ -118,6 +129,10 @@ final readonly class CheckController implements ContainerInjectionInterface {
         return $this->error(sprintf('"%s" must be a string.', $key), 400);
       }
     }
+    $id = $body['id'] ?? NULL;
+    if ($id !== NULL && !is_string($id) && !is_int($id)) {
+      return $this->error('"id" must be a string, an integer or null.', 400);
+    }
     $format = $body['format'] ?? NULL;
     if ($format !== NULL && !is_string($format)) {
       return $this->error('"format" must be a string or null.', 400);
@@ -132,11 +147,28 @@ final readonly class CheckController implements ContainerInjectionInterface {
       return $this->error('Unknown entity type or bundle.', 400);
     }
 
-    // The editor must be able to make this content and edit this field, so
-    // the endpoint gives no one a linter for content they cannot write.
+    // The editor must be able to make this content, or edit the entity named
+    // by "id", and edit this field. So the endpoint gives no one a linter for
+    // content they cannot write.
     $access = $this->entityTypeManager->getAccessControlHandler($body['entity_type']);
     $field = $this->entityFieldManager->getFieldDefinitions($body['entity_type'], $body['bundle'])[$body['field']] ?? NULL;
-    if (!$access->createAccess($body['bundle'], $this->account) || ($field && !$access->fieldAccess('edit', $field, $this->account))) {
+    // For an existing entity, field access sees its values, so access hooks
+    // that depend on the entity can refuse.
+    $items = NULL;
+    if ($id !== NULL) {
+      $entity = $this->entityTypeManager->getStorage($body['entity_type'])->load($id);
+      if (!$entity instanceof FieldableEntityInterface || $entity->bundle() !== $body['bundle']) {
+        // The same answer as for an entity the user may not edit, so the
+        // endpoint does not say which ids exist.
+        return $this->error('You may not check text for this bundle.', 403);
+      }
+      $allowed = $entity->access('update', $this->account);
+      $items = $field && $entity->hasField($body['field']) ? $entity->get($body['field']) : NULL;
+    }
+    else {
+      $allowed = $access->createAccess($body['bundle'], $this->account);
+    }
+    if (!$allowed || ($field && !$access->fieldAccess('edit', $field, $this->account, $items))) {
       return $this->error('You may not check text for this bundle.', 403);
     }
     if (!$field || !$this->fieldLinter->isEnabled($field)) {
@@ -144,7 +176,17 @@ final readonly class CheckController implements ContainerInjectionInterface {
     }
 
     // Text in an editor changes with every check, so the result is not kept.
-    $result = $this->fieldLinter->lintText($field, $body['text'], $format, FALSE);
+    // Each check runs Vale, so only a few run at once.
+    $slot = $this->acquireSlot();
+    if ($slot === NULL) {
+      return new JsonResponse(['message' => 'Vale is busy. Try again shortly.'], 503, ['Retry-After' => '1']);
+    }
+    try {
+      $result = $this->fieldLinter->lintText($field, $body['text'], $format, FALSE);
+    }
+    finally {
+      $this->lockBackend->release($slot);
+    }
     $rules = $result->alerts ? $this->valeEnvironment->rules() : [];
     $alerts = [];
     foreach ($result->alerts as $alert) {
@@ -162,10 +204,29 @@ final readonly class CheckController implements ContainerInjectionInterface {
       'publish_only' => (bool) $settings->get('publish_only'),
       'alerts' => $alerts,
     ];
+    // The reason can name server paths. The status report shows it to
+    // administrators, and the runner logs failures.
     if (!$result->isChecked()) {
-      $response['reason'] = $result->reason;
+      $response['reason'] = 'Vale could not check the text.';
     }
     return new JsonResponse($response);
+  }
+
+  /**
+   * Takes one of the slots for running Vale.
+   *
+   * @return string|null
+   *   The lock name to release, or NULL when every slot is taken.
+   */
+  private function acquireSlot(): ?string {
+    // A slot outlives a run by a second, in case the release is missed.
+    $timeout = (float) $this->valeEnvironment->timeout() + 1;
+    for ($i = 0; $i < self::SLOTS; $i++) {
+      if ($this->lockBackend->acquire('vale.check.' . $i, $timeout)) {
+        return 'vale.check.' . $i;
+      }
+    }
+    return NULL;
   }
 
   /**

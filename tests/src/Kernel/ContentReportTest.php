@@ -266,4 +266,48 @@ class ContentReportTest extends KernelTestBase {
     $this->assertSame([], $this->report(['rule' => '%']));
   }
 
+  /**
+   * Tests that the report keeps its rows when Vale is unavailable.
+   */
+  public function testWritersRefuseWithoutVale(): void {
+    $page = $this->savePage('Guide', 'This is very good.');
+    $before = $this->report();
+    $this->setValeSetting('vale_binary', NULL);
+    $this->container->get('cache.vale')->deleteAll();
+
+    // The batch stops before it writes, and says why.
+    $context = ['sandbox' => [], 'results' => []];
+    ScanBatch::scan('node', 'page', $context);
+    $this->assertSame(1, $context['finished']);
+    $this->assertStringContainsString('vale_binary', $context['results']['error']);
+    ScanBatch::finished(TRUE, $context['results']);
+    $errors = array_map(strval(...), $this->container->get('messenger')->messagesByType('error'));
+    $this->assertStringStartsWith('The scan stopped:', $errors[0]);
+
+    // Later bundles stay stopped, even once Vale is back.
+    $this->setUpVale();
+    $context['sandbox'] = [];
+    ScanBatch::scan('node', 'page', $context);
+    $this->assertSame(1, $context['finished']);
+    $this->assertSame($before, $this->report());
+
+    // So does the bulk action.
+    $this->setUpCurrentUser([], ['access content', 'scan content with vale']);
+    $action = $this->container->get('plugin.manager.action')->createInstance('vale_check_prose');
+    $this->assertInstanceOf(CheckProseAction::class, $action);
+    $action->executeMultiple([$page]);
+    $this->assertSame($before, $this->report());
+  }
+
+  /**
+   * Tests that a long message is cut to fit its column.
+   */
+  public function testLongMessage(): void {
+    $this->container->get('vale.finding_storage')->add([
+      new Finding('node', '1', 'Guide', 'page', 'field_text', 0, NULL, str_repeat('é', 20000)),
+    ]);
+    $rows = iterator_to_array($this->container->get('vale.finding_storage')->rows(), FALSE);
+    $this->assertSame(16000, mb_strlen($rows[0]['message']));
+  }
+
 }

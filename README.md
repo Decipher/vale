@@ -194,9 +194,13 @@ line and columns. `checked` is false when Vale could not run.
 that saving the text in that field would give. Each alert also has the
 sentence around it.
 
-The user needs the **Use the Vale check endpoint** permission, and the right
-to create that bundle and edit that field. With a cookie session, send an
+Add `id` to check text for an entity that exists.
+
+The user needs the **Use the Vale check endpoint** permission and the right
+to edit that field. Without `id`, they also need the right to create that
+bundle. With `id`, they need the right to edit that entity instead. With a cookie session, send an
 `X-CSRF-Token` header from `/session/token`. Too many requests get a 429.
+Four checks run at once across the site, and a check past that gets a 503.
 
 ## Features
 

@@ -144,7 +144,8 @@ class WorkspaceGateTest extends KernelTestBase {
     $this->assertSame('Stage: 1 prose error, 0 warnings or suggestions, 0 values not checked.', $this->publish());
     $this->assertSame(0, $this->livePages());
     $messages = $this->messages();
-    $this->assertSame('node "Staged", field_text: Demo.Very: Avoid \'very\'. (line 1: "very")', $messages['error'][0]);
+    // The message is markup, escaped once.
+    $this->assertSame('node "Staged", field_text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
     $this->assertStringStartsWith('Stage: 1 prose error,', $messages['error'][1]);
   }
 
@@ -248,12 +249,14 @@ class WorkspaceGateTest extends KernelTestBase {
       'field_text' => 'FAKE_CRASH',
       'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.'])],
     ])->save();
+    // The report describes Live, so it refuses to be written here.
+    $this->assertSame('Switch to Live to check content for the report.', $this->container->get('vale.report_refresher')->refusal());
     $this->switchToLive();
 
-    $this->publish();
+    $this->assertNull($this->publish());
     $warnings = $this->messages()['warning'];
     $this->assertStringStartsWith('node "Staged", field_text: not checked.', $warnings[0]);
-    $this->assertStringStartsWith('node "Staged", paragraph "Staged > Content", field_text: Demo.Very:', $warnings[1]);
+    $this->assertStringStartsWith('node "Staged", paragraph "Staged &gt; Content", field_text: Demo.Very:', $warnings[1]);
   }
 
   /**

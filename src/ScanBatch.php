@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
-use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\PluralTranslatableMarkup;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Url;
 
 /**
@@ -14,8 +15,6 @@ use Drupal\Core\Url;
  * services from the container.
  */
 final class ScanBatch {
-
-  use StringTranslationTrait;
 
   /**
    * How many entities are linted per request.
@@ -37,7 +36,7 @@ final class ScanBatch {
       $operations[] = [[self::class, 'scan'], explode(':', $bundle, 2)];
     }
     return [
-      'title' => t('Checking content with Vale'),
+      'title' => new TranslatableMarkup('Checking content with Vale'),
       'operations' => $operations,
       'finished' => [self::class, 'finished'],
     ];
@@ -62,6 +61,20 @@ final class ScanBatch {
       $context['sandbox']['done'] = 0;
       $context['sandbox']['started'] = \Drupal::time()->getRequestTime();
     }
+    // Once one bundle has stopped, the scan has stopped: later bundles do
+    // not run either.
+    if (isset($context['results']['error'])) {
+      $context['finished'] = 1;
+      return;
+    }
+    // Each chunk runs in a request of its own, so check again that the report
+    // can be written: it describes Live, and needs Vale to replace its rows.
+    $error = \Drupal::service('vale.report_refresher')->refusal();
+    if ($error !== NULL) {
+      $context['results']['error'] = $error;
+      $context['finished'] = 1;
+      return;
+    }
     // Page by id, so content added during the scan does not shift the pages.
     $keys = $walker->idsAfter($entity_type_id, $bundle, $context['sandbox']['after'], self::CHUNK);
     $findings = $keys ? $walker->lintKeys($entity_type_id, array_keys($keys)) : [];
@@ -72,7 +85,7 @@ final class ScanBatch {
     $context['results']['findings'] = ($context['results']['findings'] ?? 0) + count($findings);
     $context['results']['entities'] = ($context['results']['entities'] ?? 0) + count($keys);
     $total = max($context['sandbox']['total'], $context['sandbox']['done']);
-    $context['message'] = t('Checked @done of @total in @bundle.', [
+    $context['message'] = new TranslatableMarkup('Checked @done of @total in @bundle.', [
       '@done' => $context['sandbox']['done'],
       '@total' => $total,
       '@bundle' => $entity_type_id . ':' . $bundle,
@@ -92,18 +105,22 @@ final class ScanBatch {
    *
    * @param bool $success
    *   Whether every operation ran.
-   * @param array<string, int> $results
-   *   The totals.
+   * @param array{entities?: int, findings?: int, error?: string} $results
+   *   The totals, and an error when the scan stopped.
    */
   public static function finished(bool $success, array $results): void {
     $messenger = \Drupal::messenger();
-    if (!$success) {
-      $messenger->addError(t('The scan did not finish. The report holds what it checked.'));
+    if (isset($results['error'])) {
+      $messenger->addError(new TranslatableMarkup('The scan stopped: @error The report holds what it checked.', ['@error' => $results['error']]));
       return;
     }
-    $messenger->addStatus(t('Checked @entities items and found @findings findings.', [
-      '@entities' => $results['entities'] ?? 0,
-      '@findings' => $results['findings'] ?? 0,
+    if (!$success) {
+      $messenger->addError(new TranslatableMarkup('The scan did not finish. The report holds what it checked.'));
+      return;
+    }
+    $messenger->addStatus(new TranslatableMarkup('@checked and found @findings.', [
+      '@checked' => new PluralTranslatableMarkup($results['entities'] ?? 0, 'Checked 1 item', 'Checked @count items'),
+      '@findings' => new PluralTranslatableMarkup($results['findings'] ?? 0, '1 finding', '@count findings'),
     ]));
   }
 

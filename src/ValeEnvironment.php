@@ -10,6 +10,7 @@ use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Site\Settings;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
 use Symfony\Component\Process\Process;
 
@@ -22,6 +23,8 @@ use Symfony\Component\Process\Process;
  * configuration.
  */
 class ValeEnvironment {
+
+  use StringTranslationTrait;
 
   /**
    * How long the version and the style paths are cached, in seconds.
@@ -84,16 +87,16 @@ class ValeEnvironment {
    */
   public function unavailableReason(): ?string {
     if (!is_string(Settings::get('vale_binary'))) {
-      return 'The Vale binary is not set. Set $settings[\'vale_binary\'] in settings.php.';
+      return (string) $this->t("The Vale binary is not set. Set \$settings['vale_binary'] in settings.php.");
     }
     if ($this->binary() === NULL) {
-      return 'The Vale binary set in settings.php does not exist or is not executable.';
+      return (string) $this->t('The Vale binary set in settings.php does not exist or is not executable.');
     }
     if (!is_string(Settings::get('vale_config'))) {
-      return 'The Vale configuration is not set. Set $settings[\'vale_config\'] in settings.php.';
+      return (string) $this->t("The Vale configuration is not set. Set \$settings['vale_config'] in settings.php.");
     }
     if ($this->configPath() === NULL) {
-      return 'The Vale configuration set in settings.php does not exist or cannot be read.';
+      return (string) $this->t('The Vale configuration set in settings.php does not exist or cannot be read.');
     }
     return NULL;
   }
@@ -210,10 +213,11 @@ class ValeEnvironment {
    * Gives a fingerprint of everything that decides Vale's results.
    *
    * It covers the configuration file, every file under the styles
-   * directories and the Vale version. Any change gives a new fingerprint, so
-   * a cached result that depends on the old one is never used again. File
-   * contents are hashed only when a style file's size or modification time
-   * changes, or a file is added or removed.
+   * directories and the Vale version. A changed fingerprint means a cached
+   * result that depends on the old one is never used again. File contents
+   * are hashed only when a style file's size or modification time changes,
+   * or a file is added or removed. An edit that keeps a file's size within
+   * the same second is missed until the fingerprint expires.
    *
    * @return string
    *   The fingerprint.
