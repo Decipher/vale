@@ -7,6 +7,7 @@ namespace Drupal\Tests\vale\Kernel;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
+use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -230,6 +231,26 @@ class WorkspaceGateTest extends KernelTestBase {
     $this->container->get('config.factory')->reset('vale.settings');
     $this->stagePage('This is very good.');
     $this->assertNotNull($this->publish());
+  }
+
+  /**
+   * Tests the messages for a paragraph and for text Vale could not check.
+   */
+  public function testComponentAndUnchecked(): void {
+    $this->setMode('advise');
+    $this->switchToWorkspace('stage');
+    Node::create([
+      'type' => 'page',
+      'title' => 'Staged',
+      'field_text' => 'FAKE_CRASH',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.'])],
+    ])->save();
+    $this->switchToLive();
+
+    $this->publish();
+    $warnings = $this->messages()['warning'];
+    $this->assertStringStartsWith('node "Staged", field_text: not checked.', $warnings[0]);
+    $this->assertStringStartsWith('node "Staged", paragraph "Staged > Content", field_text: Demo.Very:', $warnings[1]);
   }
 
 }
