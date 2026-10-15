@@ -56,24 +56,35 @@ final class ScanBatch {
   public static function scan(string $entity_type_id, string $bundle, array|\ArrayAccess &$context): void {
     $walker = \Drupal::service('vale.content_walker');
     $storage = \Drupal::service('vale.finding_storage');
-    if (!isset($context['sandbox']['keys'])) {
-      $storage->clearBundle($entity_type_id, $bundle);
-      $context['sandbox']['keys'] = $walker->ids($entity_type_id, $bundle);
+    if (!isset($context['sandbox']['total'])) {
+      $context['sandbox']['total'] = $walker->count($entity_type_id, $bundle);
+      $context['sandbox']['after'] = NULL;
       $context['sandbox']['done'] = 0;
+      $context['sandbox']['started'] = \Drupal::time()->getRequestTime();
     }
-    $keys = $context['sandbox']['keys'];
-    $chunk = array_values(array_slice($keys, $context['sandbox']['done'], self::CHUNK));
-    $findings = $chunk ? $walker->lintKeys($entity_type_id, $chunk) : [];
-    $storage->add($findings);
-    $context['sandbox']['done'] += count($chunk);
+    // Page by id, so content added during the scan does not shift the pages.
+    $keys = $walker->idsAfter($entity_type_id, $bundle, $context['sandbox']['after'], self::CHUNK);
+    $findings = $keys ? $walker->lintKeys($entity_type_id, array_keys($keys)) : [];
+    // Each chunk replaces its own rows, so the report stays whole while the
+    // scan runs.
+    $storage->replace($entity_type_id, array_values($keys), $findings);
+    $context['sandbox']['done'] += count($keys);
     $context['results']['findings'] = ($context['results']['findings'] ?? 0) + count($findings);
-    $context['results']['entities'] = ($context['results']['entities'] ?? 0) + count($chunk);
+    $context['results']['entities'] = ($context['results']['entities'] ?? 0) + count($keys);
+    $total = max($context['sandbox']['total'], $context['sandbox']['done']);
     $context['message'] = t('Checked @done of @total in @bundle.', [
       '@done' => $context['sandbox']['done'],
-      '@total' => count($keys),
+      '@total' => $total,
       '@bundle' => $entity_type_id . ':' . $bundle,
     ]);
-    $context['finished'] = $keys ? $context['sandbox']['done'] / count($keys) : 1;
+    if (count($keys) < self::CHUNK) {
+      // Rows the scan did not refresh belong to content that is gone.
+      $storage->clearStale($entity_type_id, $bundle, $context['sandbox']['started']);
+      $context['finished'] = 1;
+      return;
+    }
+    $context['sandbox']['after'] = end($keys);
+    $context['finished'] = min(0.99, $context['sandbox']['done'] / max(1, $total));
   }
 
   /**

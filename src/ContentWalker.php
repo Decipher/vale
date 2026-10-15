@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
-use Drupal\Core\Cache\MemoryCache\MemoryCacheInterface;
 use Drupal\Core\Entity\ContentEntityTypeInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\Query\QueryInterface;
 use Drupal\Core\Entity\RevisionableStorageInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
  * Lints stored content: a bundle, a workspace's changes, or everything.
  *
- * Each entity is linted with the components it references through
- * entity_reference_revisions fields, such as paragraphs. The Drush command
- * and the workspace publish check both walk content through here.
+ * Each entity is linted in every translation, with the components it
+ * references through entity_reference_revisions fields, such as paragraphs,
+ * read in the same language. Outside a workspace, the revision linted is the
+ * newest one that belongs to no workspace, which includes a forward draft:
+ * what an editor is about to publish. The Drush command, the content report
+ * and the workspace publish check all walk content through here.
  */
 class ContentWalker {
 
@@ -32,6 +36,13 @@ class ContentWalker {
    * How deep components are followed.
    */
   private const int MAX_DEPTH = 10;
+
+  /**
+   * The entity types loaded since the last cache reset.
+   *
+   * @var array<string, true>
+   */
+  protected array $loaded = [];
 
   /**
    * Constructs a ContentWalker.
@@ -52,9 +63,6 @@ class ContentWalker {
    *   The service that lists a workspace's tracked entities, when Workspaces
    *   is on: workspaces.tracker from Drupal 11.3, workspaces.association
    *   before. ValeServiceProvider picks it.
-   * @param \Drupal\Core\Cache\MemoryCache\MemoryCacheInterface|null $memoryCache
-   *   The entity memory cache, cleared after each chunk so a long walk does
-   *   not keep every component it loaded.
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
@@ -64,7 +72,6 @@ class ContentWalker {
     protected PublishState $publishState,
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
     protected ?object $workspaceTracker = NULL,
-    protected ?MemoryCacheInterface $memoryCache = NULL,
   ) {}
 
   /**
@@ -82,68 +89,93 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function bundle(string $entity_type_id, string $bundle): array {
-    return $this->lintKeys($entity_type_id, $this->ids($entity_type_id, $bundle));
+    $findings = [];
+    $after = NULL;
+    while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
+      array_push($findings, ...$this->lintKeys($entity_type_id, array_keys($keys)));
+      $after = end($keys);
+    }
+    return $findings;
   }
 
   /**
-   * Lists what to load to lint a bundle, so it can be linted in chunks.
+   * Lists the next chunk of a bundle to lint, in entity id order.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param string $bundle
+   *   The bundle.
+   * @param int|string|null $after
+   *   The last entity id of the previous chunk, or NULL to start.
+   * @param int $limit
+   *   How many entities to list.
+   *
+   * @return array<int|string, int|string>
+   *   Entity ids, keyed by what to load: the revision id of the latest
+   *   revision for a revisionable entity type, the entity id otherwise.
+   *
+   * @throws \InvalidArgumentException
+   *   When the entity type or the bundle does not exist.
+   */
+  public function idsAfter(string $entity_type_id, string $bundle, int|string|null $after, int $limit): array {
+    $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
+    if (!$entity_type || !$entity_type->entityClassImplements(FieldableEntityInterface::class)
+      || !isset($this->bundleInfo->getBundleInfo($entity_type_id)[$bundle])) {
+      throw new \InvalidArgumentException(sprintf('There is no %s bundle "%s".', $entity_type_id, $bundle));
+    }
+    return $this->latestKeys($entity_type, $bundle, [], $after, $limit);
+  }
+
+  /**
+   * Counts the entities in a bundle, for progress.
    *
    * @param string $entity_type_id
    *   The entity type.
    * @param string $bundle
    *   The bundle.
    *
-   * @return list<int|string>
-   *   For a revisionable entity type, the revision id of each entity's latest
-   *   revision. Otherwise, entity ids.
-   *
-   * @throws \InvalidArgumentException
-   *   When the entity type or the bundle does not exist.
+   * @return int
+   *   The number of entities.
    */
-  public function ids(string $entity_type_id, string $bundle): array {
-    $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
-    if (!$entity_type || !$entity_type->entityClassImplements(FieldableEntityInterface::class)
-      || !isset($this->bundleInfo->getBundleInfo($entity_type_id)[$bundle])) {
-      throw new \InvalidArgumentException(sprintf('There is no %s bundle "%s".', $entity_type_id, $bundle));
-    }
+  public function count(string $entity_type_id, string $bundle): int {
+    $entity_type = $this->entityTypeManager->getDefinition($entity_type_id);
     $query = $this->entityTypeManager->getStorage($entity_type_id)->getQuery()->accessCheck(FALSE);
     if ($entity_type->hasKey('bundle')) {
       $query->condition((string) $entity_type->getKey('bundle'), $bundle);
     }
-    if (!$entity_type->isRevisionable()) {
-      return array_values($query->execute());
-    }
-
-    // Outside a workspace, a workspace's revisions are not this content
-    // yet, but latestRevision() would pick them. So take the newest revision
-    // that belongs to no workspace, which still includes a forward draft
-    // made in Live.
-    $workspace_key = $entity_type instanceof ContentEntityTypeInterface ? $entity_type->getRevisionMetadataKey('workspace') : NULL;
-    if (is_string($workspace_key) && $this->workspaceManager && !$this->workspaceManager->hasActiveWorkspace()) {
-      $revision_key = (string) $entity_type->getKey('revision');
-      $id_key = (string) $entity_type->getKey('id');
-      $aggregate = $this->entityTypeManager->getStorage($entity_type_id)->getAggregateQuery()
-        ->accessCheck(FALSE)
-        ->allRevisions()
-        ->notExists($workspace_key)
-        ->groupBy($id_key)
-        ->aggregate($revision_key, 'MAX');
-      if ($entity_type->hasKey('bundle')) {
-        $aggregate->condition((string) $entity_type->getKey('bundle'), $bundle);
-      }
-      // QueryInterface::execute() is typed for plain queries. An aggregate
-      // query returns a row per group.
-      /** @var list<array<string, string>> $rows */
-      $rows = $aggregate->execute();
-      return array_column($rows, $revision_key . '_max');
-    }
-
-    $query->latestRevision();
-    return array_keys($query->execute());
+    return (int) $query->count()->execute();
   }
 
   /**
-   * Lints a chunk of what ids() listed.
+   * Loads the revision of an entity that the report describes.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param int|string $id
+   *   The entity id.
+   *
+   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
+   *   The newest revision outside any workspace, or NULL when there is none.
+   */
+  public function latest(string $entity_type_id, int|string $id): ?FieldableEntityInterface {
+    $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
+    if (!$entity_type) {
+      return NULL;
+    }
+    $keys = $this->latestKeys($entity_type, NULL, [$id], NULL, 1);
+    $storage = $this->entityTypeManager->getStorage($entity_type_id);
+    $key = array_key_first($keys);
+    if ($key === NULL) {
+      return NULL;
+    }
+    $entity = $entity_type->isRevisionable() && $storage instanceof RevisionableStorageInterface
+      ? $storage->loadRevision($key)
+      : $storage->load($key);
+    return $entity instanceof FieldableEntityInterface ? $entity : NULL;
+  }
+
+  /**
+   * Lints a chunk of what idsAfter() listed.
    *
    * @param string $entity_type_id
    *   The entity type.
@@ -189,7 +221,7 @@ class ContentWalker {
     $bundles = [];
     foreach ($this->entityTypeManager->getDefinitions() as $entity_type_id => $entity_type) {
       if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)
-        || method_exists($entity_type->getClass(), 'getParentEntity')) {
+        || PublishState::isComponentType($entity_type)) {
         continue;
       }
       foreach ($this->bundleInfo->getBundleInfo($entity_type_id) as $bundle => $info) {
@@ -226,7 +258,7 @@ class ContentWalker {
       foreach ($tracked as $entity_type_id => $revisions) {
         $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
         // A tracked component is linted through its tracked host.
-        if (!$entity_type || method_exists($entity_type->getClass(), 'getParentEntity')) {
+        if (!$entity_type || PublishState::isComponentType($entity_type)) {
           continue;
         }
         // Inside the workspace, loading an entity gives the workspace's own
@@ -238,7 +270,7 @@ class ContentWalker {
   }
 
   /**
-   * Lints one entity and its components.
+   * Lints one entity, in every translation, and its components.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
@@ -252,9 +284,85 @@ class ContentWalker {
       $parent = $entity->getParentEntity();
       $host = $parent instanceof FieldableEntityInterface ? Finding::describe($parent) : NULL;
     }
+    $translations = [$entity];
+    if ($entity instanceof TranslatableInterface && $entity->isTranslatable()) {
+      $translations = [];
+      foreach (array_keys($entity->getTranslationLanguages()) as $langcode) {
+        $translations[] = $entity->getTranslation($langcode);
+      }
+    }
     $findings = [];
-    $this->walk($entity, $host, $findings, 0);
+    foreach ($translations as $translation) {
+      $this->walk($translation, $host, $translation->language()->getId(), $findings, 0);
+    }
     return $findings;
+  }
+
+  /**
+   * Lists the newest revision outside any workspace of some entities.
+   *
+   * @param \Drupal\Core\Entity\EntityTypeInterface $entity_type
+   *   The entity type.
+   * @param string|null $bundle
+   *   A bundle to limit to, or NULL.
+   * @param array<int|string> $ids
+   *   Entity ids to limit to, or an empty array.
+   * @param int|string|null $after
+   *   Only entities with a higher id, or NULL.
+   * @param int|null $limit
+   *   How many entities, or NULL for all.
+   *
+   * @return array<int|string, int|string>
+   *   Entity ids, keyed by revision id for a revisionable type, or by entity
+   *   id otherwise, in entity id order.
+   */
+  protected function latestKeys(EntityTypeInterface $entity_type, ?string $bundle, array $ids, int|string|null $after, ?int $limit): array {
+    $storage = $this->entityTypeManager->getStorage($entity_type->id());
+    $id_key = (string) $entity_type->getKey('id');
+    $workspace_key = $entity_type instanceof ContentEntityTypeInterface ? $entity_type->getRevisionMetadataKey('workspace') : NULL;
+    $live_only = $entity_type->isRevisionable() && is_string($workspace_key)
+      && $this->workspaceManager && !$this->workspaceManager->hasActiveWorkspace();
+
+    $limit_query = static function (QueryInterface $query) use ($entity_type, $id_key, $bundle, $ids, $after, $limit): void {
+      $query->sort($id_key);
+      if ($bundle !== NULL && $entity_type->hasKey('bundle')) {
+        $query->condition((string) $entity_type->getKey('bundle'), $bundle);
+      }
+      if ($ids) {
+        $query->condition($id_key, $ids, 'IN');
+      }
+      if ($after !== NULL) {
+        $query->condition($id_key, $after, '>');
+      }
+      if ($limit !== NULL) {
+        $query->range(0, $limit);
+      }
+    };
+
+    if ($live_only) {
+      // Outside a workspace, a workspace's revisions are not this content
+      // yet, but latestRevision() would pick them. So take the newest
+      // revision that belongs to no workspace, which still includes a
+      // forward draft.
+      $revision_key = (string) $entity_type->getKey('revision');
+      $query = $storage->getAggregateQuery()->accessCheck(FALSE)->allRevisions();
+      $limit_query($query);
+      $query->notExists($workspace_key)
+        ->groupBy($id_key)
+        ->aggregate($revision_key, 'MAX');
+      // QueryInterface::execute() is typed for plain queries. An aggregate
+      // query returns a row per group.
+      /** @var list<array<string, string>> $rows */
+      $rows = $query->execute();
+      return array_column($rows, $id_key, $revision_key . '_max');
+    }
+    $query = $storage->getQuery()->accessCheck(FALSE);
+    $limit_query($query);
+    if ($entity_type->isRevisionable()) {
+      $query->latestRevision();
+    }
+    $result = $query->execute();
+    return $entity_type->isRevisionable() ? $result : array_combine($result, $result);
   }
 
   /**
@@ -264,8 +372,7 @@ class ContentWalker {
    *   The entity type.
    * @param array<int|string, int|string> $ids
    *   Entity ids. When $by_revision is TRUE, they are keyed by revision id,
-   *   as a query with latestRevision() gives them, so a forward draft is
-   *   linted rather than the default revision.
+   *   so a forward draft is linted rather than the default revision.
    * @param bool $by_revision
    *   Whether to load the revisions named by the keys.
    *
@@ -284,27 +391,48 @@ class ContentWalker {
           array_push($findings, ...$this->entity($entity));
         }
       }
-      $storage->resetCache();
-      $this->memoryCache?->deleteAll();
+      $this->resetCaches($entity_type->id());
     }
     return $findings;
+  }
+
+  /**
+   * Resets the static caches of the storages a chunk loaded from.
+   *
+   * Only those storages are reset, so objects other code holds from other
+   * storages, such as a publisher's, are left alone.
+   *
+   * @param string $entity_type_id
+   *   The entity type the chunk was of.
+   */
+  protected function resetCaches(string $entity_type_id): void {
+    foreach (array_keys([$entity_type_id => TRUE] + $this->loaded) as $loaded) {
+      $this->entityTypeManager->getStorage($loaded)->resetCache();
+    }
+    $this->loaded = [];
   }
 
   /**
    * Lints an entity's opted-in fields and walks into its components.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity.
+   *   The entity, in the language being linted.
    * @param array{entity_type: string, id: string, bundle: string, label: string}|null $host
    *   The top-level entity, for a component.
+   * @param string $langcode
+   *   The language being linted.
    * @param \Drupal\vale\Finding[] $findings
    *   The findings so far.
    * @param int $depth
    *   How deep the entity is.
    */
-  protected function walk(FieldableEntityInterface $entity, ?array $host, array &$findings, int $depth): void {
+  protected function walk(FieldableEntityInterface $entity, ?array $host, string $langcode, array &$findings, int $depth): void {
+    // A field that is not translatable holds the same values in every
+    // translation, so only the default translation lints it.
+    $translation = $entity instanceof TranslatableInterface && !$entity->isDefaultTranslation();
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
-      foreach ($this->fieldLinter->lint($entity->get($name)) as $delta => $result) {
+      $values = $translation && !$definition->isTranslatable() ? [] : $this->fieldLinter->lint($entity->get($name));
+      foreach ($values as $delta => $result) {
         $base = [
           $entity->getEntityTypeId(),
           (string) $entity->id(),
@@ -314,18 +442,21 @@ class ContentWalker {
           $delta,
         ];
         if (!$result->isChecked()) {
-          $findings[] = new Finding(...$base, alert: NULL, reason: $result->reason, host: $host);
+          $findings[] = new Finding(...$base, alert: NULL, reason: $result->reason, host: $host, langcode: $langcode);
           continue;
         }
         foreach ($result->alerts as $alert) {
-          $findings[] = new Finding(...$base, alert: $alert, host: $host);
+          $findings[] = new Finding(...$base, alert: $alert, host: $host, langcode: $langcode);
         }
       }
       if ($definition->getType() === 'entity_reference_revisions' && $depth < self::MAX_DEPTH) {
         foreach ($entity->get($name) as $item) {
-          $component = $item->get('entity')->getValue();
-          if ($component instanceof FieldableEntityInterface) {
-            $this->walk($component, $host ?? Finding::describe($entity), $findings, $depth + 1);
+          $component = $this->publishState->component($item->get('entity')->getValue(), $langcode);
+          // A component without this translation is linted with the default
+          // translation.
+          if ($component && ($component->language()->getId() === $langcode || !$translation)) {
+            $this->loaded[$component->getEntityTypeId()] = TRUE;
+            $this->walk($component, $host ?? Finding::describe($entity), $langcode, $findings, $depth + 1);
           }
         }
       }

@@ -28,6 +28,7 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
     'entity_type' => 'Entity type',
     'entity_id' => 'Entity ID',
     'bundle' => 'Bundle',
+    'langcode' => 'Language',
     'field' => 'Field',
     'delta' => 'Delta',
     'line' => 'Line',

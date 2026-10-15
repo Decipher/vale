@@ -6,7 +6,6 @@ namespace Drupal\vale\Hook;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\Core\Entity\RevisionableInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\FindingStorage;
@@ -16,9 +15,9 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Keeps the content report current as content changes.
  *
- * The report describes Live. Saving a top-level entity's default revision
- * outside a workspace replaces its rows, and deleting it removes them. A
- * component, such as a paragraph, is reported through its host's save.
+ * The report describes Live. Saving a top-level entity outside a workspace
+ * replaces its rows with those of its newest revision, and deleting it removes
+ * them. A component, such as a paragraph, is reported through its host's save.
  */
 class ValeReportHooks {
 
@@ -78,13 +77,16 @@ class ValeReportHooks {
       !$entity instanceof FieldableEntityInterface
       || $entity->id() === NULL
       || $this->publishState->isComponent($entity)
-      || ($entity instanceof RevisionableInterface && !$entity->isDefaultRevision())
       || $this->workspaceManager?->hasActiveWorkspace()
       || !$this->contentWalker->mayHoldProse($entity->getEntityTypeId(), $entity->bundle())
     ) {
       return;
     }
-    $this->findingStorage->replace($entity->getEntityTypeId(), [$entity->id()], $this->contentWalker->entity($entity));
+    // The report shows the newest revision outside any workspace, which is
+    // not always the one saved: saving an older revision as the default
+    // leaves a newer draft in place.
+    $latest = $this->contentWalker->latest($entity->getEntityTypeId(), $entity->id());
+    $this->findingStorage->replace($entity->getEntityTypeId(), [$entity->id()], $latest ? $this->contentWalker->entity($latest) : []);
   }
 
 }
