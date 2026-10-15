@@ -1,0 +1,10 @@
+vale.check:
+  path: '/vale/check'
+  defaults:
+    _controller: '\Drupal\vale\Controller\CheckController::check'
+  methods: [POST]
+  requirements:
+    _permission: 'use vale check'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    no_cache: TRUE

@@ -20,6 +20,12 @@ vale.settings:
     workspace_mode:
       type: string
       label: 'Workspace publish check: block, advise or off'
+    check_limit:
+      type: integer
+      label: 'Requests to the check endpoint each user may make in one window'
+    check_window:
+      type: integer
+      label: 'Length of the check endpoint window, in seconds'
 
 field.field.*.*.*.third_party.vale:
   type: mapping
