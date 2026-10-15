@@ -253,7 +253,7 @@ class WorkspaceGateTest extends KernelTestBase {
     $this->assertSame('Switch to Live to check content for the report.', $this->container->get('vale.report_refresher')->refusal());
     $this->switchToLive();
 
-    $this->publish();
+    $this->assertNull($this->publish());
     $warnings = $this->messages()['warning'];
     $this->assertStringStartsWith('node "Staged", field_text: not checked.', $warnings[0]);
     $this->assertStringStartsWith('node "Staged", paragraph "Staged &gt; Content", field_text: Demo.Very:', $warnings[1]);
