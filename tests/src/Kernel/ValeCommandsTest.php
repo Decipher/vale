@@ -170,10 +170,10 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
-   * Tests that vale:install refuses an unpinned version without a checksum.
+   * Tests that vale:install refuses a version that is not one.
    */
   public function testInstallRefused(): void {
-    $result = $this->commands()->install(['dir' => $this->valeDirectory . '/bin', 'vale-version' => '1.0.0', 'sha256' => NULL]);
+    $result = $this->commands()->install(['dir' => $this->valeDirectory . '/bin', 'vale-version' => 'newest', 'sha256' => NULL]);
     $this->assertSame(1, $result->getExitCode());
     $this->assertFileDoesNotExist($this->valeDirectory . '/bin/vale');
   }

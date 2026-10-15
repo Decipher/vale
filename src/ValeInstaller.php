@@ -12,28 +12,18 @@ use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
 
 /**
- * Downloads a pinned Vale release and checks it before installing it.
+ * Downloads a Vale release and checks it before installing it.
  *
- * The module pins a version and the SHA-256 of each platform's archive, so an
- * install is the same everywhere and a changed download is refused. Another
- * version can be installed by giving its checksum too.
+ * It installs the latest release, or a version asked for. Each archive is
+ * checked against the SHA-256 the release publishes in its checksums file, so
+ * a new Vale version needs no new module release.
  */
 class ValeInstaller {
 
   /**
-   * The Vale version the module pins.
+   * Where Vale's releases are published.
    */
-  public const string VERSION = '3.18.0';
-
-  /**
-   * The SHA-256 of each archive of the pinned version, from the release.
-   */
-  protected const array CHECKSUMS = [
-    'Linux_64-bit' => 'a6f71a75a12fe689345b754f2412b90367fe33648abb7d200fa19eaadc2dbf6d',
-    'Linux_arm64' => '228325a79f3e6d8b4798d82901f8ed36f6d12b7ff0bad2cc83512dde0c84fbcc',
-    'macOS_64-bit' => '7ec47dad588bf1421e12f72f15219dcc96e3adf7204918ee86ea81fe8cddab8d',
-    'macOS_arm64' => '4d7de9bda8379da14cd45048500199c549413187526d0913383ad822866ad43d',
-  ];
+  protected const string RELEASES = 'https://github.com/vale-cli/vale/releases';
 
   /**
    * Constructs a ValeInstaller.
@@ -79,14 +69,79 @@ class ValeInstaller {
   }
 
   /**
+   * Gives the version of Vale's latest release.
+   *
+   * GitHub redirects the latest release page to the release's own page, which
+   * names the version. That needs no API request, so it is not rate limited.
+   * A repository that moved redirects first, so a few redirects are followed.
+   *
+   * @return string
+   *   The version, such as "3.24.0".
+   *
+   * @throws \RuntimeException
+   *   When the latest release cannot be found.
+   */
+  public function latestVersion(): string {
+    $url = self::RELEASES . '/latest';
+    for ($hop = 0; $hop < 3 && $url !== ''; $hop++) {
+      try {
+        $response = $this->httpClient->request('GET', $url, [
+          RequestOptions::ALLOW_REDIRECTS => FALSE,
+          RequestOptions::TIMEOUT => 30,
+        ]);
+      }
+      catch (GuzzleException $e) {
+        throw new \RuntimeException(sprintf('The latest Vale release could not be found: %s', $e->getMessage()), 0, $e);
+      }
+      $url = $response->getHeaderLine('Location');
+      if (preg_match('#/tag/v(\d+\.\d+\.\d+)$#', $url, $match)) {
+        return $match[1];
+      }
+    }
+    throw new \RuntimeException('The latest Vale release could not be found. Give a version with --vale-version.');
+  }
+
+  /**
+   * Gives the SHA-256 a release publishes for one of its archives.
+   *
+   * @param string $version
+   *   The version.
+   * @param string $name
+   *   The archive's file name.
+   *
+   * @return string
+   *   The SHA-256.
+   *
+   * @throws \RuntimeException
+   *   When the checksums file cannot be read or does not list the archive.
+   */
+  public function checksum(string $version, string $name): string {
+    $url = sprintf('%s/download/v%s/vale_%s_checksums.txt', self::RELEASES, $version, $version);
+    try {
+      $list = (string) $this->httpClient->request('GET', $url, [RequestOptions::TIMEOUT => 30])->getBody();
+    }
+    catch (GuzzleException $e) {
+      throw new \RuntimeException(sprintf('The checksums of Vale %s could not be downloaded from %s: %s', $version, $url, $e->getMessage()), 0, $e);
+    }
+    // Each line is "<sha256>  <file name>".
+    foreach (preg_split('/\R/', $list) ?: [] as $line) {
+      $parts = preg_split('/\s+/', trim($line)) ?: [];
+      if (count($parts) === 2 && $parts[1] === $name && preg_match('/^[0-9a-f]{64}$/', strtolower($parts[0]))) {
+        return strtolower($parts[0]);
+      }
+    }
+    throw new \RuntimeException(sprintf('The checksums of Vale %s do not list %s.', $version, $name));
+  }
+
+  /**
    * Downloads, checks and installs the Vale binary.
    *
    * @param string $directory
    *   The directory to put the binary in. It is created when missing.
    * @param string|null $version
-   *   A version other than the pinned one, or NULL for the pinned one.
+   *   The version, or NULL for the latest release.
    * @param string|null $sha256
-   *   The archive's SHA-256. Required with another version.
+   *   The archive's SHA-256, or NULL to take it from the release.
    * @param string|null $platform
    *   The platform, or NULL for this machine.
    *
@@ -94,24 +149,23 @@ class ValeInstaller {
    *   The path of the installed binary.
    *
    * @throws \InvalidArgumentException
-   *   When another version is asked for without its checksum.
+   *   When the version or the SHA-256 given is not valid.
    * @throws \RuntimeException
-   *   When the download fails, the checksum differs, or the archive has no
+   *   When a download fails, the checksum differs, or the archive has no
    *   binary.
    */
   public function install(string $directory, ?string $version = NULL, ?string $sha256 = NULL, ?string $platform = NULL): string {
-    $version ??= self::VERSION;
+    if ($version !== NULL && !preg_match('/^\d+\.\d+\.\d+$/', $version)) {
+      throw new \InvalidArgumentException(sprintf('"%s" is not a Vale version, such as 3.24.0.', $version));
+    }
+    if ($sha256 !== NULL && !preg_match('/^[0-9a-f]{64}$/', strtolower($sha256))) {
+      throw new \InvalidArgumentException('The SHA-256 must be 64 hexadecimal characters.');
+    }
+    $version ??= $this->latestVersion();
     $platform ??= $this->platform();
-    if ($version !== self::VERSION && $sha256 === NULL) {
-      throw new \InvalidArgumentException(sprintf('Vale %s is not the pinned %s. Give its SHA-256 from the release checksums with --sha256.', $version, self::VERSION));
-    }
-    $expected = $sha256 ?? self::CHECKSUMS[$platform] ?? NULL;
-    if (!is_string($expected) || !preg_match('/^[0-9a-f]{64}$/', strtolower($expected))) {
-      throw new \InvalidArgumentException(sprintf('No valid SHA-256 for %s.', $platform));
-    }
-
     $name = sprintf('vale_%s_%s.tar.gz', $version, $platform);
-    $url = sprintf('https://github.com/errata-ai/vale/releases/download/v%s/%s', $version, $name);
+    $expected = $sha256 === NULL ? $this->checksum($version, $name) : strtolower($sha256);
+    $url = sprintf('%s/download/v%s/%s', self::RELEASES, $version, $name);
     $work = $this->fileSystem->getTempDirectory() . '/vale-install-' . bin2hex(random_bytes(6));
     if (!$this->fileSystem->mkdir($work, 0700, TRUE)) {
       throw new \RuntimeException(sprintf('The temporary directory %s could not be created.', $work));

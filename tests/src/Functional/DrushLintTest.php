@@ -163,13 +163,13 @@ class DrushLintTest extends BrowserTestBase {
   }
 
   /**
-   * Tests that vale:install refuses an unpinned version without a checksum.
+   * Tests that vale:install refuses a SHA-256 that is not one.
    *
    * The download itself is covered by ValeInstallerTest, without a network.
    */
-  public function testInstallNeedsChecksum(): void {
-    $this->drush('vale:install', [], ['dir' => $this->valeDirectory . '/bin', 'vale-version' => '1.0.0'], NULL, NULL, 1);
-    $this->assertStringContainsString('Vale 1.0.0 is not the pinned', $this->getErrorOutput());
+  public function testInstallRefusesBadChecksum(): void {
+    $this->drush('vale:install', [], ['dir' => $this->valeDirectory . '/bin', 'vale-version' => '3.24.0', 'sha256' => 'abc'], NULL, NULL, 1);
+    $this->assertStringContainsString('The SHA-256 must be 64 hexadecimal characters.', $this->getErrorOutput());
     $this->assertFileDoesNotExist($this->valeDirectory . '/bin/vale');
   }
 

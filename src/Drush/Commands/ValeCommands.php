@@ -172,9 +172,10 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    */
   #[CLI\Command(name: 'vale:install')]
   #[CLI\Option(name: 'dir', description: 'The directory to install into. Defaults to bin/ beside the web root.')]
-  #[CLI\Option(name: 'vale-version', description: 'A Vale version other than the pinned one. Needs --sha256.')]
-  #[CLI\Option(name: 'sha256', description: "The SHA-256 of that version's archive, from its release checksums.")]
-  #[CLI\Usage(name: 'drush vale:install', description: 'Install the pinned Vale into bin/ beside the web root.')]
+  #[CLI\Option(name: 'vale-version', description: 'The Vale version, such as 3.24.0. Defaults to the latest release.')]
+  #[CLI\Option(name: 'sha256', description: "The archive's SHA-256, to check against instead of the release's checksums file.")]
+  #[CLI\Usage(name: 'drush vale:install', description: 'Install the latest Vale into bin/ beside the web root.')]
+  #[CLI\Usage(name: 'drush vale:install --vale-version=3.24.0', description: 'Install a given version.')]
   #[CLI\Usage(name: 'drush vale:install --dir=/usr/local/bin', description: 'Install it somewhere else.')]
   public function install(array $options = ['dir' => self::REQ, 'vale-version' => self::REQ, 'sha256' => self::REQ]): CommandResult {
     $directory = is_string($options['dir'] ?? NULL) ? $options['dir'] : dirname(DRUPAL_ROOT) . '/bin';

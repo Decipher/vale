@@ -109,7 +109,7 @@ class ValeInstallerTest extends KernelTestBase {
     $request = $this->requests[0]['request'] ?? NULL;
     $this->assertInstanceOf(RequestInterface::class, $request);
     $this->assertSame(
-      'https://github.com/errata-ai/vale/releases/download/v9.9.9/vale_9.9.9_Linux_64-bit.tar.gz',
+      'https://github.com/vale-cli/vale/releases/download/v9.9.9/vale_9.9.9_Linux_64-bit.tar.gz',
       (string) $request->getUri(),
     );
     exec(escapeshellarg($binary), $output);
@@ -132,20 +132,60 @@ class ValeInstallerTest extends KernelTestBase {
   }
 
   /**
-   * Tests that the pinned version is checked against the pinned checksum.
+   * Tests installing the latest release, checked against its checksums file.
    */
-  public function testPinnedChecksum(): void {
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('a6f71a75a12fe689345b754f2412b90367fe33648abb7d200fa19eaadc2dbf6d');
-    $this->installer(new Response(200, [], $this->archive()))->install($this->directory . '/bin', NULL, NULL, 'Linux_64-bit');
+  public function testLatestRelease(): void {
+    $archive = $this->archive();
+    $checksums = hash('sha256', 'other') . "  vale_9.9.9_macOS_arm64.tar.gz\n"
+      . hash('sha256', $archive) . "  vale_9.9.9_Linux_64-bit.tar.gz\n";
+    // The repository moved once, so the first redirect is to its new home.
+    $binary = $this->installer(
+      new Response(301, ['Location' => 'https://github.com/vale-cli/vale/releases/latest?moved']),
+      new Response(302, ['Location' => 'https://github.com/vale-cli/vale/releases/tag/v9.9.9']),
+      new Response(200, [], $checksums),
+      new Response(200, [], $archive),
+    )->install($this->directory . '/bin', NULL, NULL, 'Linux_64-bit');
+
+    $this->assertTrue(is_executable($binary));
+    $urls = array_map(static fn (array $entry): string => (string) $entry['request']->getUri(), $this->requests->getArrayCopy());
+    $this->assertSame([
+      'https://github.com/vale-cli/vale/releases/latest',
+      'https://github.com/vale-cli/vale/releases/latest?moved',
+      'https://github.com/vale-cli/vale/releases/download/v9.9.9/vale_9.9.9_checksums.txt',
+      'https://github.com/vale-cli/vale/releases/download/v9.9.9/vale_9.9.9_Linux_64-bit.tar.gz',
+    ], $urls);
   }
 
   /**
-   * Tests that another version needs its checksum.
+   * Tests the ways the release's own details can fail.
    */
-  public function testVersionNeedsChecksum(): void {
+  public function testReleaseFailures(): void {
+    $failures = [
+      'no Location' => [[new Response(200)], NULL, 'latest Vale release could not be found'],
+      'latest unreachable' => [[new Response(500)], NULL, 'latest Vale release could not be found'],
+      'archive not listed' => [[new Response(200, [], hash('sha256', 'x') . "  vale_9.9.9_Windows_64-bit.zip\n")], '9.9.9', 'do not list vale_9.9.9_Linux_64-bit.tar.gz'],
+      'no checksums file' => [[new Response(404)], '9.9.9', 'checksums of Vale 9.9.9 could not be downloaded'],
+    ];
+    foreach ($failures as $case => [$responses, $version, $message]) {
+      $error = NULL;
+      try {
+        $this->installer(...$responses)->install($this->directory . '/bin', $version, NULL, 'Linux_64-bit');
+      }
+      catch (\RuntimeException $e) {
+        $error = $e->getMessage();
+      }
+      $this->assertNotNull($error, "$case was not refused.");
+      $this->assertStringContainsString($message, $error, $case);
+    }
+  }
+
+  /**
+   * Tests that a version must look like one.
+   */
+  public function testInvalidVersion(): void {
     $this->expectException(\InvalidArgumentException::class);
-    $this->installer()->install($this->directory . '/bin', '9.9.9', NULL, 'Linux_64-bit');
+    $this->expectExceptionMessage('is not a Vale version');
+    $this->installer()->install($this->directory . '/bin', 'latest; rm -rf', NULL, 'Linux_64-bit');
   }
 
   /**
@@ -192,7 +232,7 @@ class ValeInstallerTest extends KernelTestBase {
    */
   public function testInvalidChecksum(): void {
     $this->expectException(\InvalidArgumentException::class);
-    $this->expectExceptionMessage('No valid SHA-256 for Linux_64-bit.');
+    $this->expectExceptionMessage('The SHA-256 must be 64 hexadecimal characters.');
     $this->installer()->install($this->directory . '/bin', '9.9.9', 'not-a-checksum', 'Linux_64-bit');
   }
 
