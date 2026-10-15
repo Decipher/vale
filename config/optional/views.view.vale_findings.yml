@@ -1,0 +1,229 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - system.menu.admin
+  module:
+    - user
+    - vale
+id: vale_findings
+label: 'Prose findings'
+module: views
+description: 'Vale findings in stored content, from the last scan.'
+tag: vale
+base_table: vale_finding
+base_field: fid
+display:
+  default:
+    id: default
+    display_title: Default
+    display_plugin: default
+    position: 0
+    display_options:
+      title: 'Prose findings'
+      fields:
+        root_link:
+          id: root_link
+          table: vale_finding
+          field: root_link
+          plugin_id: vale_root_link
+          label: Content
+        root_bundle:
+          id: root_bundle
+          table: vale_finding
+          field: root_bundle
+          plugin_id: standard
+          label: Bundle
+        label:
+          id: label
+          table: vale_finding
+          field: label
+          plugin_id: standard
+          label: In
+        field:
+          id: field
+          table: vale_finding
+          field: field
+          plugin_id: standard
+          label: Field
+        line:
+          id: line
+          table: vale_finding
+          field: line
+          plugin_id: numeric
+          label: Line
+        level:
+          id: level
+          table: vale_finding
+          field: level
+          plugin_id: standard
+          label: Level
+        rule:
+          id: rule
+          table: vale_finding
+          field: rule
+          plugin_id: standard
+          label: Rule
+        matched:
+          id: matched
+          table: vale_finding
+          field: matched
+          plugin_id: standard
+          label: Text
+        message:
+          id: message
+          table: vale_finding
+          field: message
+          plugin_id: standard
+          label: Message
+      pager:
+        type: full
+        options:
+          offset: 0
+          items_per_page: 50
+      exposed_form:
+        type: basic
+        options:
+          submit_button: Filter
+          reset_button: true
+          reset_button_label: Reset
+          exposed_sorts_label: 'Sort by'
+          expose_sort_order: true
+          sort_asc_label: Asc
+          sort_desc_label: Desc
+      access:
+        type: perm
+        options:
+          perm: 'view vale report'
+      cache:
+        type: none
+        options: {  }
+      empty:
+        area_text_custom:
+          id: area_text_custom
+          table: views
+          field: area_text_custom
+          plugin_id: text_custom
+          empty: true
+          content: 'No findings. Check content to fill the report.'
+      sorts:
+        root_label:
+          id: root_label
+          table: vale_finding
+          field: root_label
+          plugin_id: standard
+          order: ASC
+        line:
+          id: line
+          table: vale_finding
+          field: line
+          plugin_id: standard
+          order: ASC
+      filters:
+        root_bundle:
+          id: root_bundle
+          table: vale_finding
+          field: root_bundle
+          plugin_id: in_operator
+          operator: in
+          value: {  }
+          exposed: true
+          expose:
+            operator_id: root_bundle_op
+            label: Bundle
+            identifier: root_bundle
+            remember: false
+            multiple: false
+        level:
+          id: level
+          table: vale_finding
+          field: level
+          plugin_id: in_operator
+          operator: in
+          value: {  }
+          exposed: true
+          expose:
+            operator_id: level_op
+            label: Level
+            identifier: level
+            remember: false
+            multiple: false
+        rule:
+          id: rule
+          table: vale_finding
+          field: rule
+          plugin_id: string
+          operator: contains
+          value: ''
+          exposed: true
+          expose:
+            operator_id: rule_op
+            label: Rule
+            identifier: rule
+            remember: false
+      style:
+        type: table
+        options:
+          grouping: {  }
+          row_class: ''
+          default_row_class: true
+          columns:
+            root_link: root_link
+            root_bundle: root_bundle
+            label: label
+            field: field
+            line: line
+            level: level
+            rule: rule
+            matched: matched
+            message: message
+          default: '-1'
+          info: {  }
+          override: true
+          sticky: true
+          summary: ''
+          empty_table: false
+      row:
+        type: fields
+      query:
+        type: views_query
+        options: {  }
+      header:
+        vale_export:
+          id: vale_export
+          table: vale_finding
+          field: vale_export
+          plugin_id: vale_export
+          empty: false
+      display_extenders: {  }
+    cache_metadata:
+      max-age: -1
+      contexts:
+        - 'languages:language_interface'
+        - url
+        - url.query_args
+        - user.permissions
+      tags: {  }
+  page_1:
+    id: page_1
+    display_title: Page
+    display_plugin: page
+    position: 1
+    display_options:
+      display_extenders: {  }
+      path: admin/reports/vale
+      menu:
+        type: normal
+        title: 'Prose findings'
+        description: 'Vale findings in stored content.'
+        weight: 0
+        menu_name: admin
+        parent: system.admin_reports
+    cache_metadata:
+      max-age: -1
+      contexts:
+        - 'languages:language_interface'
+        - url
+        - url.query_args
+        - user.permissions
+      tags: {  }

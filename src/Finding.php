@@ -32,7 +32,7 @@ final readonly class Finding {
    *   The alert, or NULL when the value could not be checked.
    * @param string $reason
    *   Why the value could not be checked, or an empty string.
-   * @param array{entity_type: string, id: string, label: string}|null $host
+   * @param array{entity_type: string, id: string, bundle: string, label: string}|null $host
    *   For a component such as a paragraph, the top-level entity it belongs
    *   to. NULL for a top-level entity.
    */
@@ -54,14 +54,30 @@ final readonly class Finding {
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
    *
-   * @return array{entity_type: string, id: string, label: string}
+   * @return array{entity_type: string, id: string, bundle: string, label: string}
    *   Its type, id and label.
    */
   public static function describe(FieldableEntityInterface $entity): array {
     return [
       'entity_type' => $entity->getEntityTypeId(),
       'id' => (string) $entity->id(),
+      'bundle' => $entity->bundle(),
       'label' => (string) $entity->label(),
+    ];
+  }
+
+  /**
+   * Gives the top-level entity the finding belongs to.
+   *
+   * @return array{entity_type: string, id: string, bundle: string, label: string}
+   *   The host for a component, or the entity itself.
+   */
+  public function root(): array {
+    return $this->host ?? [
+      'entity_type' => $this->entityType,
+      'id' => $this->entityId,
+      'bundle' => $this->bundle,
+      'label' => $this->label,
     ];
   }
 

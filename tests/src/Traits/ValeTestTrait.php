@@ -33,6 +33,10 @@ trait ValeTestTrait {
     $fixtures = dirname(__DIR__, 2) . '/fixtures';
     $this->valeDirectory = sys_get_temp_dir() . '/vale-test-' . bin2hex(random_bytes(6));
     $this->copyDirectory($fixtures . '/vale', $this->valeDirectory);
+    // Saving content writes to the content report's table.
+    if ($this instanceof KernelTestBase && !\Drupal::database()->schema()->tableExists('vale_finding')) {
+      $this->installSchema('vale', ['vale_finding']);
+    }
     $this->setValeSetting('vale_binary', $binary ?? $fixtures . '/bin/fake-vale');
     $this->setValeSetting('vale_config', $this->valeDirectory . '/.vale.ini');
   }
