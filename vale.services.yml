@@ -78,3 +78,13 @@ services:
       - '@http_client'
       - '@file_system'
   Drupal\vale\ValeInstaller: '@vale.installer'
+  vale.workspace_publish_subscriber:
+    class: Drupal\vale\EventSubscriber\WorkspacePublishSubscriber
+    arguments:
+      - '@vale.content_walker'
+      - '@vale.environment'
+      - '@config.factory'
+      - '@messenger'
+      - '@logger.channel.vale'
+    tags:
+      - { name: event_subscriber }
