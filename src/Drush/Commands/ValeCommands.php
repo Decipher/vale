@@ -106,11 +106,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
   #[CLI\Command(name: 'vale:lint')]
   #[CLI\Argument(name: 'scope', description: 'An entity type and bundle, such as node:page. Leave it out to lint all content.')]
   #[CLI\Option(name: 'workspace', description: 'Lint only the revisions this workspace tracks, as they read in it.')]
-  #[CLI\Option(name: 'save', description: "Store the findings in the content report, replacing that scope's rows. Not with --workspace.")]
+  #[CLI\Option(name: 'save', description: "Store the alerts in the content report, replacing that scope's rows. Not with --workspace.")]
   #[CLI\Usage(name: 'drush vale:lint node:page', description: 'Lint the latest revision of every page, with its paragraphs.')]
   #[CLI\Usage(name: 'drush vale:lint --workspace=stage', description: 'Lint what the stage workspace would publish.')]
-  #[CLI\Usage(name: 'drush vale:lint --format=json', description: 'Lint all content and print one JSON record per finding.')]
-  #[CLI\Usage(name: 'drush vale:lint --save', description: 'Lint all content and store the findings in the content report.')]
+  #[CLI\Usage(name: 'drush vale:lint --format=json', description: 'Lint all content and print one JSON record per alert.')]
+  #[CLI\Usage(name: 'drush vale:lint --save', description: 'Lint all content and store the alerts in the content report.')]
   #[CLI\FieldLabels(labels: [
     'host' => 'Host',
     'entity' => 'Entity',

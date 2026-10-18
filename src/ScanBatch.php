@@ -118,9 +118,9 @@ final class ScanBatch {
       $messenger->addError(new TranslatableMarkup('The scan did not finish. The report holds what it checked.'));
       return;
     }
-    $messenger->addStatus(new TranslatableMarkup('@checked and found @findings.', [
+    $messenger->addStatus(new TranslatableMarkup('@checked and found @alerts.', [
       '@checked' => new PluralTranslatableMarkup($results['entities'] ?? 0, 'Checked 1 item', 'Checked @count items'),
-      '@findings' => new PluralTranslatableMarkup($results['findings'] ?? 0, '1 finding', '@count findings'),
+      '@alerts' => new PluralTranslatableMarkup($results['findings'] ?? 0, '1 alert', '@count alerts'),
     ]));
   }
 

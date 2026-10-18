@@ -13,7 +13,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the prose findings report, its scan, export and bulk action.
+ * Tests the prose linting report, its scan, export and bulk action.
  *
  * @group vale
  * @runTestsInSeparateProcesses
@@ -87,12 +87,12 @@ class ContentReportTest extends BrowserTestBase {
     $this->logInWith(['view vale report', 'scan content with vale']);
 
     $this->drupalGet('admin/reports/vale');
-    $this->assertSession()->pageTextContains('No findings. Check content to fill the report.');
+    $this->assertSession()->pageTextContains('No alerts. Check content to fill the report.');
 
     $this->clickLink('Check content');
     $this->assertSession()->checkboxChecked('bundles[node:page]');
     $this->submitForm([], 'Check content');
-    $this->assertSession()->pageTextContains('Checked 2 items and found 2 findings.');
+    $this->assertSession()->pageTextContains('Checked 2 items and found 2 alerts.');
     $this->assertSession()->addressEquals('admin/reports/vale');
     $this->assertSession()->linkExists('Guide');
     $this->assertSession()->pageTextContains('Demo.Very');
@@ -106,7 +106,7 @@ class ContentReportTest extends BrowserTestBase {
     $this->drupalGet('admin/reports/vale', ['query' => ['level' => 'error']]);
     $this->assertSession()->pageTextContains('Demo.Very');
     $this->assertSession()->pageTextNotContains('Demo.Delve');
-    $this->clickLink('Export these findings as CSV');
+    $this->clickLink('Export these alerts as CSV');
     $this->assertSession()->responseHeaderContains('Content-Type', 'text/csv');
     $lines = array_values(array_filter(explode("\n", $this->getSession()->getPage()->getContent())));
     $this->assertCount(2, $lines);
@@ -128,7 +128,7 @@ class ContentReportTest extends BrowserTestBase {
       'node_bulk_form[1]' => TRUE,
       'action' => 'node_vale_check_prose',
     ], 'Apply to selected items');
-    $this->assertSession()->pageTextContains('Checked 2 items: 1 errors and 1 other findings.');
+    $this->assertSession()->pageTextContains('Checked 2 items: 1 errors and 1 other alerts.');
     $this->drupalGet('admin/reports/vale');
     $this->assertSession()->pageTextContains('Demo.Very');
   }

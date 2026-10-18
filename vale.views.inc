@@ -30,15 +30,15 @@ function vale_views_data(): array {
   ];
 
   $data['vale_finding']['table'] = [
-    'group' => t('Prose findings'),
+    'group' => t('Prose linting'),
     'base' => [
       'field' => 'fid',
-      'title' => t('Prose findings'),
-      'help' => t('Vale findings in stored content, from the last scan.'),
+      'title' => t('Prose linting'),
+      'help' => t('Vale alerts in stored content, from the last check.'),
       'weight' => 10,
     ],
   ];
-  $data['vale_finding']['fid'] = $number(t('Finding ID'), t('The row id.'));
+  $data['vale_finding']['fid'] = $number(t('Alert ID'), t('The row id.'));
   $data['vale_finding']['root_type'] = $string(t('Root type'), t('The entity type of the top-level entity.'));
   $data['vale_finding']['root_id'] = $string(t('Root ID'), t('The id of the top-level entity.'));
   $data['vale_finding']['root_bundle'] = $string(t('Root bundle'), t('The bundle of the top-level entity.'));
@@ -80,14 +80,14 @@ function vale_views_data(): array {
   $data['vale_finding']['span_end'] = $number(t('End'), t('The last column of the match.'));
   $data['vale_finding']['scanned'] = [
     'title' => t('Scanned'),
-    'help' => t('When the finding was recorded.'),
+    'help' => t('When the alert was recorded.'),
     'field' => ['id' => 'date'],
     'filter' => ['id' => 'date'],
     'sort' => ['id' => 'date'],
   ];
   $data['vale_finding']['vale_export'] = [
     'title' => t('Export link'),
-    'help' => t('A link to export the filtered findings as CSV.'),
+    'help' => t('A link to export the filtered alerts as CSV.'),
     'area' => ['id' => 'vale_export'],
   ];
   return $data;

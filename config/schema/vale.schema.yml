@@ -30,7 +30,7 @@ vale.settings:
           max: 300
     publish_only:
       type: boolean
-      label: 'Refuse error-level findings only when content is published'
+      label: 'Refuse error-level alerts only when content is published'
     fail_closed:
       type: boolean
       label: 'Refuse a save when Vale cannot check its text'

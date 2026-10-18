@@ -17,7 +17,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 #[QueueWorker(
   id: ReportRefresher::QUEUE,
-  title: new TranslatableMarkup('Refresh the prose findings report'),
+  title: new TranslatableMarkup('Refresh the prose linting report'),
   cron: ['time' => 30],
 )]
 final class ReportRefresh extends QueueWorkerBase implements ContainerFactoryPluginInterface {

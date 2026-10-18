@@ -186,7 +186,7 @@ class ContentReportUiTest extends KernelTestBase {
     ScanBatch::finished(TRUE, ['entities' => 2, 'findings' => 2]);
     ScanBatch::finished(FALSE, []);
     $messenger = $this->container->get('messenger');
-    $this->assertSame(['Checked 2 items and found 2 findings.'], array_map(strval(...), $messenger->messagesByType('status')));
+    $this->assertSame(['Checked 2 items and found 2 alerts.'], array_map(strval(...), $messenger->messagesByType('status')));
     $this->assertSame(['The scan did not finish. The report holds what it checked.'], array_map(strval(...), $messenger->messagesByType('error')));
     $this->assertSame('/admin/reports/vale', ScanBatch::reportUrl()->toString());
   }

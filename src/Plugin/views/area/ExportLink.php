@@ -29,7 +29,7 @@ final class ExportLink extends AreaPluginBase {
     $query = array_intersect_key($this->view->exposed_raw_input, array_flip(['root_bundle', 'level', 'rule']));
     $query = array_filter($query, static fn (mixed $value): bool => is_string($value) && $value !== '' && $value !== 'All');
     $url = Url::fromRoute('vale.report_export', [], ['query' => $query]);
-    $link = Link::fromTextAndUrl($this->t('Export these findings as CSV'), $url)->toRenderable();
+    $link = Link::fromTextAndUrl($this->t('Export these alerts as CSV'), $url)->toRenderable();
     $link['#access'] = $url->access();
     return $link;
   }

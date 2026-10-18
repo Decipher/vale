@@ -102,7 +102,7 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
         $finding->isError() ? $errors++ : $others++;
       }
     }
-    $this->messenger()->addStatus($this->t('Checked @count items: @errors errors and @others other findings. See the prose findings report.', [
+    $this->messenger()->addStatus($this->t('Checked @count items: @errors errors and @others other alerts. See the prose linting report.', [
       '@count' => count($entities),
       '@errors' => $errors,
       '@others' => $others,
