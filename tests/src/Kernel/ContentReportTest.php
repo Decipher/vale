@@ -187,6 +187,9 @@ class ContentReportTest extends KernelTestBase {
     $this->assertTrue($action->access($page));
     $action->executeMultiple([$page]);
     $this->assertSame(['Guide > node.field_text:Demo.Very:error'], $this->report());
+    // Something that holds no fields is skipped.
+    $action->execute();
+    $this->assertSame(['Guide > node.field_text:Demo.Very:error'], $this->report());
 
     $this->setUpCurrentUser([], ['access content']);
     $this->assertFalse($action->access($page));

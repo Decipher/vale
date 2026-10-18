@@ -96,6 +96,10 @@ class ContentReportUiTest extends KernelTestBase {
    * Tests the default view, with its link to each page and to the export.
    */
   public function testView(): void {
+    // A root whose entity type has no edit form is shown as plain text.
+    $this->container->get('vale.finding_storage')->add([
+      new Finding('gone', '5', 'Orphan', 'page', 'field_text', 0, new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 1, 4, 'very')),
+    ]);
     $view = Views::getView('vale_findings');
     $this->assertNotNull($view);
     $view->setExposedInput(['level' => 'error']);
@@ -106,6 +110,16 @@ class ContentReportUiTest extends KernelTestBase {
     $this->assertStringNotContainsString('Demo.Delve', $html);
     $this->assertStringContainsString('/node/1/edit', $html);
     $this->assertStringContainsString('/admin/reports/vale/export?level=error', str_replace('&amp;', '&', $html));
+    $this->assertStringContainsString('Orphan', $html);
+    $this->assertStringNotContainsString('/gone/', $html);
+
+    // An empty report has nothing to export.
+    $view = Views::getView('vale_findings');
+    $this->assertNotNull($view);
+    $view->setExposedInput(['rule' => 'Demo.Missing']);
+    $build = $view->preview('page_1');
+    $html = (string) $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertStringNotContainsString('/admin/reports/vale/export', $html);
 
     $this->assertSame(['page' => 'page'], FindingStorage::bundleOptions());
     $this->assertSame(['error', 'warning', 'suggestion', 'unchecked'], array_keys(FindingStorage::levelOptions()));

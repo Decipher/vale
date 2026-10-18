@@ -76,11 +76,8 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
     }
     $rows = $this->findingStorage->rows($filters);
     $response = new StreamedResponse(static function () use ($rows): void {
-      $out = fopen('php://output', 'w');
-      if ($out === FALSE) {
-        return;
-      }
-      fputcsv($out, array_values(self::COLUMNS), escape: '');
+      $out = new \SplFileObject('php://output', 'w');
+      $out->fputcsv(array_values(self::COLUMNS), escape: '');
       foreach ($rows as $row) {
         $line = [];
         foreach (array_keys(self::COLUMNS) as $column) {
@@ -88,9 +85,8 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
           // A spreadsheet runs a cell that starts with one of these.
           $line[] = preg_match('/^[=+\-@\t\r]/', $value) ? "'" . $value : $value;
         }
-        fputcsv($out, $line, escape: '');
+        $out->fputcsv($line, escape: '');
       }
-      fclose($out);
     });
     $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
     $response->headers->set('Content-Disposition', 'attachment; filename="prose-findings.csv"');
