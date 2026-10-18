@@ -25,14 +25,24 @@ Submit bug reports and feature suggestions, or track changes in the
 
 ## Table of contents
 
+- Features
 - Requirements
 - Recommended modules
 - Installation
 - Configuration
 - Usage
-- Features
 - FAQ
 - Maintainers
+
+## Features
+
+- Checks content when it is validated on save: forms, JSON:API, REST and
+  workspace publishing. Code that saves without validating, such as a
+  migration, is not checked.
+- Lists every error in a value at once, on the field it came from.
+- Reads Markdown as Markdown and HTML as HTML, so code is not checked as
+  prose.
+- Caches results until the text or the styles change.
 
 ## Requirements
 
@@ -201,16 +211,6 @@ to edit that field. Without `id`, they also need the right to create that
 bundle. With `id`, they need the right to edit that entity instead. With a cookie session, send an
 `X-CSRF-Token` header from `/session/token`. Too many requests get a 429.
 Four checks run at once across the site, and a check past that gets a 503.
-
-## Features
-
-- Checks content when it is validated on save: forms, JSON:API, REST and
-  workspace publishing. Code that saves without validating, such as a
-  migration, is not checked.
-- Lists every error in a value at once, on the field it came from.
-- Reads Markdown as Markdown and HTML as HTML, so code is not checked as
-  prose.
-- Caches results until the text or the styles change.
 
 ## FAQ
 
