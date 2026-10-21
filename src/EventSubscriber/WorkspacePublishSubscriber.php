@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\vale\EventSubscriber;
 
-use Drupal\vale\Alert;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\vale\Alert;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\Finding;
 use Drupal\vale\ValeEnvironment;
@@ -83,7 +84,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
 
     $reason = $this->valeEnvironment->unavailableReason();
     if ($reason !== NULL) {
-      $this->report($event, $block, (string) $this->t('Prose in @workspace not checked: @reason', $context + ['@reason' => $reason]));
+      $this->report($event, $block, $this->t('Prose in @workspace not checked: @reason', $context + ['@reason' => $reason]));
       return;
     }
 
@@ -105,13 +106,14 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
       }
     }
 
-    $summary = (string) $this->t('@workspace: @errors, @others, @unchecked.', $context + [
+    $summary = $this->t('@workspace: @errors, @others, @unchecked.', $context + [
       '@errors' => $this->formatPlural(count($errors), '1 prose error', '@count prose errors'),
       '@others' => $this->formatPlural(count($findings) - count($errors) - count($unchecked), '1 warning or suggestion', '@count warnings or suggestions'),
       '@unchecked' => $this->formatPlural(count($unchecked), '1 value not checked', '@count values not checked'),
     ]);
     if (count($ordered) > self::MESSAGE_LIMIT) {
-      $summary .= ' ' . $this->t('@count are not listed. Run drush vale:lint --workspace=@id for all of them.', [
+      $summary = $this->t('@summary @count are not listed. Run drush vale:lint --workspace=@id for all of them.', [
+        '@summary' => $summary,
         '@count' => count($ordered) - self::MESSAGE_LIMIT,
         '@id' => $workspace->id(),
       ]);
@@ -121,7 +123,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     }
     else {
       $this->messenger->addWarning($summary);
-      $this->logger->notice($summary);
+      $this->logger->notice((string) $summary);
     }
   }
 
@@ -132,19 +134,19 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    *   The event.
    * @param bool $block
    *   Whether to stop publishing.
-   * @param string $message
-   *   Why.
+   * @param \Drupal\Core\StringTranslation\TranslatableMarkup $message
+   *   Why. It stays markup, so the messenger does not escape it twice.
    */
-  protected function report(WorkspacePrePublishEvent $event, bool $block, string $message): void {
+  protected function report(WorkspacePrePublishEvent $event, bool $block, TranslatableMarkup $message): void {
     if ($block) {
       $event->stopPublishing();
       $event->setPublishingStoppedReason($message);
       $this->messenger->addError($message);
-      $this->logger->error($message);
+      $this->logger->error((string) $message);
       return;
     }
     $this->messenger->addWarning($message);
-    $this->logger->warning($message);
+    $this->logger->warning((string) $message);
   }
 
   /**
@@ -153,19 +155,34 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    * @param \Drupal\vale\Finding $finding
    *   The finding.
    *
-   * @return string
-   *   The description.
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup
+   *   The description, with the content's text escaped.
    */
-  protected function describe(Finding $finding): string {
-    $where = sprintf('%s "%s"', $finding->entityType, $finding->label);
+  protected function describe(Finding $finding): TranslatableMarkup {
+    $where = $this->t('@type "@label"', ['@type' => $finding->entityType, '@label' => $finding->label]);
     if ($finding->host) {
-      $where = sprintf('%s "%s", %s', $finding->host['entity_type'], $finding->host['label'], $where);
+      $where = $this->t('@type "@label", @part', [
+        '@type' => $finding->host['entity_type'],
+        '@label' => $finding->host['label'],
+        '@part' => $where,
+      ]);
     }
     if (!$finding->alert instanceof Alert) {
-      return sprintf('%s, %s: not checked. %s', $where, $finding->field, $finding->reason);
+      return $this->t('@where, @field: not checked. @reason', [
+        '@where' => $where,
+        '@field' => $finding->field,
+        '@reason' => $finding->reason,
+      ]);
     }
     $alert = $finding->alert;
-    return sprintf('%s, %s: %s: %s (line %d: "%s")', $where, $finding->field, $alert->rule, $alert->message, $alert->line, $alert->match);
+    return $this->t('@where, @field: @rule: @message (line @line: "@match")', [
+      '@where' => $where,
+      '@field' => $finding->field,
+      '@rule' => $alert->rule,
+      '@message' => $alert->message,
+      '@line' => $alert->line,
+      '@match' => $alert->match,
+    ]);
   }
 
 }

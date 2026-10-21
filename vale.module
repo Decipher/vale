@@ -14,10 +14,20 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\LegacyHook;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\vale\Hook\ValeEntityHooks;
 use Drupal\vale\Hook\ValeFieldUiHooks;
 use Drupal\vale\Hook\ValeFormHooks;
+use Drupal\vale\Hook\ValeHelpHooks;
 use Drupal\vale\Hook\ValeReportHooks;
+
+/**
+ * Implements hook_help().
+ */
+#[LegacyHook]
+function vale_help(string $route_name, RouteMatchInterface $route_match): string {
+  return \Drupal::service(ValeHelpHooks::class)->help($route_name, $route_match);
+}
 
 /**
  * Implements hook_form_FORM_ID_alter() for field_config_edit_form.

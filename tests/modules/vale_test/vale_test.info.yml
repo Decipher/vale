@@ -1,0 +1,6 @@
+name: 'Vale test'
+type: module
+description: 'Refuses edits to one page, for testing field access with entity values.'
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true

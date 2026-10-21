@@ -90,7 +90,7 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
       }
     });
     $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
-    $response->headers->set('Content-Disposition', 'attachment; filename="prose-findings.csv"');
+    $response->headers->set('Content-Disposition', 'attachment; filename="prose-linting.csv"');
     return $response;
   }
 

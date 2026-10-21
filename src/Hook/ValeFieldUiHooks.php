@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\field\FieldConfigInterface;
 use Drupal\vale\Alert;
 use Drupal\vale\FieldSettings;
@@ -158,6 +159,7 @@ class ValeFieldUiHooks {
         '#open' => $changed > 0,
         'table' => [
           '#type' => 'table',
+          '#caption' => $this->t('Rules in the @style style', ['@style' => $style]),
           '#header' => [$this->t('Rule'), $this->t('Rule level'), $this->t('This field')],
         ] + $rows,
       ];
@@ -195,7 +197,7 @@ class ValeFieldUiHooks {
 
     $profile = trim((string) ($values['profile'] ?? ''));
     if (!preg_match('/^[A-Za-z0-9_.-]*$/', $profile)) {
-      $form_state->setError($element['profile'], t('Use only letters, digits, dots, hyphens and underscores.'));
+      $form_state->setError($element['profile'], new TranslatableMarkup('Use only letters, digits, dots, hyphens and underscores.'));
     }
 
     // Each loaded rule has one select. With no rules loaded there are no

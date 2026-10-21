@@ -7,9 +7,9 @@ dependencies:
     - user
     - vale
 id: vale_findings
-label: 'Prose findings'
+label: 'Prose linting'
 module: views
-description: 'Vale findings in stored content, from the last scan.'
+description: 'Vale alerts in stored content, from the last check.'
 tag: vale
 base_table: vale_finding
 base_field: fid
@@ -20,7 +20,7 @@ display:
     display_plugin: default
     position: 0
     display_options:
-      title: 'Prose findings'
+      title: 'Prose linting'
       fields:
         root_link:
           id: root_link
@@ -39,7 +39,7 @@ display:
           table: vale_finding
           field: label
           plugin_id: standard
-          label: In
+          label: 'Found in'
         langcode:
           id: langcode
           table: vale_finding
@@ -112,7 +112,7 @@ display:
           field: area_text_custom
           plugin_id: text_custom
           empty: true
-          content: 'No findings. Check content to fill the report.'
+          content: 'No alerts. Check content to fill the report.'
       sorts:
         root_label:
           id: root_label
@@ -189,6 +189,7 @@ display:
           info: {  }
           override: true
           sticky: true
+          caption: 'Prose linting'
           summary: ''
           empty_table: false
       row:
@@ -222,8 +223,8 @@ display:
       path: admin/reports/vale
       menu:
         type: normal
-        title: 'Prose findings'
-        description: 'Vale findings in stored content.'
+        title: 'Prose linting'
+        description: 'Vale alerts in stored content.'
         weight: 0
         menu_name: admin
         parent: system.admin_reports

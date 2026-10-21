@@ -10,12 +10,12 @@ Checks the prose in text fields against your style guide, with the
 Vale applies rules for style, tone and terminology. You can write your own, or
 use a published style such as Microsoft, Google, write-good or proselint. This
 module runs those rules on the text fields you choose, whenever a save
-validates the content, as forms, JSON:API and REST do. A finding at error
+validates the content, as forms, JSON:API and REST do. An alert at error
 level stops the save and is marked on the field, or in publish-only mode, only
 the save that publishes. Warnings and suggestions are shown to the author, and
 the content saves.
 
-![A save refused: two findings listed, and the field marked](docs/screenshots/save-refused.png)
+![A save refused: two alerts listed, and the field marked](docs/screenshots/save-refused.png)
 
 For a full description of the module, visit the
 [project page](https://www.drupal.org/project/vale).
@@ -25,14 +25,24 @@ Submit bug reports and feature suggestions, or track changes in the
 
 ## Table of contents
 
+- Features
 - Requirements
 - Recommended modules
 - Installation
 - Configuration
 - Usage
-- Features
 - FAQ
 - Maintainers
+
+## Features
+
+- Checks content when it is validated on save: forms, JSON:API, REST and
+  workspace publishing. Code that saves without validating, such as a
+  migration, is not checked.
+- Lists every error in a value at once, on the field it came from.
+- Reads Markdown as Markdown and HTML as HTML, so code is not checked as
+  prose.
+- Caches results until the text or the styles change.
 
 ## Requirements
 
@@ -132,7 +142,7 @@ There is no settings form. Set these in `settings.php`, such as
 | `default_extension` | `html` | The extension for every other text format |
 | `publish_only` | `FALSE` | When `FALSE`, any save with an error is refused. When `TRUE`, drafts save with their errors, and only the save that publishes is refused |
 | `fail_closed` | `FALSE` | A save is refused when Vale cannot check its text, as it is for an error. Off, the save goes through with a notice |
-| `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the findings, `off` skips the check |
+| `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the alerts, `off` skips the check |
 | `timeout` | `10` | Seconds one Vale run may take |
 | `check_limit`, `check_window` | `120`, `60` | Check endpoint requests allowed per user, per this many seconds |
 
@@ -144,16 +154,16 @@ There is no settings form. Set these in `settings.php`, such as
 `drush vale:lint node:page`, or a workspace's changes with `--workspace`. It
 exits with 1 on an error, so a deploy can depend on it.
 
-![drush vale:lint lists findings by entity, field and rule, and exits with 1](docs/screenshots/drush.png)
+![drush vale:lint lists alerts by entity, field and rule, and exits with 1](docs/screenshots/drush.png)
 
-`--format=json` gives one full record per finding. `drush vale:check
+`--format=json` gives one full record per alert. `drush vale:check
 node.page.body "Some text."` lints text, or standard input, as that field
 would, with `--text-format` for its format. `vale:rules` and `vale:status`
 show what is loaded.
 
 ### Content report
 
-**Reports > Prose findings** lists the findings in stored content, with
+**Reports > Prose linting** lists the alerts in stored content, with
 filters for bundle, level and rule, a link to each item, and a CSV export of
 what the filters show. It needs Views.
 
@@ -182,7 +192,7 @@ A write with an error is refused with a 422 that points at the field:
 ```
 
 All the errors in one value are in one entry, a line each. In publish-only
-mode a refused publish points at `/data`. Other findings are in the response's
+mode a refused publish points at `/data`. Other alerts are in the response's
 `meta.vale`, as `{checked, alerts}`. Each alert has the entity's type, bundle
 and UUID, the field and delta, and the rule, level, message, matched text,
 line and columns. `checked` is false when Vale could not run.
@@ -190,23 +200,17 @@ line and columns. `checked` is false when Vale could not run.
 ### Check endpoint
 
 `POST /vale/check` with a JSON body of `entity_type`, `bundle`, `field`,
-`format` and `text` returns `{checked, publish_only, alerts}`, the findings
+`format` and `text` returns `{checked, publish_only, alerts}`, the alerts
 that saving the text in that field would give. Each alert also has the
 sentence around it.
 
-The user needs the **Use the Vale check endpoint** permission, and the right
-to create that bundle and edit that field. With a cookie session, send an
+Add `id` to check text for an entity that exists.
+
+The user needs the **Use the Vale check endpoint** permission and the right
+to edit that field. Without `id`, they also need the right to create that
+bundle. With `id`, they need the right to edit that entity instead. With a cookie session, send an
 `X-CSRF-Token` header from `/session/token`. Too many requests get a 429.
-
-## Features
-
-- Checks content when it is validated on save: forms, JSON:API, REST and
-  workspace publishing. Code that saves without validating, such as a
-  migration, is not checked.
-- Lists every error in a value at once, on the field it came from.
-- Reads Markdown as Markdown and HTML as HTML, so code is not checked as
-  prose.
-- Caches results until the text or the styles change.
+Four checks run at once across the site, and a check past that gets a 503.
 
 ## FAQ
 

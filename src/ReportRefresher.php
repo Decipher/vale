@@ -6,6 +6,8 @@ namespace Drupal\vale;
 
 use Drupal\Core\DestructableInterface;
 use Drupal\Core\Queue\QueueFactory;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
  * Refreshes the content report after content is saved.
@@ -53,13 +55,34 @@ class ReportRefresher implements DestructableInterface {
    *   The Vale environment.
    * @param \Drupal\Core\Queue\QueueFactory $queueFactory
    *   The queue factory.
+   * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
+   *   The workspace manager, when Workspaces is on.
    */
   public function __construct(
     protected ContentWalker $contentWalker,
     protected FindingStorage $findingStorage,
     protected ValeEnvironment $valeEnvironment,
     protected QueueFactory $queueFactory,
+    protected ?WorkspaceManagerInterface $workspaceManager = NULL,
   ) {}
+
+  /**
+   * Says why the report cannot be written now, if it cannot.
+   *
+   * Every writer that replaces rows asks first: the report describes Live,
+   * and replacing rows without Vale would leave them unchecked.
+   *
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup|null
+   *   The reason, or NULL when the report can be written. It stays markup, so
+   *   a message that holds it does not escape it again.
+   */
+  public function refusal(): ?TranslatableMarkup {
+    if ($this->workspaceManager?->hasActiveWorkspace()) {
+      return new TranslatableMarkup('Switch to Live to check content for the report.');
+    }
+    $reason = $this->valeEnvironment->unavailableReason();
+    return $reason === NULL ? NULL : new TranslatableMarkup('Vale is not available, so content cannot be checked. @reason', ['@reason' => $reason]);
+  }
 
   /**
    * Notes that an entity's rows need refreshing.
