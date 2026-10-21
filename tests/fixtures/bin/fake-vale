@@ -11,6 +11,7 @@
  * - FAKE_TIMEOUT: sleeps past any time limit.
  * - FAKE_CRASH: fails the way Vale fails, with exit code 2.
  * - FAKE_GARBAGE: prints output that is not JSON.
+ * - FAKE_KILLED: is killed by a signal, as the out-of-memory killer would.
  *
  * Each lint run appends the --path value to calls.log beside the
  * configuration, so a test can count runs.
@@ -52,6 +53,10 @@ if (str_contains($text, 'FAKE_TIMEOUT')) {
 if (str_contains($text, 'FAKE_CRASH')) {
   print json_encode(['Line' => 0, 'Path' => $path, 'Text' => 'Fake failure.', 'Code' => 'E100', 'Span' => 0]);
   exit(2);
+}
+if (str_contains($text, 'FAKE_KILLED')) {
+  exec('kill -KILL ' . getmypid());
+  sleep(30);
 }
 if (str_contains($text, 'FAKE_GARBAGE')) {
   print "This is not JSON.\n";

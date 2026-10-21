@@ -72,15 +72,16 @@ class ReportRefresher implements DestructableInterface {
    * Every writer that replaces rows asks first: the report describes Live,
    * and replacing rows without Vale would leave them unchecked.
    *
-   * @return string|null
-   *   The reason, or NULL when the report can be written.
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup|null
+   *   The reason, or NULL when the report can be written. It stays markup, so
+   *   a message that holds it does not escape it again.
    */
-  public function refusal(): ?string {
+  public function refusal(): ?TranslatableMarkup {
     if ($this->workspaceManager?->hasActiveWorkspace()) {
-      return (string) new TranslatableMarkup('Switch to Live to check content for the report.');
+      return new TranslatableMarkup('Switch to Live to check content for the report.');
     }
     $reason = $this->valeEnvironment->unavailableReason();
-    return $reason === NULL ? NULL : (string) new TranslatableMarkup('Vale is not available, so content cannot be checked. @reason', ['@reason' => $reason]);
+    return $reason === NULL ? NULL : new TranslatableMarkup('Vale is not available, so content cannot be checked. @reason', ['@reason' => $reason]);
   }
 
   /**

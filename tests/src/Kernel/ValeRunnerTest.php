@@ -149,6 +149,16 @@ class ValeRunnerTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a run killed by a signal is a failure, not a pass.
+   */
+  public function testKilled(): void {
+    $result = $this->runner()->lint('FAKE_KILLED');
+
+    $this->assertSame(LintResult::FAILED, $result->status);
+    $this->assertStringStartsWith('Vale could not be run:', $result->reason);
+  }
+
+  /**
    * Tests that a failed run and unreadable output are failures.
    */
   public function testFailures(): void {

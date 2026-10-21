@@ -105,7 +105,7 @@ final class ScanBatch {
    *
    * @param bool $success
    *   Whether every operation ran.
-   * @param array{entities?: int, findings?: int, error?: string} $results
+   * @param array{entities?: int, findings?: int, error?: \Drupal\Core\StringTranslation\TranslatableMarkup} $results
    *   The totals, and an error when the scan stopped.
    */
   public static function finished(bool $success, array $results): void {

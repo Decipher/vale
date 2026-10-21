@@ -304,10 +304,12 @@ class ContentReportTest extends KernelTestBase {
     $context = ['sandbox' => [], 'results' => []];
     ScanBatch::scan('node', 'page', $context);
     $this->assertSame(1, $context['finished']);
-    $this->assertStringContainsString('vale_binary', $context['results']['error']);
+    $this->assertStringContainsString('vale_binary', (string) $context['results']['error']);
     ScanBatch::finished(TRUE, $context['results']);
     $errors = array_map(strval(...), $this->container->get('messenger')->messagesByType('error'));
     $this->assertStringStartsWith('The scan stopped:', $errors[0]);
+    // The reason is escaped once, so its quotes show as quotes.
+    $this->assertStringContainsString("\$settings[&#039;vale_binary&#039;]", $errors[0]);
 
     // Later bundles stay stopped, even once Vale is back.
     $this->setUpVale();

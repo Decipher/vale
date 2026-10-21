@@ -24,7 +24,7 @@ class ValeHelpHooks {
       return '';
     }
     $output = '<h2>' . $this->t('About') . '</h2>';
-    $output .= '<p>' . $this->t('Vale checks the prose in text fields with the <a href=":vale">Vale</a> style linter. An error-level alert stops the save. Warnings and suggestions are shown to the author.', [':vale' => 'https://vale.sh']) . '</p>';
+    $output .= '<p>' . $this->t('Vale checks the prose in text fields with the <a href=":vale">Vale</a> style linter. An error-level alert stops the save, or in publish-only mode, only the save that publishes. Warnings and suggestions are shown to the author.', [':vale' => 'https://vale.sh']) . '</p>';
     $output .= '<h2>' . $this->t('Uses') . '</h2>';
     $output .= '<dl>';
     $output .= '<dt>' . $this->t('Turning on checks for a field') . '</dt>';
