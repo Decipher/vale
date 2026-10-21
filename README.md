@@ -150,6 +150,17 @@ node.page.body "Some text."` lints text, or standard input, as that field
 would, with `--text-format` for its format. `vale:rules` and `vale:status`
 show what is loaded.
 
+### Content report
+
+**Reports > Prose findings** lists the findings in stored content, with
+filters for bundle, level and rule, a link to each item, and a CSV export of
+what the filters show. It needs Views.
+
+Fill it with **Check content** on that page, which scans the bundles you pick
+in a batch, or with `drush vale:lint --save` from cron or CI. You can also
+check selected items with the **Check prose with Vale** bulk action on the
+content overview. Saving or deleting content keeps its rows current.
+
 ### JSON:API
 
 A write with an error is refused with a 422 that points at the field:

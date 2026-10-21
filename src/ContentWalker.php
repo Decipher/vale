@@ -82,6 +82,25 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function bundle(string $entity_type_id, string $bundle): array {
+    return $this->lintKeys($entity_type_id, $this->ids($entity_type_id, $bundle));
+  }
+
+  /**
+   * Lists what to load to lint a bundle, so it can be linted in chunks.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return list<int|string>
+   *   For a revisionable entity type, the revision id of each entity's latest
+   *   revision. Otherwise, entity ids.
+   *
+   * @throws \InvalidArgumentException
+   *   When the entity type or the bundle does not exist.
+   */
+  public function ids(string $entity_type_id, string $bundle): array {
     $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
     if (!$entity_type || !$entity_type->entityClassImplements(FieldableEntityInterface::class)
       || !isset($this->bundleInfo->getBundleInfo($entity_type_id)[$bundle])) {
@@ -92,7 +111,7 @@ class ContentWalker {
       $query->condition((string) $entity_type->getKey('bundle'), $bundle);
     }
     if (!$entity_type->isRevisionable()) {
-      return $this->lintIds($entity_type, $query->execute(), FALSE);
+      return array_values($query->execute());
     }
 
     // Outside a workspace, a workspace's revisions are not this content
@@ -103,7 +122,7 @@ class ContentWalker {
     if (is_string($workspace_key) && $this->workspaceManager && !$this->workspaceManager->hasActiveWorkspace()) {
       $revision_key = (string) $entity_type->getKey('revision');
       $id_key = (string) $entity_type->getKey('id');
-      $aggregate = $this->entityTypeManager->getStorage($entity_type->id())->getAggregateQuery()
+      $aggregate = $this->entityTypeManager->getStorage($entity_type_id)->getAggregateQuery()
         ->accessCheck(FALSE)
         ->allRevisions()
         ->notExists($workspace_key)
@@ -112,19 +131,34 @@ class ContentWalker {
       if ($entity_type->hasKey('bundle')) {
         $aggregate->condition((string) $entity_type->getKey('bundle'), $bundle);
       }
-      $latest = [];
       // QueryInterface::execute() is typed for plain queries. An aggregate
       // query returns a row per group.
       /** @var list<array<string, string>> $rows */
       $rows = $aggregate->execute();
-      foreach ($rows as $row) {
-        $latest[$row[$revision_key . '_max']] = $row[$id_key];
-      }
-      return $this->lintIds($entity_type, $latest, TRUE);
+      return array_column($rows, $revision_key . '_max');
     }
 
     $query->latestRevision();
-    return $this->lintIds($entity_type, $query->execute(), TRUE);
+    return array_keys($query->execute());
+  }
+
+  /**
+   * Lints a chunk of what ids() listed.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param list<int|string> $keys
+   *   Revision ids for a revisionable entity type, otherwise entity ids.
+   *
+   * @return \Drupal\vale\Finding[]
+   *   The findings.
+   */
+  public function lintKeys(string $entity_type_id, array $keys): array {
+    $entity_type = $this->entityTypeManager->getDefinition($entity_type_id);
+    // lintIds() reads revision ids from the keys, and entity ids from the
+    // values.
+    $by_revision = $entity_type->isRevisionable();
+    return $this->lintIds($entity_type, $by_revision ? array_flip($keys) : $keys, $by_revision);
   }
 
   /**
@@ -138,18 +172,33 @@ class ContentWalker {
    */
   public function all(): array {
     $findings = [];
+    foreach (array_keys($this->scannableBundles()) as $key) {
+      [$entity_type_id, $bundle] = explode(':', $key, 2);
+      array_push($findings, ...$this->bundle($entity_type_id, $bundle));
+    }
+    return $findings;
+  }
+
+  /**
+   * Lists the bundles a scan of all content covers.
+   *
+   * @return array<string, string>
+   *   Labels, such as "Content: Basic page", keyed by "entity_type:bundle".
+   */
+  public function scannableBundles(): array {
+    $bundles = [];
     foreach ($this->entityTypeManager->getDefinitions() as $entity_type_id => $entity_type) {
       if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)
         || method_exists($entity_type->getClass(), 'getParentEntity')) {
         continue;
       }
-      foreach (array_keys($this->bundleInfo->getBundleInfo($entity_type_id)) as $bundle) {
+      foreach ($this->bundleInfo->getBundleInfo($entity_type_id) as $bundle => $info) {
         if ($this->mayHoldProse($entity_type_id, (string) $bundle)) {
-          array_push($findings, ...$this->bundle($entity_type_id, (string) $bundle));
+          $bundles[$entity_type_id . ':' . $bundle] = $entity_type->getLabel() . ': ' . ($info['label'] ?? $bundle);
         }
       }
     }
-    return $findings;
+    return $bundles;
   }
 
   /**
@@ -246,7 +295,7 @@ class ContentWalker {
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
-   * @param array{entity_type: string, id: string, label: string}|null $host
+   * @param array{entity_type: string, id: string, bundle: string, label: string}|null $host
    *   The top-level entity, for a component.
    * @param \Drupal\vale\Finding[] $findings
    *   The findings so far.
@@ -295,7 +344,7 @@ class ContentWalker {
    *   TRUE when the bundle has an opted-in field or an
    *   entity_reference_revisions field.
    */
-  protected function mayHoldProse(string $entity_type_id, string $bundle): bool {
+  public function mayHoldProse(string $entity_type_id, string $bundle): bool {
     foreach ($this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle) as $definition) {
       if ($definition->getType() === 'entity_reference_revisions' || $this->fieldLinter->isEnabled($definition)) {
         return TRUE;

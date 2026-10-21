@@ -1,0 +1,5 @@
+vale.report_scan:
+  route_name: vale.report_scan
+  title: 'Check content'
+  appears_on:
+    - view.vale_findings.page_1

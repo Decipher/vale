@@ -191,9 +191,11 @@ class WorkspaceGateTest extends KernelTestBase {
   public function testOff(): void {
     $this->setMode('off');
     $this->stagePage('This is very good.');
-    $runs = count($this->valeRuns());
     $this->assertNull($this->publish());
-    $this->assertCount($runs, $this->valeRuns());
+    $this->assertSame(1, $this->livePages());
+    // Publishing saves the page in Live, which refreshes the content report,
+    // but the publish check itself shows nothing.
+    $this->assertSame([], $this->messages());
   }
 
   /**
