@@ -14,6 +14,7 @@ use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Alert;
 use Drupal\vale\Drush\Commands\ValeCommands;
 use Drupal\vale\Finding;
+use Drupal\vale\FindingStorage;
 use Drupal\vale\Plugin\Action\CheckProseAction;
 use Drupal\vale\ScanBatch;
 use PHPUnit\Framework\Attributes\Group;
@@ -204,7 +205,28 @@ class ContentReportTest extends KernelTestBase {
     for ($i = 1; $i <= 1200; $i++) {
       $findings[] = new Finding('node', (string) $i, "Page $i", 'page', 'field_text', 0, $alert);
     }
-    $this->container->get('vale.finding_storage')->add($findings);
+    // Record each insert, so the test fails if the batches go. The row count
+    // alone fits under the database's limit on bound values.
+    $storage = new class($this->container->get('database'), $this->container->get('datetime.time')) extends FindingStorage {
+
+      /**
+       * The size of each insert.
+       *
+       * @var list<int>
+       */
+      public array $sizes = [];
+
+      /**
+       * {@inheritdoc}
+       */
+      protected function insert(array $findings, int $now): void {
+        $this->sizes[] = count($findings);
+        parent::insert($findings, $now);
+      }
+
+    };
+    $storage->add($findings);
+    $this->assertSame([500, 500, 200], $storage->sizes);
     $count = $this->container->get('database')->select('vale_finding')->countQuery()->execute()->fetchField();
     $this->assertSame(1200, (int) $count);
   }
