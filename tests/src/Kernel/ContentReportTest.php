@@ -113,12 +113,16 @@ class ContentReportTest extends KernelTestBase {
     $page->save();
     $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
 
-    // A forward draft is not what Live shows, so it does not change the row.
+    // A forward draft is what an editor is about to publish, so the report
+    // shows it.
     $page->setNewRevision();
     $page->isDefaultRevision(FALSE);
     $page->set('field_text', 'Really.');
     $page->save();
-    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
+    $this->assertSame([
+      'Guide > node.field_text:Demo.Really:suggestion',
+      'Guide > paragraph.field_text:Demo.Very:error',
+    ], $this->report());
 
     $page->delete();
     $this->assertSame([], $this->report());
@@ -177,7 +181,9 @@ class ContentReportTest extends KernelTestBase {
   public function testAction(): void {
     $page = $this->savePage('Guide', 'Fine.');
     // Change the text without a save hook, as an import would.
-    $this->container->get('database')->update('node__field_text')->fields(['field_text_value' => 'This is very good.'])->execute();
+    foreach (['node__field_text', 'node_revision__field_text'] as $table) {
+      $this->container->get('database')->update($table)->fields(['field_text_value' => 'This is very good.'])->execute();
+    }
     $this->container->get('entity_type.manager')->getStorage('node')->resetCache();
     $this->assertSame([], $this->report());
 

@@ -57,6 +57,14 @@ function vale_views_data(): array {
   $data['vale_finding']['entity_id'] = $string(t('Entity ID'), t('The id of the entity that holds the value.'));
   $data['vale_finding']['bundle'] = $string(t('Bundle'), t('The bundle of the entity that holds the value.'));
   $data['vale_finding']['label'] = $string(t('Label'), t('The label of the entity that holds the value.'));
+  $data['vale_finding']['langcode'] = [
+    'title' => t('Language'),
+    'help' => t('The language of the translation that holds the value.'),
+    'field' => ['id' => 'language'],
+    'filter' => ['id' => 'language'],
+    'sort' => ['id' => 'standard'],
+    'argument' => ['id' => 'language'],
+  ];
   $data['vale_finding']['field'] = $string(t('Field'), t('The field name.'));
   $data['vale_finding']['delta'] = $number(t('Delta'), t('The delta of the value.'));
   $data['vale_finding']['rule'] = $string(t('Rule'), t('The Vale rule.'));

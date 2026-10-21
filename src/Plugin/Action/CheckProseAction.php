@@ -85,7 +85,9 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
       if (!$entity instanceof FieldableEntityInterface) {
         continue;
       }
-      $findings = $this->contentWalker->entity($entity);
+      // Views lists the default revision. The report holds the newest one.
+      $latest = $this->contentWalker->latest($entity->getEntityTypeId(), $entity->id()) ?? $entity;
+      $findings = $this->contentWalker->entity($latest);
       $this->findingStorage->replace($entity->getEntityTypeId(), [$entity->id()], $findings);
       foreach ($findings as $finding) {
         $finding->isError() ? $errors++ : $others++;

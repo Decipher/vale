@@ -70,7 +70,6 @@ services:
       - '@?workspaces.manager'
       # The workspace tracker is set by ValeServiceProvider.
       - null
-      - '@entity.memory_cache'
   Drupal\vale\ContentWalker: '@vale.content_walker'
   vale.installer:
     class: Drupal\vale\ValeInstaller

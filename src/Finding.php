@@ -35,6 +35,8 @@ final readonly class Finding {
    * @param array{entity_type: string, id: string, bundle: string, label: string}|null $host
    *   For a component such as a paragraph, the top-level entity it belongs
    *   to. NULL for a top-level entity.
+   * @param string $langcode
+   *   The language of the translation that holds the value.
    */
   public function __construct(
     public string $entityType,
@@ -46,6 +48,7 @@ final readonly class Finding {
     public ?Alert $alert,
     public string $reason = '',
     public ?array $host = NULL,
+    public string $langcode = '',
   ) {}
 
   /**

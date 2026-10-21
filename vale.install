@@ -57,6 +57,7 @@ function vale_schema(): array {
         'entity_id' => $string('The id of the entity that holds the value.'),
         'bundle' => $string('The bundle of the entity that holds the value.'),
         'label' => $string('The label of the entity that holds the value.', 255),
+        'langcode' => $string('The language of the translation that holds the value.', 12),
         'field' => $string('The field name.'),
         'delta' => $integer('The delta of the value.'),
         'rule' => $string('The Vale rule, such as Microsoft.Contractions.', 255),

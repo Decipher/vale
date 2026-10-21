@@ -55,6 +55,24 @@ class FindingStorage {
   }
 
   /**
+   * Removes the rows of a bundle that a scan did not refresh.
+   *
+   * @param string $entity_type
+   *   The root entity type.
+   * @param string $bundle
+   *   The root bundle.
+   * @param int $before
+   *   When the scan started, as a Unix timestamp.
+   */
+  public function clearStale(string $entity_type, string $bundle, int $before): void {
+    $this->database->delete(self::TABLE)
+      ->condition('root_type', $entity_type)
+      ->condition('root_bundle', $bundle)
+      ->condition('scanned', $before, '<')
+      ->execute();
+  }
+
+  /**
    * Removes every row, before everything is scanned again.
    */
   public function clearAll(): void {
@@ -113,7 +131,7 @@ class FindingStorage {
   protected function insert(array $findings, int $now): void {
     $insert = $this->database->insert(self::TABLE)->fields([
       'root_type', 'root_id', 'root_bundle', 'root_label',
-      'entity_type', 'entity_id', 'bundle', 'label',
+      'entity_type', 'entity_id', 'bundle', 'label', 'langcode',
       'field', 'delta', 'rule', 'level', 'message', 'matched', 'line', 'span_start', 'span_end', 'scanned',
     ]);
     foreach ($findings as $finding) {
@@ -122,6 +140,7 @@ class FindingStorage {
       $insert->values([
         $root['entity_type'], $root['id'], $root['bundle'], mb_substr($root['label'], 0, 255),
         $finding->entityType, $finding->entityId, $finding->bundle, mb_substr($finding->label, 0, 255),
+        $finding->langcode,
         $finding->field, $finding->delta,
         $alert->rule ?? '',
         $alert->level ?? 'unchecked',

@@ -81,6 +81,7 @@ class DrushLintTest extends BrowserTestBase {
       'id' => '1',
       'bundle' => 'docs_text',
       'label' => $records[0]['label'],
+      'language' => 'en',
       'host_type' => 'node',
       'host_id' => '1',
       'host_label' => 'Guide',
