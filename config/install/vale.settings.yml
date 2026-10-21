@@ -2,6 +2,7 @@ formats: {}
 default_extension: html
 timeout: 10
 publish_only: false
+fail_closed: false
 workspace_mode: advise
 check_limit: 120
 check_window: 60

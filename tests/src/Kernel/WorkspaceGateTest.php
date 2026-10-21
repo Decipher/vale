@@ -12,6 +12,7 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
+use Drupal\vale\Plugin\Action\CheckProseAction;
 use Drupal\workspaces\WorkspacePublishException;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -253,6 +254,20 @@ class WorkspaceGateTest extends KernelTestBase {
     $warnings = $this->messages()['warning'];
     $this->assertStringStartsWith('node "Staged", field_text: not checked.', $warnings[0]);
     $this->assertStringStartsWith('node "Staged", paragraph "Staged > Content", field_text: Demo.Very:', $warnings[1]);
+  }
+
+  /**
+   * Tests that the bulk action refuses to write the report in a workspace.
+   */
+  public function testActionRefusedInWorkspace(): void {
+    $page = Node::create(['type' => 'page', 'title' => 'Live page', 'field_text' => 'This is very good.']);
+    $page->save();
+    $this->switchToWorkspace('stage');
+    $action = $this->container->get('plugin.manager.action')->createInstance('vale_check_prose');
+    $this->assertInstanceOf(CheckProseAction::class, $action);
+    $action->executeMultiple([$page]);
+    $this->switchToLive();
+    $this->assertSame(['Switch to Live to check content for the report.'], $this->messages()['error'] ?? []);
   }
 
 }

@@ -52,14 +52,16 @@ class FieldLinter {
    *   The text.
    * @param string|null $format
    *   The text format, or NULL for a field without one.
+   * @param bool $store
+   *   Whether to cache the result.
    *
    * @return \Drupal\vale\LintResult
    *   The result, with only the alerts the field's settings report.
    */
-  public function lintText(FieldDefinitionInterface $field, string $text, ?string $format): LintResult {
+  public function lintText(FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
     $settings = FieldSettings::forField($field);
     $extension = in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
-    $result = $this->runner->lint($text, $extension, $settings->name($field));
+    $result = $this->runner->lint($text, $extension, $settings->name($field), $store);
     return $result->withAlerts($settings->filter($result->alerts));
   }
 

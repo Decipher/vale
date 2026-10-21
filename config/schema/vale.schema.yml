@@ -17,6 +17,9 @@ vale.settings:
     publish_only:
       type: boolean
       label: 'Refuse error-level findings only when content is published'
+    fail_closed:
+      type: boolean
+      label: 'Refuse a save when Vale cannot check its text'
     workspace_mode:
       type: string
       label: 'Workspace publish check: block, advise or off'

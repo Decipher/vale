@@ -53,7 +53,7 @@ class ValeRunner implements ValeRunnerInterface {
   /**
    * {@inheritdoc}
    */
-  public function lint(string $text, string $extension = 'html', string $name = 'text'): LintResult {
+  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE): LintResult {
     $reason = $this->environment->unavailableReason();
     if ($reason !== NULL) {
       return LintResult::unavailable($reason);
@@ -114,7 +114,9 @@ class ValeRunner implements ValeRunnerInterface {
       $alerts = $this->unwrap($alerts, count(preg_split('/\R/', $text) ?: []));
     }
 
-    $this->cache->set($cid, array_map(static fn (Alert $alert) => $alert->toArray(), $alerts), $this->time->getRequestTime() + static::RESULT_LIFETIME);
+    if ($store) {
+      $this->cache->set($cid, array_map(static fn (Alert $alert) => $alert->toArray(), $alerts), $this->time->getRequestTime() + static::RESULT_LIFETIME);
+    }
     return LintResult::checked($alerts);
   }
 

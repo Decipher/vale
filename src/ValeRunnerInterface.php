@@ -21,11 +21,14 @@ interface ValeRunnerInterface {
    *   The name the text is linted under, without the extension. Sections in
    *   .vale.ini match on "<name>.<extension>", so fields are linted as
    *   "<entity_type>.<bundle>.<field>".
+   * @param bool $store
+   *   Whether to cache the result. Text that is still being written, such as
+   *   a check from the editor, is not worth keeping.
    *
    * @return \Drupal\vale\LintResult
    *   Every alert Vale reported, at every level.
    */
-  public function lint(string $text, string $extension = 'html', string $name = 'text'): LintResult;
+  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE): LintResult;
 
   /**
    * Gives the file extension for a text format.
