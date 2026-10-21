@@ -198,6 +198,9 @@ class ContentWalkerTest extends KernelTestBase {
     // there, and the changed page is linted as Live has it.
     $this->assertSame(['node.field_text:Demo.Very'], $this->summarise($walker->bundle('node', 'page')));
     $this->assertSame('Fine.', $walker->latest('node', $changed->id())?->get('field_text')->value);
+    // Content Live does not have, and an entity type that is gone, give none.
+    $this->assertNull($walker->latest('node', 999));
+    $this->assertNull($walker->latest('gone', 1));
 
     $this->expectException(\InvalidArgumentException::class);
     $walker->workspace('nope');
