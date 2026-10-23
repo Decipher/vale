@@ -109,6 +109,11 @@ None are required. These are supported when they are installed:
 5. Check **Reports > Status report**. The Vale entry shows the version and the
    number of rules in your styles.
 
+If you enable the module through a config import, such as `drush deploy`,
+Drupal does not install its optional config. Export
+`views.view.vale_findings` with the rest of your configuration, or the report
+page is missing.
+
 ## Configuration
 
 ### Fields
@@ -130,6 +135,17 @@ field:
 [*.field_summary.*]
 Microsoft.Contractions = NO
 ```
+
+### Permissions
+
+No role gets these by default, Drupal CMS's content editor included. Grant
+them in **People > Permissions**.
+
+| Permission | What it allows |
+| --- | --- |
+| Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
+| View the prose linting report | The report, which quotes text from all content, published or not |
+| Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
 
 ### Site settings
 
@@ -232,6 +248,12 @@ a warning for the server it ran on. A timeout or a failed run shows only to
 the author. `drush vale:lint` and the workspace `block` mode fail instead, so
 an unchecked deploy does not pass. To refuse the save instead, set
 `fail_closed`.
+
+**Q: Does it check Canvas pages?**
+
+**A:** Not yet. Canvas keeps a page's text in component props, not in fields
+you can opt in. Node fields on a Drupal CMS site are checked, including node
+text that Canvas renders through a content template.
 
 **Q: How much does the result cache hold?**
 
