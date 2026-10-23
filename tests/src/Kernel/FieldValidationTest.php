@@ -122,7 +122,7 @@ class FieldValidationTest extends KernelTestBase {
   public function testErrorBlocks(): void {
     $page = $this->page(['field_text' => ['value' => 'This is very good.', 'format' => 'plain_text']]);
     $this->assertSame(
-      ['field_text.0.value' => ['Demo.Very: Avoid &#039;very&#039;. (line 1: "very")']],
+      ['field_text.0.value' => ['Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")']],
       $this->violations($page),
     );
   }
@@ -135,7 +135,7 @@ class FieldValidationTest extends KernelTestBase {
   public function testSeveralErrors(): void {
     $page = $this->page(['field_text' => "This is very good.\nVery much so."]);
     $this->assertSame(
-      ['field_text.0.value' => ["Demo.Very: Avoid &#039;very&#039;. (line 1: \"very\")<br>\nDemo.Very: Avoid &#039;Very&#039;. (line 2: \"Very\")"]],
+      ['field_text.0.value' => ["Text: Demo.Very: Avoid &#039;very&#039;. (line 1: \"very\")<br>\nText: Demo.Very: Avoid &#039;Very&#039;. (line 2: \"Very\")"]],
       $this->violations($page),
     );
   }
@@ -192,7 +192,7 @@ class FieldValidationTest extends KernelTestBase {
     $this->setSetting('vale_binary', NULL);
     $violations = $this->violations($this->page(['field_text' => 'Fine.']));
     $this->assertSame(['field_text.0.value'], array_keys($violations));
-    $this->assertStringStartsWith('Vale could not check this text.', $violations['field_text.0.value'][0]);
+    $this->assertStringStartsWith('Text: Vale could not check this text.', $violations['field_text.0.value'][0]);
 
     // In publish-only mode, a draft saves and publishing is refused.
     $this->config('vale.settings')->set('publish_only', TRUE)->save();
