@@ -89,8 +89,11 @@ class JsonApiValidationTest extends BrowserTestBase {
    *   The status code and the decoded response document.
    */
   protected function request(string $method, string $path, array $document): array {
+    // drupalCreateUser() keeps the plain password on the account.
+    /** @var string $password */
+    $password = $this->author->passRaw;
     $response = $this->getHttpClient()->request($method, Url::fromUri('base:/jsonapi/' . $path)->setAbsolute()->toString(), [
-      RequestOptions::AUTH => [$this->author->getAccountName(), $this->author->passRaw],
+      RequestOptions::AUTH => [$this->author->getAccountName(), $password],
       RequestOptions::HEADERS => [
         'Accept' => 'application/vnd.api+json',
         'Content-Type' => 'application/vnd.api+json',
