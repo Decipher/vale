@@ -14,7 +14,6 @@ use Drupal\vale\ValeInstaller;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -43,9 +42,9 @@ class ValeInstallerTest extends KernelTestBase {
   /**
    * The requests the installer made.
    *
-   * @var \ArrayObject<int, array<mixed>>
+   * @var list<\Psr\Http\Message\RequestInterface>
    */
-  protected \ArrayObject $requests;
+  protected array $requests = [];
 
   /**
    * {@inheritdoc}
@@ -54,7 +53,6 @@ class ValeInstallerTest extends KernelTestBase {
     parent::setUp();
     $this->directory = sys_get_temp_dir() . '/vale-installer-' . bin2hex(random_bytes(6));
     mkdir($this->directory);
-    $this->requests = new \ArrayObject();
   }
 
   /**
@@ -89,10 +87,11 @@ class ValeInstallerTest extends KernelTestBase {
    */
   protected function installer(Response ...$responses): ValeInstaller {
     $stack = HandlerStack::create(new MockHandler(array_values($responses)));
-    // The history middleware takes its container by reference. An
-    // ArrayObject is shared through a local variable all the same.
-    $history = $this->requests;
-    $stack->push(Middleware::history($history));
+    // Record each request the installer sends.
+    $stack->push(fn (callable $handler): callable => function (RequestInterface $request, array $options) use ($handler) {
+      $this->requests[] = $request;
+      return $handler($request, $options);
+    });
     return new ValeInstaller(new Client(['handler' => $stack]), $this->container->get('file_system'));
   }
 
@@ -106,7 +105,7 @@ class ValeInstallerTest extends KernelTestBase {
 
     $this->assertSame($this->directory . '/bin/vale', $binary);
     $this->assertTrue(is_executable($binary));
-    $request = $this->requests[0]['request'] ?? NULL;
+    $request = $this->requests[0] ?? NULL;
     $this->assertInstanceOf(RequestInterface::class, $request);
     $this->assertSame(
       'https://github.com/vale-cli/vale/releases/download/v9.9.9/vale_9.9.9_Linux_64-bit.tar.gz',
@@ -147,7 +146,7 @@ class ValeInstallerTest extends KernelTestBase {
     )->install($this->directory . '/bin', NULL, NULL, 'Linux_64-bit');
 
     $this->assertTrue(is_executable($binary));
-    $urls = array_map(static fn (array $entry): string => (string) $entry['request']->getUri(), $this->requests->getArrayCopy());
+    $urls = array_map(static fn (RequestInterface $request): string => (string) $request->getUri(), $this->requests);
     $this->assertSame([
       'https://github.com/vale-cli/vale/releases/latest',
       'https://github.com/vale-cli/vale/releases/latest?moved',
