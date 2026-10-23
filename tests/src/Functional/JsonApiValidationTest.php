@@ -147,7 +147,7 @@ class JsonApiValidationTest extends BrowserTestBase {
     $this->assertSame(422, $status);
     $this->assertCount(1, $document['errors']);
     $this->assertSame('/data/attributes/field_text/value', $document['errors'][0]['source']['pointer']);
-    $this->assertSame('field_text.0.value: Demo.Very: Avoid \'very\'. (line 1: "very")', $document['errors'][0]['detail']);
+    $this->assertSame('field_text.0.value: Text: Demo.Very: Avoid \'very\'. (line 1: "very")', $document['errors'][0]['detail']);
     $this->assertSame([], \Drupal::entityQuery('node')->accessCheck(FALSE)->execute());
   }
 
