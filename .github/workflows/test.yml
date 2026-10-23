@@ -31,12 +31,6 @@ jobs:
             php-version: 8.5
             drupal-version: 11
 
-          # Drush supports Drupal 12 only in 14.x-dev, whose dependencies are
-          # dev releases too, so the Drupal 12 legs use dev stability.
-          - name: lint-d12
-            php-version: 8.5
-            drupal-version: 12@dev
-
     name: ${{ matrix.name }}
 
     env:
@@ -72,16 +66,6 @@ jobs:
         with:
           php-version: ${{ matrix.php-version }}
           extensions: gd, sqlite, pdo_sqlite
-
-      # Paragraphs, which the tests use, does not declare Drupal 12 support
-      # yet. The lenient plugin relaxes its core constraint, using the
-      # allowed-list in composer.dev.json. Composer only applies a plugin that
-      # is already installed, so it is installed globally first.
-      - name: Allow test modules that do not declare Drupal 12 yet
-        if: ${{ startsWith(matrix.drupal-version, '12') }}
-        run: |
-          composer global config --no-plugins allow-plugins.mglaman/composer-drupal-lenient true
-          composer global require mglaman/composer-drupal-lenient
 
       - name: Assemble the codebase
         run: .devtools/assemble
@@ -141,11 +125,6 @@ jobs:
             drupal-version: 11@beta
             stability: canary
 
-          - name: test-php-min-d12-dev
-            php-version: 8.5
-            drupal-version: 12@dev
-            stability: canary
-
     services:
       chrome:
         image: selenium/standalone-chromium:latest@sha256:c7c17cd79c62819a8329df00e610dbc4073c279da034a6f37135d454eb0d8870
@@ -202,16 +181,6 @@ jobs:
           if [ "$(php -r 'echo PHP_MAJOR_VERSION . PHP_MINOR_VERSION;')" -ge "84" ]; then
             echo "SYMFONY_DEPRECATIONS_HELPER=disabled" >> "$GITHUB_ENV"
           fi
-
-      # Paragraphs, which the tests use, does not declare Drupal 12 support
-      # yet. The lenient plugin relaxes its core constraint, using the
-      # allowed-list in composer.dev.json. Composer only applies a plugin that
-      # is already installed, so it is installed globally first.
-      - name: Allow test modules that do not declare Drupal 12 yet
-        if: ${{ startsWith(matrix.drupal-version, '12') }}
-        run: |
-          composer global config --no-plugins allow-plugins.mglaman/composer-drupal-lenient true
-          composer global require mglaman/composer-drupal-lenient
 
       - name: Assemble the codebase
         run: .devtools/assemble
