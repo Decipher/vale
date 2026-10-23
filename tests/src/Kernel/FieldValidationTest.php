@@ -8,17 +8,18 @@ use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormState;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\field\Entity\FieldConfig;
-use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\Core\TypedData\DataDefinition;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\node\Entity\Node;
-use Drupal\node\NodeInterface;
-use Drupal\paragraphs\Entity\Paragraph;
-use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\Tests\content_moderation\Traits\ContentModerationTestTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\node\Entity\Node;
+use Drupal\node\NodeInterface;
+use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\user\Entity\User;
 use Drupal\vale\Alert;
 use Drupal\vale\Hook\ValeFormHooks;
@@ -324,8 +325,12 @@ class FieldValidationTest extends KernelTestBase {
    * Tests that the text validator ignores what it cannot check.
    */
   public function testTextValidatorIgnoresOtherValues(): void {
-    $validator = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeTextConstraint::class . 'Validator');
-    $validator->validate('Not a field.', new ValeTextConstraint());
+    // Validate through core's validator, which gives the constraint validator
+    // its context on every Symfony version.
+    $typed_data_manager = $this->container->get('typed_data_manager');
+    $value = $typed_data_manager->create(DataDefinition::create('string'), 'Not a field.');
+    $violations = $typed_data_manager->getValidator()->validate($value, new ValeTextConstraint());
+    $this->assertCount(0, $violations);
     $this->assertSame([], $this->valeRuns());
   }
 

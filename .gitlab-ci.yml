@@ -63,5 +63,8 @@ phpstan:
 
 phpunit:
   before_script: *install-vale
+  # Every phpunit variant extends this job. One resource group makes them run
+  # one at a time, so two variants never share a database server.
+  resource_group: vale-phpunit
   variables:
     VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale

@@ -95,7 +95,7 @@ class JsonApiValidationTest extends BrowserTestBase {
         'Accept' => 'application/vnd.api+json',
         'Content-Type' => 'application/vnd.api+json',
       ],
-      RequestOptions::BODY => json_encode($document),
+      RequestOptions::BODY => json_encode($document, JSON_THROW_ON_ERROR),
       RequestOptions::HTTP_ERRORS => FALSE,
     ]);
     $decoded = json_decode((string) $response->getBody(), TRUE);
