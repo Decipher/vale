@@ -10,6 +10,7 @@ use Consolidation\OutputFormatters\StructuredData\PropertyList;
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -121,6 +122,9 @@ class ValeCommandsTest extends KernelTestBase {
 
     // Refusals.
     $this->assertSame(1, $this->commands()->lint('node:nope', ['workspace' => NULL])->getExitCode());
+    // A bundle with no field opted in is refused, so it never reads as a pass.
+    NodeType::create(['type' => 'bare', 'name' => 'Bare'])->save();
+    $this->assertSame(1, $this->commands()->lint('node:bare', ['workspace' => NULL])->getExitCode());
     $this->assertSame(1, $this->commands()->lint('node:page', ['workspace' => 'stage'])->getExitCode());
     $this->assertSame(1, $this->commands()->lint(NULL, ['workspace' => 'stage'])->getExitCode());
     $this->setSetting('vale_binary', NULL);
