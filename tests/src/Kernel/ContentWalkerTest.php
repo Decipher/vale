@@ -351,6 +351,26 @@ class ContentWalkerTest extends KernelTestBase {
     $this->assertTrue($target(['negate' => 1, 'target_bundles' => ['plain' => 'plain']]));
     // A field with no list may hold every bundle.
     $this->assertTrue($target(['target_bundles' => []]));
+
+    // Only components are linted with their host, so a reference to other
+    // content does not count, even when that content has an opted-in field.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', TRUE)->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'bundle' => 'plain',
+      'settings' => [
+        'handler' => 'default:node',
+        'handler_settings' => ['target_bundles' => ['page' => 'page']],
+      ],
+    ])->save();
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
   }
 
 }
