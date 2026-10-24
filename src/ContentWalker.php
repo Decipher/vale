@@ -495,7 +495,8 @@ class ContentWalker {
    *   bundle that has one.
    */
   public function mayHoldProse(string $entity_type_id, string $bundle): bool {
-    return $this->reachesProse($entity_type_id, $bundle, []);
+    $seen = [];
+    return $this->reachesProse($entity_type_id, $bundle, $seen);
   }
 
   /**
@@ -506,12 +507,13 @@ class ContentWalker {
    * @param string $bundle
    *   The bundle.
    * @param array<string, true> $seen
-   *   The bundles already followed, so references that loop end.
+   *   The bundles already searched. A bundle with no prose has none from any
+   *   path, so the set is shared across the whole search.
    *
    * @return bool
    *   TRUE when an opted-in field is reachable.
    */
-  private function reachesProse(string $entity_type_id, string $bundle, array $seen): bool {
+  private function reachesProse(string $entity_type_id, string $bundle, array &$seen): bool {
     $seen[$entity_type_id . ':' . $bundle] = TRUE;
     $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
     foreach ($definitions as $definition) {
@@ -524,6 +526,11 @@ class ContentWalker {
         continue;
       }
       $target_type = (string) $definition->getSetting('target_type');
+      // Only components are linted with their host, as walk() does.
+      $target = $this->entityTypeManager->getDefinition($target_type, FALSE);
+      if (!$target || !PublishState::isComponentType($target)) {
+        continue;
+      }
       foreach ($this->targetBundles($definition, $target_type) as $target_bundle) {
         if (!isset($seen[$target_type . ':' . $target_bundle]) && $this->reachesProse($target_type, $target_bundle, $seen)) {
           return TRUE;
@@ -546,10 +553,10 @@ class ContentWalker {
    *   Paragraphs can list the bundles it excludes instead.
    */
   private function targetBundles(FieldDefinitionInterface $definition, string $target_type): array {
-    $all = array_map('strval', array_keys($this->bundleInfo->getBundleInfo($target_type)));
+    $all = array_map(strval(...), array_keys($this->bundleInfo->getBundleInfo($target_type)));
     $settings = $definition->getSetting('handler_settings');
     $settings = is_array($settings) ? $settings : [];
-    $listed = array_map('strval', array_keys(array_filter((array) ($settings['target_bundles'] ?? []))));
+    $listed = array_map(strval(...), array_keys(array_filter((array) ($settings['target_bundles'] ?? []))));
     if (!$listed) {
       return $all;
     }
