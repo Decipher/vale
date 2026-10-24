@@ -14,6 +14,7 @@ use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -307,6 +308,69 @@ class ContentWalkerTest extends KernelTestBase {
 
     // The other page is a page of its own, linted once, with no host.
     $this->assertSame(['node.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('node', 'page')));
+  }
+
+  /**
+   * Tests which bundles count as holding prose through their components.
+   */
+  public function testMayHoldProse(): void {
+    $walker = $this->container->get('vale.content_walker');
+    ParagraphsType::create(['id' => 'plain', 'label' => 'Plain'])->save();
+    // A plain paragraph may hold more plain paragraphs, so references loop.
+    FieldStorageConfig::create([
+      'field_name' => 'field_nested',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_nested',
+      'entity_type' => 'paragraph',
+      'bundle' => 'plain',
+      'settings' => [
+        'handler' => 'default:paragraph',
+        'handler_settings' => ['target_bundles' => ['plain' => 'plain']],
+      ],
+    ])->save();
+    $field = FieldConfig::loadByName('node', 'page', 'field_content');
+    $this->assertInstanceOf(FieldConfig::class, $field);
+    $target = function (array $handler_settings) use ($field, $walker): bool {
+      $field->setSetting('handler_settings', $handler_settings)->save();
+      return $walker->mayHoldProse('node', 'page');
+    };
+
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'docs_text'));
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
+    // The page's own text field is opted in, so turn it off to test only its
+    // components.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->assertTrue($target(['target_bundles' => ['docs_text' => 'docs_text']]));
+    $this->assertFalse($target(['target_bundles' => ['plain' => 'plain']]));
+    // Paragraphs can list the bundles a field excludes.
+    $this->assertFalse($target(['negate' => 1, 'target_bundles' => ['docs_text' => 'docs_text']]));
+    $this->assertTrue($target(['negate' => 1, 'target_bundles' => ['plain' => 'plain']]));
+    // A field with no list may hold every bundle.
+    $this->assertTrue($target(['target_bundles' => []]));
+
+    // Only components are linted with their host, so a reference to other
+    // content does not count, even when that content has an opted-in field.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', TRUE)->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'bundle' => 'plain',
+      'settings' => [
+        'handler' => 'default:node',
+        'handler_settings' => ['target_bundles' => ['page' => 'page']],
+      ],
+    ])->save();
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
   }
 
 }

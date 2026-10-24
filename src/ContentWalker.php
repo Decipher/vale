@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\Query\QueryInterface;
 use Drupal\Core\Entity\RevisionableStorageInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
@@ -118,12 +119,30 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function idsAfter(string $entity_type_id, string $bundle, int|string|null $after, int $limit): array {
+    return $this->latestKeys($this->bundleType($entity_type_id, $bundle), $bundle, [], $after, $limit);
+  }
+
+  /**
+   * Checks that a bundle of a fieldable entity type exists.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return \Drupal\Core\Entity\EntityTypeInterface
+   *   The entity type.
+   *
+   * @throws \InvalidArgumentException
+   *   When the entity type or the bundle does not exist.
+   */
+  public function bundleType(string $entity_type_id, string $bundle): EntityTypeInterface {
     $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
     if (!$entity_type || !$entity_type->entityClassImplements(FieldableEntityInterface::class)
       || !isset($this->bundleInfo->getBundleInfo($entity_type_id)[$bundle])) {
       throw new \InvalidArgumentException(sprintf('There is no %s bundle "%s".', $entity_type_id, $bundle));
     }
-    return $this->latestKeys($entity_type, $bundle, [], $after, $limit);
+    return $entity_type;
   }
 
   /**
@@ -464,7 +483,7 @@ class ContentWalker {
   }
 
   /**
-   * Says whether a bundle has opted-in fields or components.
+   * Says whether a bundle has an opted-in field, itself or in its components.
    *
    * @param string $entity_type_id
    *   The entity type.
@@ -472,16 +491,76 @@ class ContentWalker {
    *   The bundle.
    *
    * @return bool
-   *   TRUE when the bundle has an opted-in field or an
-   *   entity_reference_revisions field.
+   *   TRUE when the bundle has an opted-in field, or references a component
+   *   bundle that has one.
    */
   public function mayHoldProse(string $entity_type_id, string $bundle): bool {
-    foreach ($this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle) as $definition) {
-      if ($definition->getType() === 'entity_reference_revisions' || $this->fieldLinter->isEnabled($definition)) {
+    $seen = [];
+    return $this->reachesProse($entity_type_id, $bundle, $seen);
+  }
+
+  /**
+   * Says whether a bundle, or a component it may hold, has an opted-in field.
+   *
+   * @param string $entity_type_id
+   *   The entity type.
+   * @param string $bundle
+   *   The bundle.
+   * @param array<string, true> $seen
+   *   The bundles already searched. A bundle with no prose has none from any
+   *   path, so the set is shared across the whole search.
+   *
+   * @return bool
+   *   TRUE when an opted-in field is reachable.
+   */
+  private function reachesProse(string $entity_type_id, string $bundle, array &$seen): bool {
+    $seen[$entity_type_id . ':' . $bundle] = TRUE;
+    $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
+    foreach ($definitions as $definition) {
+      if ($this->fieldLinter->isEnabled($definition)) {
         return TRUE;
       }
     }
+    foreach ($definitions as $definition) {
+      if ($definition->getType() !== 'entity_reference_revisions') {
+        continue;
+      }
+      $target_type = (string) $definition->getSetting('target_type');
+      // Only components are linted with their host, as walk() does.
+      $target = $this->entityTypeManager->getDefinition($target_type, FALSE);
+      if (!$target || !PublishState::isComponentType($target)) {
+        continue;
+      }
+      foreach ($this->targetBundles($definition, $target_type) as $target_bundle) {
+        if (!isset($seen[$target_type . ':' . $target_bundle]) && $this->reachesProse($target_type, $target_bundle, $seen)) {
+          return TRUE;
+        }
+      }
+    }
     return FALSE;
+  }
+
+  /**
+   * Lists the bundles a reference field may point to.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
+   *   The reference field.
+   * @param string $target_type
+   *   Its target entity type.
+   *
+   * @return list<string>
+   *   The bundles. A field with no bundle list may point to every bundle, and
+   *   Paragraphs can list the bundles it excludes instead.
+   */
+  private function targetBundles(FieldDefinitionInterface $definition, string $target_type): array {
+    $all = array_map(strval(...), array_keys($this->bundleInfo->getBundleInfo($target_type)));
+    $settings = $definition->getSetting('handler_settings');
+    $settings = is_array($settings) ? $settings : [];
+    $listed = array_map(strval(...), array_keys(array_filter((array) ($settings['target_bundles'] ?? []))));
+    if (!$listed) {
+      return $all;
+    }
+    return array_values(empty($settings['negate']) ? array_intersect($all, $listed) : array_diff($all, $listed));
   }
 
 }
