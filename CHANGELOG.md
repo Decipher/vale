@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- Each prose error starts with the field's label, such as "Body:
+  Vale.Repetition: ...", so the same alert in two fields shows for each. The
+  message for text Vale could not check names its field too, and JSON:API's
+  422 detail reads `body.0.value: Body: ...`
+  ([#3632984](https://www.drupal.org/project/vale/issues/3632984)).
+
 ## 1.0.0-beta1 (2026-10-21)
 
 ### Added
