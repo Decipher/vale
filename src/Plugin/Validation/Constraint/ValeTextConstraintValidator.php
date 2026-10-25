@@ -60,6 +60,8 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     }
     $entity = $value->getEntity();
     $field = $value->getFieldDefinition()->getName();
+    // Each message names its field. Drupal drops a message that repeats
+    // another, so the same alert in two fields would otherwise show once.
     $label = (string) $value->getFieldDefinition()->getLabel();
 
     // In publish-only mode an error stops only the save that publishes, and
