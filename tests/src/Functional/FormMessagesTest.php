@@ -62,9 +62,9 @@ class FormMessagesTest extends BrowserTestBase {
       'field_text[0][value]' => "This is very good.\nVery much so.",
       'field_code[0][value]' => 'Very, very code.',
     ], 'Save');
-    $this->assertSession()->pageTextContains('Demo.Very: Avoid \'very\'. (line 1: "very")');
+    $this->assertSession()->pageTextContains('Text: Demo.Very: Avoid \'very\'. (line 1: "very")');
     // Both findings show, not only the first.
-    $this->assertSession()->pageTextContains('Demo.Very: Avoid \'Very\'. (line 2: "Very")');
+    $this->assertSession()->pageTextContains('Text: Demo.Very: Avoid \'Very\'. (line 2: "Very")');
     $this->assertSession()->elementExists('css', 'textarea[name="field_text[0][value]"].error');
     $this->assertSession()->elementNotExists('css', 'textarea[name="field_code[0][value]"].error');
     $this->assertSession()->pageTextNotContains('A page has been created.');
