@@ -204,6 +204,36 @@ class FieldSettingsTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a field's Vale settings are validated against their schema.
+   */
+  public function testFieldSettingsValidation(): void {
+    $field = $this->addField('field_callout', [
+      'enabled' => TRUE,
+      'min_level' => Alert::WARNING,
+      'level_overrides' => [['rule' => 'Demo.Delve', 'level' => Alert::ERROR]],
+    ]);
+    $typed = $this->container->get('config.typed');
+    $paths = function () use ($field, $typed): array {
+      $paths = [];
+      foreach ($typed->createFromNameAndData('field.field.' . $field->id(), $field->toArray())->validate() as $violation) {
+        if (str_starts_with($violation->getPropertyPath(), 'third_party_settings.vale.')) {
+          $paths[] = $violation->getPropertyPath();
+        }
+      }
+      sort($paths);
+      return $paths;
+    };
+    $this->assertSame([], $paths());
+
+    $field->setThirdPartySetting('vale', 'min_level', 'loud');
+    $field->setThirdPartySetting('vale', 'level_overrides', [['rule' => 'Demo.Delve', 'level' => 'loud']]);
+    $this->assertSame([
+      'third_party_settings.vale.level_overrides.0.level',
+      'third_party_settings.vale.min_level',
+    ], $paths());
+  }
+
+  /**
    * Tests the help page.
    */
   public function testHelp(): void {
