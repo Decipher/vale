@@ -119,11 +119,11 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function idsAfter(string $entity_type_id, string $bundle, int|string|null $after, int $limit): array {
-    return $this->latestKeys($this->bundleType($entity_type_id, $bundle), $bundle, [], $after, $limit);
+    return $this->latestKeys($this->entityTypeForBundle($entity_type_id, $bundle), $bundle, [], $after, $limit);
   }
 
   /**
-   * Checks that a bundle of a fieldable entity type exists.
+   * Gets the entity type of a bundle, checking that the bundle exists.
    *
    * @param string $entity_type_id
    *   The entity type.
@@ -136,7 +136,7 @@ class ContentWalker {
    * @throws \InvalidArgumentException
    *   When the entity type or the bundle does not exist.
    */
-  public function bundleType(string $entity_type_id, string $bundle): EntityTypeInterface {
+  public function entityTypeForBundle(string $entity_type_id, string $bundle): EntityTypeInterface {
     $entity_type = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
     if (!$entity_type || !$entity_type->entityClassImplements(FieldableEntityInterface::class)
       || !isset($this->bundleInfo->getBundleInfo($entity_type_id)[$bundle])) {

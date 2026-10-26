@@ -156,7 +156,8 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       }
       elseif ($scope !== NULL) {
         [$entity_type, $bundle] = explode(':', $scope, 2) + [1 => ''];
-        $this->contentWalker->bundleType($entity_type, $bundle);
+        // Refuse a bundle that does not exist.
+        $this->contentWalker->entityTypeForBundle($entity_type, $bundle);
         // An empty table would read as a pass.
         if (!$this->contentWalker->mayHoldProse($entity_type, $bundle)) {
           throw new \InvalidArgumentException(sprintf('No field in %s is checked with Vale.', $scope));
