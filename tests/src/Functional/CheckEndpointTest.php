@@ -77,15 +77,17 @@ class CheckEndpointTest extends BrowserTestBase {
    * @phpstan-impure
    */
   protected function check(array $body, bool $session = TRUE): array {
+    /** @var array<string, string> $headers */
+    $headers = ['Content-Type' => 'application/json'];
     $options = [
-      RequestOptions::HEADERS => ['Content-Type' => 'application/json'],
-      RequestOptions::BODY => json_encode($body),
+      RequestOptions::BODY => json_encode($body, JSON_THROW_ON_ERROR),
       RequestOptions::HTTP_ERRORS => FALSE,
     ];
     if ($session) {
       $options[RequestOptions::COOKIES] = $this->getSessionCookies();
-      $options[RequestOptions::HEADERS]['X-CSRF-Token'] = $this->drupalGet('session/token');
+      $headers['X-CSRF-Token'] = $this->drupalGet('session/token');
     }
+    $options[RequestOptions::HEADERS] = $headers;
     $response = $this->getHttpClient()->request('POST', Url::fromRoute('vale.check')->setAbsolute()->toString(), $options);
     $decoded = json_decode((string) $response->getBody(), TRUE);
     return [$response->getStatusCode(), is_array($decoded) ? $decoded : []];
@@ -166,7 +168,7 @@ class CheckEndpointTest extends BrowserTestBase {
     $this->logInWith(['use vale check', 'create page content']);
     $response = $this->getHttpClient()->request('POST', Url::fromRoute('vale.check')->setAbsolute()->toString(), [
       RequestOptions::COOKIES => $this->getSessionCookies(),
-      RequestOptions::BODY => json_encode($this->body('Very.')),
+      RequestOptions::BODY => json_encode($this->body('Very.'), JSON_THROW_ON_ERROR),
       RequestOptions::HTTP_ERRORS => FALSE,
     ]);
     $this->assertSame(403, $response->getStatusCode());

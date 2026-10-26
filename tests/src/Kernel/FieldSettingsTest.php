@@ -39,6 +39,7 @@ class FieldSettingsTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    $this->installEntitySchema('node');
     $this->installConfig(['vale']);
     $this->setUpVale();
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
