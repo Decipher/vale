@@ -492,35 +492,50 @@ class ContentWalker {
    *
    * @return bool
    *   TRUE when the bundle has an opted-in field, or references a component
-   *   bundle that has one.
+   *   bundle that has one no deeper than walk() follows.
    */
   public function mayHoldProse(string $entity_type_id, string $bundle): bool {
-    $seen = [];
-    return $this->reachesProse($entity_type_id, $bundle, $seen);
+    // Search one depth at a time, so each bundle is first found by its
+    // shortest path. A bundle with no prose has none from any path, so each
+    // bundle is searched once.
+    $seen = [$entity_type_id . ':' . $bundle => TRUE];
+    $level = [[$entity_type_id, $bundle]];
+    for ($depth = 0; $level; $depth++) {
+      $next = [];
+      foreach ($level as [$type, $name]) {
+        $definitions = $this->entityFieldManager->getFieldDefinitions($type, $name);
+        foreach ($definitions as $definition) {
+          if ($this->fieldLinter->isEnabled($definition)) {
+            return TRUE;
+          }
+        }
+        // walk() follows components only to MAX_DEPTH.
+        if ($depth === self::MAX_DEPTH) {
+          continue;
+        }
+        foreach ($this->componentBundles($definitions) as $key => $component) {
+          if (!isset($seen[$key])) {
+            $seen[$key] = TRUE;
+            $next[] = $component;
+          }
+        }
+      }
+      $level = $next;
+    }
+    return FALSE;
   }
 
   /**
-   * Says whether a bundle, or a component it may hold, has an opted-in field.
+   * Lists the component bundles that reference fields may hold.
    *
-   * @param string $entity_type_id
-   *   The entity type.
-   * @param string $bundle
-   *   The bundle.
-   * @param array<string, true> $seen
-   *   The bundles already searched. A bundle with no prose has none from any
-   *   path, so the set is shared across the whole search.
+   * @param \Drupal\Core\Field\FieldDefinitionInterface[] $definitions
+   *   The field definitions of a bundle.
    *
-   * @return bool
-   *   TRUE when an opted-in field is reachable.
+   * @return array<string, array{string, string}>
+   *   The entity type and bundle of each component bundle, keyed by both.
    */
-  private function reachesProse(string $entity_type_id, string $bundle, array &$seen): bool {
-    $seen[$entity_type_id . ':' . $bundle] = TRUE;
-    $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
-    foreach ($definitions as $definition) {
-      if ($this->fieldLinter->isEnabled($definition)) {
-        return TRUE;
-      }
-    }
+  private function componentBundles(array $definitions): array {
+    $bundles = [];
     foreach ($definitions as $definition) {
       if ($definition->getType() !== 'entity_reference_revisions') {
         continue;
@@ -532,12 +547,10 @@ class ContentWalker {
         continue;
       }
       foreach ($this->targetBundles($definition, $target_type) as $target_bundle) {
-        if (!isset($seen[$target_type . ':' . $target_bundle]) && $this->reachesProse($target_type, $target_bundle, $seen)) {
-          return TRUE;
-        }
+        $bundles[$target_type . ':' . $target_bundle] = [$target_type, $target_bundle];
       }
     }
-    return FALSE;
+    return $bundles;
   }
 
   /**

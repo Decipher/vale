@@ -373,4 +373,63 @@ class ContentWalkerTest extends KernelTestBase {
     $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
   }
 
+  /**
+   * Tests that a component counts only as deep as linting follows it.
+   */
+  public function testMayHoldProseDepth(): void {
+    $walker = $this->container->get('vale.content_walker');
+    // A chain of paragraph bundles, each holding the next: level0 holds
+    // level1, and so on to level11.
+    FieldStorageConfig::create([
+      'field_name' => 'field_next',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    for ($level = 0; $level <= 11; $level++) {
+      ParagraphsType::create(['id' => "level$level", 'label' => "Level $level"])->save();
+    }
+    for ($level = 0; $level < 11; $level++) {
+      $next = 'level' . ($level + 1);
+      FieldConfig::create([
+        'field_name' => 'field_next',
+        'entity_type' => 'paragraph',
+        'bundle' => "level$level",
+        'settings' => [
+          'handler' => 'default:paragraph',
+          'handler_settings' => ['target_bundles' => [$next => $next]],
+        ],
+      ])->save();
+    }
+
+    // Linting follows components 10 deep, so level10 is reached and level11
+    // is not.
+    $this->createValeTextField('paragraph', 'level11', 'field_words', TRUE);
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'level0'));
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level1'));
+    $this->createValeTextField('paragraph', 'level10', 'field_words', TRUE);
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level0'));
+
+    // A bundle found too deep by one path still counts when a shorter path
+    // reaches it.
+    FieldConfig::loadByName('paragraph', 'level10', 'field_words')?->delete();
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'level0'));
+    FieldStorageConfig::create([
+      'field_name' => 'field_shortcut',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_shortcut',
+      'entity_type' => 'paragraph',
+      'bundle' => 'level0',
+      'settings' => [
+        'handler' => 'default:paragraph',
+        'handler_settings' => ['target_bundles' => ['level11' => 'level11']],
+      ],
+    ])->save();
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level0'));
+  }
+
 }
