@@ -108,7 +108,7 @@ class PublishStateTest extends UnitTestCase {
   /**
    * Tests that Live keeps the usual publishing decision.
    */
-  public function testOutsideAWorkspace(): void {
+  public function testOutsideWorkspace(): void {
     $state = new PublishState(NULL, $this->manager(FALSE), $this->information(TRUE));
     $this->assertTrue($state->isBeingPublished($this->node(TRUE)));
   }
