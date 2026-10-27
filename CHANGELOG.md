@@ -8,6 +8,14 @@ and this project adheres to
 
 ## Unreleased
 
+### Added
+
+- A development recipe, applied by `make provision`, that creates a Page
+  content type whose body is checked with Vale, so a fresh development site
+  has a field to lint: create a Page, or run `drush vale:check`. The Vale
+  binary, its configuration and the settings wiring are installed with it,
+  so the stack lints out of the box.
+
 ### Changed
 
 - Each prose error starts with the field's label, such as "Body:

@@ -102,14 +102,21 @@ describe: info
 # Lando uses `destroy` and DDEV uses `delete` for what our `reset` does.
 delete destroy: reset
 
-# Allow running Drush commands with `make drush <command>`
+# Allow running Drush commands with `make drush <command>`. The bare form
+# works for colon-free commands; colon-bearing commands, which make's rule
+# parser would read as targets, go through CMD instead:
+#   make drush status
+#   make drush CMD="cr"
+#   make drush CMD="recipe:apply recipes/dev_content"
 ifeq (drush,$(firstword $(MAKECMDGOALS)))
-  DRUSH_RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  $(eval $(DRUSH_RUN_ARGS):;@:)
+  ifeq ($(CMD),)
+    DRUSH_RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(DRUSH_RUN_ARGS):;@:)
+  endif
 endif
 
 drush:
-	$(DRUSH) $(DRUSH_RUN_ARGS)
+	$(DRUSH) $(if $(CMD),$(CMD),$(DRUSH_RUN_ARGS))
 
 login:
 	@url="$$($(DRUSH) uli)"; printf '%s\n' "$$url"; if [ -n "$$LOGIN_QRCODE" ]; then ./.devtools/qrcode "$$url"; fi
