@@ -145,7 +145,7 @@ class WorkspaceGateTest extends KernelTestBase {
     $this->assertSame(0, $this->livePages());
     $messages = $this->messages();
     // The message is markup, escaped once.
-    $this->assertSame('node "Staged", field_text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
+    $this->assertSame('node "Staged", Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
     $this->assertStringStartsWith('Stage: 1 prose error,', $messages['error'][1]);
   }
 
@@ -189,7 +189,7 @@ class WorkspaceGateTest extends KernelTestBase {
     $this->assertSame('Stage: 1 prose error, 0 warnings or suggestions, 0 values not checked.', $this->publish());
     $this->assertSame(0, $this->livePages());
     $messages = $this->messages();
-    $this->assertSame('node "Staged", field_text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
+    $this->assertSame('node "Staged", Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
     $this->assertStringStartsWith('Stage: 1 prose error,', $messages['error'][1]);
   }
 
@@ -317,8 +317,8 @@ class WorkspaceGateTest extends KernelTestBase {
 
     $this->assertNull($this->publish());
     $warnings = $this->messages()['warning'];
-    $this->assertStringStartsWith('node "Staged", field_text: not checked.', $warnings[0]);
-    $this->assertStringStartsWith('node "Staged", paragraph "Staged &gt; Content", field_text: Demo.Very:', $warnings[1]);
+    $this->assertStringStartsWith('node "Staged", Text: not checked.', $warnings[0]);
+    $this->assertStringStartsWith('node "Staged", paragraph "Staged &gt; Content", Text: Demo.Very:', $warnings[1]);
   }
 
   /**
