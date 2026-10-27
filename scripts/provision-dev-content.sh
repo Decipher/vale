@@ -30,16 +30,17 @@ if [ -f build/web/core/profiles/standard/config/install/node.type.page.yml ]; th
   exit 0
 fi
 
-# Drupal 11.5 splits the text_with_summary field type out of text, and the
-# recipe's body field needs that module's config schema to validate.
-# Earlier cores provide the field type in text itself.
-if [ -d build/web/core/modules/text_with_summary ]; then
-  make drush CMD='pm:install text_with_summary' >/dev/null
-fi
-
 if ! make drush CMD='help recipe:apply' >/dev/null 2>&1; then
   echo "[dev-content] Drush does not provide recipe:apply; skipping."
   exit 0
+fi
+
+# Drupal 11.5 splits the text_with_summary field type out of text, and the
+# recipe's body field needs that module's config schema to validate.
+# Earlier cores provide the field type in text itself. Install it only once
+# the recipe will be applied, so a skipped recipe leaves the site unchanged.
+if [ -d build/web/core/modules/text_with_summary ]; then
+  make drush CMD='pm:install text_with_summary' >/dev/null
 fi
 
 echo "[dev-content] Applying $recipe"
