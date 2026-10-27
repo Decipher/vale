@@ -9,16 +9,19 @@ use Consolidation\AnnotatedCommand\Input\StdinHandler;
 use Consolidation\OutputFormatters\StructuredData\PropertyList;
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\node\Entity\Node;
-use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
+use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\vale\Drush\Commands\ValeCommands;
 use Drupal\vale\ValeInstaller;
 use Drush\Attributes\Command;
 use GuzzleHttp\Client;
-use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -121,6 +124,23 @@ class ValeCommandsTest extends KernelTestBase {
 
     // Refusals.
     $this->assertSame(1, $this->commands()->lint('node:nope', ['workspace' => NULL])->getExitCode());
+    // A bundle with no field opted in is refused, so it never reads as a pass.
+    NodeType::create(['type' => 'bare', 'name' => 'Bare'])->save();
+    $this->assertSame(1, $this->commands()->lint('node:bare', ['workspace' => NULL])->getExitCode());
+    // So is a bundle whose components have no field opted in.
+    NodeType::create(['type' => 'refs', 'name' => 'Refs'])->save();
+    ParagraphsType::create(['id' => 'plain', 'label' => 'Plain'])->save();
+    FieldConfig::create([
+      'field_name' => 'field_content',
+      'entity_type' => 'node',
+      'bundle' => 'refs',
+      'label' => 'Content',
+      'settings' => [
+        'handler' => 'default:paragraph',
+        'handler_settings' => ['target_bundles' => ['plain' => 'plain']],
+      ],
+    ])->save();
+    $this->assertSame(1, $this->commands()->lint('node:refs', ['workspace' => NULL])->getExitCode());
     $this->assertSame(1, $this->commands()->lint('node:page', ['workspace' => 'stage'])->getExitCode());
     $this->assertSame(1, $this->commands()->lint(NULL, ['workspace' => 'stage'])->getExitCode());
     $this->setSetting('vale_binary', NULL);

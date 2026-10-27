@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Functional;
 
 use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
@@ -95,6 +96,11 @@ class DrushLintTest extends BrowserTestBase {
       'message' => "'delve' is an AI tell.",
       'text' => 'delve',
     ], $records[0]);
+
+    // A bundle with no field opted in says so, rather than passing.
+    NodeType::create(['type' => 'bare', 'name' => 'Bare'])->save();
+    $this->drush('vale:lint', ['node:bare'], [], NULL, NULL, 1);
+    $this->assertStringContainsString('No field in node:bare is checked with Vale.', $this->getErrorOutput());
   }
 
   /**

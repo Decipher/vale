@@ -168,7 +168,8 @@ There is no settings form. Set these in `settings.php`, such as
 
 `drush vale:lint` checks stored content, such as every page with
 `drush vale:lint node:page`, or a workspace's changes with `--workspace`. It
-exits with 1 on an error, so a deploy can depend on it.
+exits with 1 on an error, so a deploy can depend on it. A bundle with no field
+checked by Vale is refused, so it never reads as a pass.
 
 ![drush vale:lint lists alerts by entity, field and rule, and exits with 1](docs/screenshots/drush.png)
 

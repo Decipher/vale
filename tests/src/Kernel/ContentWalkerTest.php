@@ -14,6 +14,7 @@ use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -307,6 +308,128 @@ class ContentWalkerTest extends KernelTestBase {
 
     // The other page is a page of its own, linted once, with no host.
     $this->assertSame(['node.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('node', 'page')));
+  }
+
+  /**
+   * Tests which bundles count as holding prose through their components.
+   */
+  public function testMayHoldProse(): void {
+    $walker = $this->container->get('vale.content_walker');
+    ParagraphsType::create(['id' => 'plain', 'label' => 'Plain'])->save();
+    // A plain paragraph may hold more plain paragraphs, so references loop.
+    FieldStorageConfig::create([
+      'field_name' => 'field_nested',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_nested',
+      'entity_type' => 'paragraph',
+      'bundle' => 'plain',
+      'settings' => [
+        'handler' => 'default:paragraph',
+        'handler_settings' => ['target_bundles' => ['plain' => 'plain']],
+      ],
+    ])->save();
+    $field = FieldConfig::loadByName('node', 'page', 'field_content');
+    $this->assertInstanceOf(FieldConfig::class, $field);
+    $target = function (array $handler_settings) use ($field, $walker): bool {
+      $field->setSetting('handler_settings', $handler_settings)->save();
+      return $walker->mayHoldProse('node', 'page');
+    };
+
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'docs_text'));
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
+    // The page's own text field is opted in, so turn it off to test only its
+    // components.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->assertTrue($target(['target_bundles' => ['docs_text' => 'docs_text']]));
+    $this->assertFalse($target(['target_bundles' => ['plain' => 'plain']]));
+    // Paragraphs can list the bundles a field excludes.
+    $this->assertFalse($target(['negate' => 1, 'target_bundles' => ['docs_text' => 'docs_text']]));
+    $this->assertTrue($target(['negate' => 1, 'target_bundles' => ['plain' => 'plain']]));
+    // A field with no list may hold every bundle.
+    $this->assertTrue($target(['target_bundles' => []]));
+
+    // Only components are linted with their host, so a reference to other
+    // content does not count, even when that content has an opted-in field.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', TRUE)->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'bundle' => 'plain',
+      'settings' => [
+        'handler' => 'default:node',
+        'handler_settings' => ['target_bundles' => ['page' => 'page']],
+      ],
+    ])->save();
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'plain'));
+  }
+
+  /**
+   * Tests that a component counts only as deep as linting follows it.
+   */
+  public function testMayHoldProseDepth(): void {
+    $walker = $this->container->get('vale.content_walker');
+    // A chain of paragraph bundles, each holding the next: level0 holds
+    // level1, and so on to level11.
+    FieldStorageConfig::create([
+      'field_name' => 'field_next',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    for ($level = 0; $level <= 11; $level++) {
+      ParagraphsType::create(['id' => "level$level", 'label' => "Level $level"])->save();
+    }
+    for ($level = 0; $level < 11; $level++) {
+      $next = 'level' . ($level + 1);
+      FieldConfig::create([
+        'field_name' => 'field_next',
+        'entity_type' => 'paragraph',
+        'bundle' => "level$level",
+        'settings' => [
+          'handler' => 'default:paragraph',
+          'handler_settings' => ['target_bundles' => [$next => $next]],
+        ],
+      ])->save();
+    }
+
+    // Linting follows components 10 deep, so level10 is reached and level11
+    // is not.
+    $this->createValeTextField('paragraph', 'level11', 'field_words', TRUE);
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'level0'));
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level1'));
+    $this->createValeTextField('paragraph', 'level10', 'field_words', TRUE);
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level0'));
+
+    // A bundle found too deep by one path still counts when a shorter path
+    // reaches it.
+    FieldConfig::loadByName('paragraph', 'level10', 'field_words')?->delete();
+    $this->assertFalse($walker->mayHoldProse('paragraph', 'level0'));
+    FieldStorageConfig::create([
+      'field_name' => 'field_shortcut',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_shortcut',
+      'entity_type' => 'paragraph',
+      'bundle' => 'level0',
+      'settings' => [
+        'handler' => 'default:paragraph',
+        'handler_settings' => ['target_bundles' => ['level11' => 'level11']],
+      ],
+    ])->save();
+    $this->assertTrue($walker->mayHoldProse('paragraph', 'level0'));
   }
 
 }
