@@ -6,10 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 1.0.0 (2026-10-27)
 
 ### Added
 
+- Drupal 12 support, alongside Drupal 10.3 and 11
+  ([#3632782](https://www.drupal.org/project/vale/issues/3632782)).
+- README sections on Canvas pages, which are not checked, on the module's
+  permissions, and on installing through config import, which skips the
+  optional report view.
 - A development recipe, applied by `make provision`, that creates a Page
   content type whose body is checked with Vale, so a fresh development site
   has a field to lint: create a Page, or run `drush vale:check`. The Vale
@@ -26,13 +31,19 @@ and this project adheres to
 
 ### Fixed
 
+- `drush vale:lint ENTITY_TYPE:BUNDLE` refuses a bundle with nothing checked
+  by Vale and exits with 1, instead of printing an empty table that read as a
+  pass. A bundle counts as checked when it has an opted-in field, or can hold
+  a component type that has one, no deeper than linting follows
+  ([#3632983](https://www.drupal.org/project/vale/issues/3632983)).
 - Publish-only mode no longer refuses an edit of published content inside a
   workspace. The save drafts within the workspace, where nothing is live yet;
   the workspace publish check still stops on its errors. That check now stops
   on them even in `advise` mode, and on unchecked text while `fail_closed`,
   because under publish-only the workspace's publish is the publishing save.
   Content a workspace does not track, which saves straight to Live, keeps
-  its publishing refusal.
+  its publishing refusal
+  ([#3633410](https://www.drupal.org/project/vale/issues/3633410)).
 
 ## 1.0.0-beta1 (2026-10-21)
 
