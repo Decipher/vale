@@ -47,7 +47,7 @@ Submit bug reports and feature suggestions, or track changes in the
 ## Requirements
 
 - PHP 8.3 or later
-- Drupal 10.3 or 11
+- Drupal 10.3, 11 or 12
 - Vale 3, on every web server and in the CLI container, with the styles your
   `.vale.ini` uses
 

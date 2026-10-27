@@ -39,9 +39,10 @@ vale.settings:
       label: 'Workspace publish check: block, advise or off'
       constraints:
         Choice:
-          - block
-          - advise
-          - 'off'
+          choices:
+            - block
+            - advise
+            - 'off'
     check_limit:
       type: integer
       label: 'Requests to the check endpoint each user may make in one window'
@@ -67,9 +68,10 @@ field.field.*.*.*.third_party.vale:
       label: 'Lowest level to report'
       constraints:
         Choice:
-          - error
-          - warning
-          - suggestion
+          choices:
+            - error
+            - warning
+            - suggestion
     disabled_rules:
       type: sequence
       label: 'Rules turned off'
@@ -91,9 +93,10 @@ field.field.*.*.*.third_party.vale:
             label: 'New level'
             constraints:
               Choice:
-                - error
-                - warning
-                - suggestion
+                choices:
+                  - error
+                  - warning
+                  - suggestion
     profile:
       type: string
       label: 'Name the values are linted under'

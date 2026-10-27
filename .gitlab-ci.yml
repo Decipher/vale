@@ -23,6 +23,13 @@ include:
 variables:
   OPT_IN_TEST_PREVIOUS_MINOR: 1
   OPT_IN_TEST_NEXT_MINOR: 1
+  # Drupal 12 is core's main branch. Run its jobs on every push and MR, not
+  # by hand, so a Drupal 12 failure blocks a merge.
+  OPT_IN_TEST_NEXT_MAJOR: 1
+  _AUTORUN_NEXT_MAJOR: 'push-and-mr'
+  # The tests use Paragraphs, which does not declare Drupal 12 support yet.
+  # vale does not need it at runtime, so the next major jobs install it anyway.
+  _LENIENT_ALLOW_LIST: 'paragraphs,entity_reference_revisions'
   # The phpunit binary (_PHPUNIT_CONCURRENT: 0) loads phpunit.xml from the
   # project root. That file is the scaffold config for local and GitHub runs.
   # This flag points the binary at the DrupalCI config instead.
@@ -56,5 +63,8 @@ phpstan:
 
 phpunit:
   before_script: *install-vale
+  # Every phpunit variant extends this job. One resource group makes them run
+  # one at a time, so two variants never share a database server.
+  resource_group: vale-phpunit
   variables:
     VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale
