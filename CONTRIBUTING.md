@@ -33,6 +33,10 @@ ahoy provision    # Provision the Drupal website
 The `provision` command is useful for re-installing the Drupal website without
 re-assembling the codebase.
 
+The provisioned site also applies `recipes/dev_content`, which creates a
+**Page** content type whose body is checked with Vale, so the stack has
+content to lint as soon as it is up. Set `DEV_CONTENT=0` to skip it.
+
 ### Drupal versions
 
 The Drupal version used for the codebase assembly is determined by the

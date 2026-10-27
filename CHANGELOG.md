@@ -8,6 +8,12 @@ and this project adheres to
 
 ## Unreleased
 
+### Added
+
+- A development recipe, applied by `make provision`, that creates a Page
+  content type whose body is checked with Vale, so a fresh development site
+  has content to lint.
+
 ### Changed
 
 - Each prose error starts with the field's label, such as "Body:
