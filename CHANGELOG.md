@@ -12,9 +12,6 @@ and this project adheres to
 
 - Drupal 12 support, alongside Drupal 10.3 and 11
   ([#3632782](https://www.drupal.org/project/vale/issues/3632782)).
-- README sections on Canvas pages, which are not checked, on the module's
-  permissions, and on installing through config import, which skips the
-  optional report view.
 - A development recipe, applied by `make provision`, that creates a Page
   content type whose body is checked with Vale, so a fresh development site
   has a field to lint: create a Page, or run `drush vale:check`. The Vale
