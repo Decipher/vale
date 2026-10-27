@@ -201,7 +201,6 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     ]);
   }
 
-
   /**
    * Gives a finding's field by its label, as save errors name it.
    *
