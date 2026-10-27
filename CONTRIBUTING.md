@@ -34,10 +34,11 @@ The `provision` command is useful for re-installing the Drupal website without
 re-assembling the codebase.
 
 The provisioned site also applies `recipes/dev_content`, which creates a
-**Page** content type whose body is checked with Vale, so the stack has
-content to lint as soon as it is up, and installs the Vale binary, its
-configuration and the settings that point the site at them. Set
-`DEV_CONTENT=0` or `DEV_VALE=0` to skip either.
+**Page** content type whose body is checked with Vale — create a Page or
+run `drush vale:check node.page.body` to see it — and installs the Vale
+binary, its configuration and the settings that point the site at them, so
+the stack lints as soon as it is up. Set `DEV_CONTENT=0` or `DEV_VALE=0`
+to skip either.
 
 ### Drupal versions
 
