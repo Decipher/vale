@@ -430,20 +430,21 @@ class ContentWalker {
    *
    * @return bool
    *   TRUE when the latest revision of its host holds it, through hosts that
-   *   are held in turn, no deeper than walk() follows. TRUE when the
-   *   component does not say what holds it.
+   *   are held in turn, no deeper than walk() follows.
    */
   protected function isHeld(FieldableEntityInterface $component, int $depth = 0): bool {
-    if (!method_exists($component, 'getParentEntity') || !$component->hasField('parent_field_name')) {
-      return TRUE;
+    // A component type names the fields that record its host.
+    $entity_type = $component->getEntityType();
+    $fields = [];
+    foreach (['type', 'id', 'field_name'] as $part) {
+      $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
+      $fields[$part] = $name !== '' && $component->hasField($name) ? (string) $component->get($name)->value : '';
     }
-    $parent = $component->getParentEntity();
-    $field = (string) $component->get('parent_field_name')->value;
-    $host = $parent instanceof FieldableEntityInterface ? $this->latest($parent->getEntityTypeId(), $parent->id()) : NULL;
-    if (!$host || $field === '' || !$host->hasField($field) || $depth >= self::MAX_DEPTH) {
+    $host = $fields['type'] !== '' && $fields['id'] !== '' ? $this->latest($fields['type'], $fields['id']) : NULL;
+    if (!$host || $fields['field_name'] === '' || !$host->hasField($fields['field_name']) || $depth >= self::MAX_DEPTH) {
       return FALSE;
     }
-    foreach ($host->get($field) as $item) {
+    foreach ($host->get($fields['field_name']) as $item) {
       if ((string) $item->get('target_id')->getValue() === (string) $component->id()) {
         return !$this->publishState->isComponent($host) || $this->isHeld($host, $depth + 1);
       }

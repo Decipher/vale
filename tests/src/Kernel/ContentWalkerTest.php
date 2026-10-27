@@ -158,6 +158,10 @@ class ContentWalkerTest extends KernelTestBase {
     $first->save();
     $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
 
+    // A paragraph saved with no host is not linted either.
+    Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.'])->save();
+    $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
+
     // All content reaches paragraphs only through their hosts.
     $this->assertSame($this->summarise($walker->bundle('node', 'page')), $this->summarise($walker->all()));
 
