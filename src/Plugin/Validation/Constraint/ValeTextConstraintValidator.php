@@ -60,6 +60,9 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     }
     $entity = $value->getEntity();
     $field = $value->getFieldDefinition()->getName();
+    // Each message names its field. Drupal drops a message that repeats
+    // another, so the same alert in two fields would otherwise show once.
+    $label = (string) $value->getFieldDefinition()->getLabel();
 
     // In publish-only mode an error stops only the save that publishes, and
     // ValeTree reports it on the entity rather than here. JSON:API drops
@@ -78,7 +81,10 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
           $this->alertCollector->addUnchecked($result->reason);
         }
         elseif (!$publish_only) {
-          $this->context->buildViolation($constraint->uncheckedMessage, ['@reason' => $result->reason])->atPath($delta . '.value')->addViolation();
+          $this->context->buildViolation($constraint->uncheckedMessage, [
+            '@field' => $label,
+            '@reason' => $result->reason,
+          ])->atPath($delta . '.value')->addViolation();
         }
         continue;
       }
@@ -89,6 +95,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
         }
         elseif (!$publish_only) {
           $errors->add($constraint->message, [
+            '@field' => $label,
             '@rule' => $alert->rule,
             '@message' => $alert->message,
             '@line' => $alert->line,

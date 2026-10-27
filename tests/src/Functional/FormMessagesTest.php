@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Functional;
 
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
@@ -62,12 +63,29 @@ class FormMessagesTest extends BrowserTestBase {
       'field_text[0][value]' => "This is very good.\nVery much so.",
       'field_code[0][value]' => 'Very, very code.',
     ], 'Save');
-    $this->assertSession()->pageTextContains('Demo.Very: Avoid \'very\'. (line 1: "very")');
+    $this->assertSession()->pageTextContains('Text: Demo.Very: Avoid \'very\'. (line 1: "very")');
     // Both findings show, not only the first.
-    $this->assertSession()->pageTextContains('Demo.Very: Avoid \'Very\'. (line 2: "Very")');
+    $this->assertSession()->pageTextContains('Text: Demo.Very: Avoid \'Very\'. (line 2: "Very")');
     $this->assertSession()->elementExists('css', 'textarea[name="field_text[0][value]"].error');
     $this->assertSession()->elementNotExists('css', 'textarea[name="field_code[0][value]"].error');
     $this->assertSession()->pageTextNotContains('A page has been created.');
+  }
+
+  /**
+   * Tests that the same error in two fields shows once for each field.
+   */
+  public function testSameErrorInTwoFields(): void {
+    $this->createValeTextField('node', 'page', 'field_note', TRUE);
+    EntityFormDisplay::load('node.page.default')->setComponent('field_note', ['type' => 'text_textarea'])->save();
+    $this->drupalGet('node/add/page');
+    $this->submitForm([
+      'title[0][value]' => 'A page',
+      'field_text[0][value]' => 'This is very good.',
+      'field_note[0][value]' => 'This is very good.',
+    ], 'Save');
+    // Drupal drops a message that repeats another, so each names its field.
+    $this->assertSession()->pageTextContains('Text: Demo.Very: Avoid \'very\'. (line 1: "very")');
+    $this->assertSession()->pageTextContains('Note: Demo.Very: Avoid \'very\'. (line 1: "very")');
   }
 
   /**

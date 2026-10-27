@@ -198,7 +198,7 @@ A write with an error is refused with a 422 that points at the field:
     {
       "title": "Unprocessable Content",
       "status": "422",
-      "detail": "body.0.value: Vale.Repetition: 'the' is repeated! (line 1: \"the the\")",
+      "detail": "body.0.value: Body: Vale.Repetition: 'the' is repeated! (line 1: \"the the\")",
       "source": {
         "pointer": "/data/attributes/body/value"
       }
