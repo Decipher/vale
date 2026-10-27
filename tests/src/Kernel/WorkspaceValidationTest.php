@@ -14,6 +14,7 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
+use Drupal\workspaces\WorkspaceInformation;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -51,6 +52,7 @@ class WorkspaceValidationTest extends KernelTestBase {
     'text',
     'user',
     'vale',
+    'vale_test',
   ];
 
   /**
@@ -112,6 +114,84 @@ class WorkspaceValidationTest extends KernelTestBase {
     $collected = $this->container->get('vale.alert_collector')->alerts();
     $this->assertCount(1, $collected);
     $this->assertSame('Docs text', $collected[0]['label']);
+  }
+
+  /**
+   * Tests that editing published content in a workspace is a draft save.
+   *
+   * Under publish-only mode, an error stops only the save that publishes.
+   * A save inside a workspace publishes nothing live, so the same edit
+   * validates there and its finding waits for the workspace publish check.
+   */
+  public function testPublishedEditIsDraftInWorkspace(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $page = Node::create([
+      'type' => 'page',
+      'title' => 'Guide',
+      'field_text' => 'Fine.',
+      'status' => TRUE,
+    ]);
+    $page->save();
+    $this->assertTrue($page->isPublished());
+
+    // In Live, saving an error into published content is the publishing
+    // save, and is refused on the entity. See ValeTreeConstraintValidator.
+    $page->set('field_text', 'This is very good.');
+    $messages = [];
+    foreach ($page->validate() as $violation) {
+      $messages[$violation->getPropertyPath()][] = (string) $violation->getMessage();
+    }
+    $this->assertSame([''], array_keys($messages));
+    $this->assertStringContainsString('Text: Demo.Very', $messages[''][0]);
+
+    // In a workspace, the same edit is a draft: it validates, and the
+    // finding is collected for the publish check instead.
+    $this->container->get('vale.alert_collector')->reset();
+    $this->switchToWorkspace('stage');
+    $page = Node::load($page->id());
+    $this->assertInstanceOf(NodeInterface::class, $page);
+    $page->set('field_text', 'This is very good.');
+    $messages = [];
+    foreach ($page->validate() as $violation) {
+      $messages[$violation->getPropertyPath()][] = (string) $violation->getMessage();
+    }
+    $this->assertSame([], $messages);
+    $collected = $this->container->get('vale.alert_collector')->alerts();
+    $this->assertCount(1, $collected);
+    $this->assertSame('field_text', $collected[0]['field']);
+    $this->assertSame('Demo.Very', $collected[0]['alert']->rule);
+  }
+
+  /**
+   * Tests that content a workspace does not track keeps its refusal.
+   *
+   * A type an ignored workspace handler keeps out saves straight to Live,
+   * so publishing it is refused as it is outside a workspace, rather than
+   * drafting into a workspace that would never publish it.
+   */
+  public function testUntrackedTypeStillRefusedInWorkspace(): void {
+    if (!class_exists(WorkspaceInformation::class)) {
+      $this->markTestSkipped('Workspace information arrives in Drupal 11.3.');
+    }
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    \Drupal::state()->set('vale_test_nodes_not_tracked', TRUE);
+    $this->container->get('kernel')->rebuildContainer();
+    $this->entityTypeManager = \Drupal::entityTypeManager();
+    $this->entityTypeManager->clearCachedDefinitions();
+
+    $this->switchToWorkspace('stage');
+    $page = Node::create([
+      'type' => 'page',
+      'title' => 'Guide',
+      'field_text' => 'This is very good.',
+      'status' => TRUE,
+    ]);
+    $messages = [];
+    foreach ($page->validate() as $violation) {
+      $messages[] = (string) $violation->getMessage();
+    }
+    $this->assertCount(1, $messages);
+    $this->assertStringContainsString('Text: Demo.Very', $messages[0]);
   }
 
 }

@@ -48,6 +48,8 @@ services:
     class: Drupal\vale\PublishState
     arguments:
       - '@?content_moderation.moderation_information'
+      - '@?workspaces.manager'
+      - '@?workspaces.information'
   Drupal\vale\PublishState: '@vale.publish_state'
   vale.jsonapi_alerts_subscriber:
     class: Drupal\vale\EventSubscriber\JsonApiAlertsSubscriber

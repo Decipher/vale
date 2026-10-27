@@ -12,6 +12,20 @@ use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\workspaces\Entity\Handler\IgnoredWorkspaceHandler;
+
+/**
+ * Implements hook_entity_type_alter().
+ *
+ * A test that keeps nodes out of workspaces, as an ignored handler does for
+ * a type a site leaves live while a workspace is active, sets the state and
+ * rebuilds the container. Nothing else sets it, so other tests are spared.
+ */
+function vale_test_entity_type_alter(array &$entity_types): void {
+  if (\Drupal::state()->get('vale_test_nodes_not_tracked')) {
+    $entity_types['node']->setHandlerClass('workspace', IgnoredWorkspaceHandler::class);
+  }
+}
 
 /**
  * Implements hook_entity_field_access().
