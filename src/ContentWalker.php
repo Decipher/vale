@@ -90,11 +90,59 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function bundle(string $entity_type_id, string $bundle): array {
+    if (PublishState::isComponentType($this->entityTypeForBundle($entity_type_id, $bundle))) {
+      return $this->componentBundle($entity_type_id, $bundle);
+    }
     $findings = [];
     $after = NULL;
     while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
       array_push($findings, ...$this->lintKeys($entity_type_id, array_keys($keys)));
       $after = end($keys);
+    }
+    return $findings;
+  }
+
+  /**
+   * Lints a bundle of components the way their hosts lint them.
+   *
+   * A host lints the revision of a component that it references, in the
+   * host's translations, and no deeper than walk() follows. So each host is
+   * walked once and only this bundle's findings are kept. A component that
+   * no host holds any more, such as one an older revision replaced, has
+   * none.
+   *
+   * @param string $entity_type_id
+   *   The component entity type.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return \Drupal\vale\Finding[]
+   *   The findings.
+   */
+  protected function componentBundle(string $entity_type_id, string $bundle): array {
+    $storage = $this->entityTypeManager->getStorage($entity_type_id);
+    $roots = [];
+    $after = NULL;
+    while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
+      $components = $storage instanceof RevisionableStorageInterface ? $storage->loadMultipleRevisions(array_keys($keys)) : $storage->loadMultiple($keys);
+      foreach ($components as $component) {
+        $root = $component instanceof FieldableEntityInterface ? $this->root($component) : NULL;
+        if ($root) {
+          $roots[implode(':', $root)] = $root;
+        }
+      }
+      $this->resetCaches($entity_type_id);
+      $after = end($keys);
+    }
+    $findings = [];
+    foreach ($roots as [$type, $id]) {
+      $host = $this->latest($type, $id);
+      foreach ($host ? $this->entity($host) : [] as $finding) {
+        if ($finding->entityType === $entity_type_id && $finding->bundle === $bundle) {
+          $findings[] = $finding;
+        }
+      }
+      $this->resetCaches($type);
     }
     return $findings;
   }
@@ -406,9 +454,7 @@ class ContentWalker {
     foreach (array_chunk($keys, self::CHUNK) as $chunk) {
       $entities = $by_revision ? $storage->loadMultipleRevisions($chunk) : $storage->loadMultiple($chunk);
       foreach ($entities as $entity) {
-        // A component its host no longer holds is not linted, as linting the
-        // host would not reach it.
-        if ($entity instanceof FieldableEntityInterface && (!$this->publishState->isComponent($entity) || $this->isHeld($entity))) {
+        if ($entity instanceof FieldableEntityInterface) {
           array_push($findings, ...$this->entity($entity));
         }
       }
@@ -418,38 +464,40 @@ class ContentWalker {
   }
 
   /**
-   * Says whether a component's host still holds it.
-   *
-   * A host's new revision can stop referencing a paragraph, which stays
-   * stored for the older revisions. Linting the host no longer reaches it.
+   * Finds the top-level entity that a component belongs to.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $component
    *   The component.
-   * @param int $depth
-   *   How many hosts up the search is.
    *
-   * @return bool
-   *   TRUE when the latest revision of its host holds it, through hosts that
-   *   are held in turn, no deeper than walk() follows.
+   * @return array{string, int|string}|null
+   *   The entity type and id of the first host that is not a component, or
+   *   NULL when the component has no host, or its hosts go deeper than walk()
+   *   follows.
    */
-  protected function isHeld(FieldableEntityInterface $component, int $depth = 0): bool {
-    // A component type names the fields that record its host.
-    $entity_type = $component->getEntityType();
-    $fields = [];
-    foreach (['type', 'id', 'field_name'] as $part) {
-      $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
-      $fields[$part] = $name !== '' && $component->hasField($name) ? (string) $component->get($name)->value : '';
-    }
-    $host = $fields['type'] !== '' && $fields['id'] !== '' ? $this->latest($fields['type'], $fields['id']) : NULL;
-    if (!$host || $fields['field_name'] === '' || !$host->hasField($fields['field_name']) || $depth >= self::MAX_DEPTH) {
-      return FALSE;
-    }
-    foreach ($host->get($fields['field_name']) as $item) {
-      if ((string) $item->get('target_id')->getValue() === (string) $component->id()) {
-        return !$this->publishState->isComponent($host) || $this->isHeld($host, $depth + 1);
+  protected function root(FieldableEntityInterface $component): ?array {
+    $entity = $component;
+    for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
+      // A component type names the fields that record its host.
+      $entity_type = $entity->getEntityType();
+      $host = [];
+      foreach (['type', 'id'] as $part) {
+        $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
+        $host[] = $name !== '' && $entity->hasField($name) ? (string) $entity->get($name)->value : '';
+      }
+      [$type, $id] = $host;
+      $definition = $type !== '' && $id !== '' ? $this->entityTypeManager->getDefinition($type, FALSE) : NULL;
+      if (!$definition) {
+        return NULL;
+      }
+      if (!PublishState::isComponentType($definition)) {
+        return [$type, $id];
+      }
+      $entity = $this->latest($type, $id);
+      if (!$entity) {
+        return NULL;
       }
     }
-    return FALSE;
+    return NULL;
   }
 
   /**

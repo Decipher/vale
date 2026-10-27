@@ -274,6 +274,51 @@ class ContentWalkerTest extends KernelTestBase {
     ], $this->summarise($findings));
     $this->assertSame(['fr', 'fr'], array_map(static fn (Finding $finding): string => $finding->langcode, $findings));
     $this->assertSame('Guide FR', $findings[1]->label);
+
+    // The paragraph bundle gives what linting the page gives for it.
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+  }
+
+  /**
+   * Tests a paragraph that only a translation of its page holds.
+   */
+  public function testBundleTranslatedReference(): void {
+    $this->installConfig(['language']);
+    ConfigurableLanguage::createFromLangcode('fr')->save();
+    $manager = $this->container->get('content_translation.manager');
+    $manager->setEnabled('node', 'page', TRUE);
+    $manager->setEnabled('paragraph', 'docs_text', TRUE);
+    // Each translation holds its own paragraphs.
+    FieldConfig::loadByName('node', 'page', 'field_content')?->set('translatable', TRUE)->save();
+
+    $page = $this->savePage([
+      'title' => 'Guide',
+      'field_text' => 'Fine.',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])],
+    ]);
+    $page->addTranslation('fr', [
+      'title' => 'Guide FR',
+      'field_text' => 'Fine.',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.', 'langcode' => 'fr'])],
+    ])->save();
+
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+  }
+
+  /**
+   * Tests that a paragraph bundle lints the revision its page references.
+   */
+  public function testBundleHeldRevision(): void {
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.']);
+    $this->savePage(['title' => 'Guide', 'field_text' => 'Fine.', 'field_content' => [$paragraph]]);
+    // A newer revision of the paragraph that the page does not reference.
+    $paragraph = Paragraph::load($paragraph->id());
+    $this->assertInstanceOf(Paragraph::class, $paragraph);
+    $paragraph->setNewRevision();
+    $paragraph->set('field_text', 'Really.');
+    $paragraph->save();
+
+    $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
   }
 
   /**
