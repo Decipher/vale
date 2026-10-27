@@ -8,10 +8,11 @@ use Drupal\content_moderation\ContentModerationState;
 use Drupal\content_moderation\ModerationInformationInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
+use Drupal\workspaces\WorkspaceInformationInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
@@ -31,10 +32,14 @@ class PublishState {
    *   The moderation information service, when Content Moderation is on.
    * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
    *   The workspace manager, when Workspaces is on.
+   * @param \Drupal\workspaces\WorkspaceInformationInterface|null $workspaceInformation
+   *   The workspace information service. Drupal 11.3 offers it; earlier
+   *   versions have none, and there every publishable revision is tracked.
    */
   public function __construct(
     protected ?ModerationInformationInterface $moderation = NULL,
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
+    protected ?WorkspaceInformationInterface $workspaceInformation = NULL,
   ) {}
 
   /**
@@ -51,11 +56,12 @@ class PublishState {
     if (!$entity instanceof EntityPublishedInterface) {
       return TRUE;
     }
-    if ($this->workspaceManager?->hasActiveWorkspace()) {
-      // A save inside a workspace publishes nothing live: the revision the
-      // workspace tracks stays unseen until the workspace is published, and
-      // that publish, not this save, is the publishing moment. The workspace
-      // publish check covers its errors.
+    if ($this->isWorkspaceDraft($entity)) {
+      // A save the workspace tracks publishes nothing live: the revision it
+      // tracks stays unseen until the workspace is published, and that
+      // publish, not this save, is the publishing moment. The workspace
+      // publish check covers its errors. Types a workspace does not track
+      // still save straight to Live, so they keep their publishing refusal.
       return FALSE;
     }
     if ($entity->isNew() && $entity instanceof ContentEntityInterface && $this->moderation?->isModeratedEntity($entity)) {
@@ -70,6 +76,30 @@ class PublishState {
       }
     }
     return $entity->isPublished();
+  }
+
+  /**
+   * Says whether a save of the entity drafts into the active workspace.
+   *
+   * A save of content a workspace tracks lands in the workspace, not Live.
+   * Types it does not track, such as those an ignored workspace handler
+   * keeps out, still save straight to Live. Drupal before 11.3, which has
+   * no workspace information service, tracks every publishable revision.
+   *
+   * @param \Drupal\Core\Entity\EntityPublishedInterface $entity
+   *   The entity being saved.
+   *
+   * @return bool
+   *   TRUE when a workspace is active and it tracks the entity.
+   */
+  protected function isWorkspaceDraft(EntityPublishedInterface $entity): bool {
+    if (!$this->workspaceManager?->hasActiveWorkspace()) {
+      return FALSE;
+    }
+    if ($this->workspaceInformation instanceof WorkspaceInformationInterface) {
+      return $this->workspaceInformation->isEntitySupported($entity);
+    }
+    return $entity->getEntityType()->isRevisionable();
   }
 
   /**

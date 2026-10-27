@@ -14,6 +14,7 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
+use Drupal\workspaces\WorkspaceInformation;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -51,6 +52,7 @@ class WorkspaceValidationTest extends KernelTestBase {
     'text',
     'user',
     'vale',
+    'vale_test',
   ];
 
   /**
@@ -158,6 +160,38 @@ class WorkspaceValidationTest extends KernelTestBase {
     $this->assertCount(1, $collected);
     $this->assertSame('field_text', $collected[0]['field']);
     $this->assertSame('Demo.Very', $collected[0]['alert']->rule);
+  }
+
+  /**
+   * Tests that content a workspace does not track keeps its refusal.
+   *
+   * A type an ignored workspace handler keeps out saves straight to Live,
+   * so publishing it is refused as it is outside a workspace, rather than
+   * drafting into a workspace that would never publish it.
+   */
+  public function testUntrackedTypeStillRefusedInWorkspace(): void {
+    if (!class_exists(WorkspaceInformation::class)) {
+      $this->markTestSkipped('Workspace information arrives in Drupal 11.3.');
+    }
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    \Drupal::state()->set('vale_test_nodes_not_tracked', TRUE);
+    $this->container->get('kernel')->rebuildContainer();
+    $this->entityTypeManager = \Drupal::entityTypeManager();
+    $this->entityTypeManager->clearCachedDefinitions();
+
+    $this->switchToWorkspace('stage');
+    $page = Node::create([
+      'type' => 'page',
+      'title' => 'Guide',
+      'field_text' => 'This is very good.',
+      'status' => TRUE,
+    ]);
+    $messages = [];
+    foreach ($page->validate() as $violation) {
+      $messages[] = (string) $violation->getMessage();
+    }
+    $this->assertCount(1, $messages);
+    $this->assertStringContainsString('Text: Demo.Very', $messages[0]);
   }
 
 }

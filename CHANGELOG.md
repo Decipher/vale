@@ -23,6 +23,8 @@ and this project adheres to
   the workspace publish check still stops on its errors. That check now stops
   on them even in `advise` mode, and on unchecked text while `fail_closed`,
   because under publish-only the workspace's publish is the publishing save.
+  Content a workspace does not track, which saves straight to Live, keeps
+  its publishing refusal.
 
 ## 1.0.0-beta1 (2026-10-21)
 
