@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
+use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
  * Decides whether an entity is being published by the save in progress.
@@ -28,9 +29,12 @@ class PublishState {
    *
    * @param \Drupal\content_moderation\ModerationInformationInterface|null $moderation
    *   The moderation information service, when Content Moderation is on.
+   * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
+   *   The workspace manager, when Workspaces is on.
    */
   public function __construct(
     protected ?ModerationInformationInterface $moderation = NULL,
+    protected ?WorkspaceManagerInterface $workspaceManager = NULL,
   ) {}
 
   /**
@@ -46,6 +50,13 @@ class PublishState {
   public function isBeingPublished(EntityInterface $entity): bool {
     if (!$entity instanceof EntityPublishedInterface) {
       return TRUE;
+    }
+    if ($this->workspaceManager?->hasActiveWorkspace()) {
+      // A save inside a workspace publishes nothing live: the revision the
+      // workspace tracks stays unseen until the workspace is published, and
+      // that publish, not this save, is the publishing moment. The workspace
+      // publish check covers its errors.
+      return FALSE;
     }
     if ($entity->isNew() && $entity instanceof ContentEntityInterface && $this->moderation?->isModeratedEntity($entity)) {
       // Without a state set, the field computes the initial one.

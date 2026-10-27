@@ -156,7 +156,7 @@ There is no settings form. Set these in `settings.php`, such as
 | --- | --- | --- |
 | `formats` | none | The extension for a text format, such as `markdown: md`, so Vale reads it as Markdown |
 | `default_extension` | `html` | The extension for every other text format |
-| `publish_only` | `FALSE` | When `FALSE`, any save with an error is refused. When `TRUE`, drafts save with their errors, and only the save that publishes is refused |
+| `publish_only` | `FALSE` | When `FALSE`, any save with an error is refused. When `TRUE`, drafts save with their errors, and only the save that publishes is refused. Inside a workspace every save is a draft; the workspace's publish is the publishing save |
 | `fail_closed` | `FALSE` | A save is refused when Vale cannot check its text, as it is for an error. Off, the save goes through with a notice |
 | `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the alerts, `off` skips the check |
 | `timeout` | `10` | Seconds one Vale run may take |

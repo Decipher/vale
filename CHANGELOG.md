@@ -16,6 +16,12 @@ and this project adheres to
   422 detail reads `body.0.value: Body: ...`
   ([#3632984](https://www.drupal.org/project/vale/issues/3632984)).
 
+### Fixed
+
+- Publish-only mode no longer refuses an edit of published content inside a
+  workspace. The save drafts within the workspace, where nothing is live yet;
+  the workspace publish check still stops on its errors.
+
 ## 1.0.0-beta1 (2026-10-21)
 
 ### Added
