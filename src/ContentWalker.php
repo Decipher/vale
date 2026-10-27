@@ -122,11 +122,12 @@ class ContentWalker {
   protected function componentBundle(string $entity_type_id, string $bundle): array {
     $storage = $this->entityTypeManager->getStorage($entity_type_id);
     $roots = [];
+    $hosts = [];
     $after = NULL;
     while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
       $components = $storage instanceof RevisionableStorageInterface ? $storage->loadMultipleRevisions(array_keys($keys)) : $storage->loadMultiple($keys);
       foreach ($components as $component) {
-        $root = $component instanceof FieldableEntityInterface ? $this->root($component) : NULL;
+        $root = $component instanceof FieldableEntityInterface ? $this->root($component, $hosts) : NULL;
         if ($root) {
           $roots[implode(':', $root)] = $root;
         }
@@ -468,36 +469,40 @@ class ContentWalker {
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $component
    *   The component.
+   * @param array<string, array{string, int|string}|null> $hosts
+   *   The roots already found for hosts that are components, keyed by their
+   *   entity type and id, so each is loaded once.
+   * @param int $depth
+   *   How many component hosts up the search is.
    *
    * @return array{string, int|string}|null
    *   The entity type and id of the first host that is not a component, or
    *   NULL when the component has no host, or its hosts go deeper than walk()
    *   follows.
    */
-  protected function root(FieldableEntityInterface $component): ?array {
-    $entity = $component;
-    for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
-      // A component type names the fields that record its host.
-      $entity_type = $entity->getEntityType();
-      $host = [];
-      foreach (['type', 'id'] as $part) {
-        $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
-        $host[] = $name !== '' && $entity->hasField($name) ? (string) $entity->get($name)->value : '';
-      }
-      [$type, $id] = $host;
-      $definition = $type !== '' && $id !== '' ? $this->entityTypeManager->getDefinition($type, FALSE) : NULL;
-      if (!$definition) {
-        return NULL;
-      }
-      if (!PublishState::isComponentType($definition)) {
-        return [$type, $id];
-      }
-      $entity = $this->latest($type, $id);
-      if (!$entity) {
-        return NULL;
-      }
+  protected function root(FieldableEntityInterface $component, array &$hosts = [], int $depth = 0): ?array {
+    // A component type names the fields that record its host.
+    $entity_type = $component->getEntityType();
+    $host = [];
+    foreach (['type', 'id'] as $part) {
+      $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
+      $host[] = $name !== '' && $component->hasField($name) ? (string) $component->get($name)->value : '';
     }
-    return NULL;
+    [$type, $id] = $host;
+    $definition = $type !== '' && $id !== '' ? $this->entityTypeManager->getDefinition($type, FALSE) : NULL;
+    if (!$definition) {
+      return NULL;
+    }
+    if (!PublishState::isComponentType($definition)) {
+      return [$type, $id];
+    }
+    // A host that is itself a component leads on to its own host.
+    $key = $type . ':' . $id;
+    if (!array_key_exists($key, $hosts)) {
+      $parent = $depth + 1 < self::MAX_DEPTH ? $this->latest($type, $id) : NULL;
+      $hosts[$key] = $parent ? $this->root($parent, $hosts, $depth + 1) : NULL;
+    }
+    return $hosts[$key];
   }
 
   /**
