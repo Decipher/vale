@@ -158,7 +158,7 @@ There is no settings form. Set these in `settings.php`, such as
 | `default_extension` | `html` | The extension for every other text format |
 | `publish_only` | `FALSE` | When `FALSE`, any save with an error is refused. When `TRUE`, drafts save with their errors, and only the save that publishes is refused. Inside a workspace every save is a draft; the workspace's publish is the publishing save |
 | `fail_closed` | `FALSE` | A save is refused when Vale cannot check its text, as it is for an error. Off, the save goes through with a notice |
-| `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the alerts, `off` skips the check |
+| `workspace_mode` | `advise` | Before a workspace is published: `block` stops it on errors, `advise` lists the alerts, `off` skips the check. With `publish_only` on, `advise` stops on errors too, and on unchecked text while `fail_closed`, because the workspace's publish is the publishing save |
 | `timeout` | `10` | Seconds one Vale run may take |
 | `check_limit`, `check_window` | `120`, `60` | Check endpoint requests allowed per user, per this many seconds |
 

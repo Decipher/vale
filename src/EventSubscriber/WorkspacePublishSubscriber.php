@@ -26,6 +26,10 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * - advise: publish, and show and log the findings.
  * - off: do nothing.
  *
+ * Under publish-only, the workspace's publish is the publishing save, so
+ * advise stops on the same things that would stop that save live: error
+ * findings, and text Vale could not check while fail-closed.
+ *
  * Core's publish form shows only "Publication failed" and logs the reason,
  * so the findings also go to the messenger.
  */
@@ -74,17 +78,24 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    *   The event.
    */
   public function onPrePublish(WorkspacePrePublishEvent $event): void {
-    $mode = $this->configFactory->get('vale.settings')->get('workspace_mode');
+    $settings = $this->configFactory->get('vale.settings');
+    $mode = $settings->get('workspace_mode');
     if (!in_array($mode, ['block', 'advise'], TRUE)) {
       return;
     }
     $block = $mode === 'block';
+    // Under publish-only, this publish is the publishing save: the errors
+    // that would stop that save live must stop it here too, whatever the
+    // mode says about lesser findings. Text Vale could not check stops it
+    // only while fail-closed, as it does live.
+    $publish_only = (bool) $settings->get('publish_only');
+    $fail_closed = (bool) $settings->get('fail_closed');
     $workspace = $event->getWorkspace();
     $context = ['@workspace' => $workspace->label()];
 
     $reason = $this->valeEnvironment->unavailableReason();
     if ($reason !== NULL) {
-      $this->report($event, $block, $this->t('Prose in @workspace not checked: @reason', $context + ['@reason' => $reason]));
+      $this->report($event, $block || ($publish_only && $fail_closed), $this->t('Prose in @workspace not checked: @reason', $context + ['@reason' => $reason]));
       return;
     }
 
@@ -94,6 +105,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     if ($findings === []) {
       return;
     }
+    $block = $block || ($publish_only && ($errors !== [] || ($unchecked !== [] && $fail_closed)));
 
     $ordered = [...$unchecked, ...$errors, ...array_diff_key($findings, $errors, $unchecked)];
     foreach (array_slice($ordered, 0, self::MESSAGE_LIMIT) as $finding) {

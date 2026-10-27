@@ -176,6 +176,68 @@ class WorkspaceGateTest extends KernelTestBase {
   }
 
   /**
+   * Tests that publish-only mode stops an advise publish on errors.
+   *
+   * The workspace's publish is the publishing save under publish-only, so
+   * the errors that would stop that save live must stop it here too,
+   * whatever the mode says about lesser findings.
+   */
+  public function testPublishOnlyAdviseBlocksErrors(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->stagePage('This is very good.');
+
+    $this->assertSame('Stage: 1 prose error, 0 warnings or suggestions, 0 values not checked.', $this->publish());
+    $this->assertSame(0, $this->livePages());
+    $messages = $this->messages();
+    $this->assertSame('node "Staged", field_text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")', $messages['error'][0]);
+    $this->assertStringStartsWith('Stage: 1 prose error,', $messages['error'][1]);
+  }
+
+  /**
+   * Tests that publish-only mode still publishes warnings in advise mode.
+   */
+  public function testPublishOnlyAdvisePublishesWarnings(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->stagePage('We delve.');
+    $this->assertNull($this->publish());
+    $this->assertSame(1, $this->livePages());
+    $warnings = $this->messages()['warning'];
+    $this->assertStringContainsString('Demo.Delve', $warnings[0]);
+    $this->assertStringStartsWith('Stage: 0 prose errors, 1 warning or suggestion', $warnings[1]);
+  }
+
+  /**
+   * Tests publish-only advise on text Vale could not check.
+   *
+   * Unchecked text stops a publishing save live only while fail-closed, so
+   * the workspace publish follows the same line.
+   */
+  public function testPublishOnlyFailClosedBlocksUnchecked(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->stagePage('FAKE_CRASH');
+
+    $this->assertNull($this->publish());
+    $this->assertSame(1, $this->livePages());
+
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $this->stagePage('FAKE_CRASH');
+    $this->assertNotNull($this->publish());
+    $this->assertSame(1, $this->livePages());
+  }
+
+  /**
+   * Tests publish-only advise when Vale cannot be run at all.
+   */
+  public function testPublishOnlyFailClosedBlocksWhenUnavailable(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $this->stagePage('Fine.');
+    $this->setSetting('vale_binary', NULL);
+    $this->assertStringContainsString('Prose in Stage not checked:', (string) $this->publish());
+    $this->assertSame(0, $this->livePages());
+  }
+
+  /**
    * Tests that a long list of findings is cut, and the total still shown.
    */
   public function testManyWarnings(): void {

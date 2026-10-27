@@ -20,7 +20,9 @@ and this project adheres to
 
 - Publish-only mode no longer refuses an edit of published content inside a
   workspace. The save drafts within the workspace, where nothing is live yet;
-  the workspace publish check still stops on its errors.
+  the workspace publish check still stops on its errors. That check now stops
+  on them even in `advise` mode, and on unchecked text while `fail_closed`,
+  because under publish-only the workspace's publish is the publishing save.
 
 ## 1.0.0-beta1 (2026-10-21)
 
