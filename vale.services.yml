@@ -93,6 +93,10 @@ services:
       - '@logger.channel.vale'
     tags:
       - { name: event_subscriber }
+  vale.jsonapi_error_subscriber:
+    class: Drupal\vale\EventSubscriber\JsonApiErrorSubscriber
+    tags:
+      - { name: event_subscriber }
   vale.finding_storage:
     class: Drupal\vale\FindingStorage
     arguments:
