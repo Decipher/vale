@@ -117,7 +117,7 @@ class ContentWalkerTest extends KernelTestBase {
    * Tests linting a bundle, with paragraphs and forward revisions.
    */
   public function testBundle(): void {
-    $this->savePage([
+    $first = $this->savePage([
       'title' => 'First',
       'field_text' => 'This is very good.',
       'field_code' => 'Very, very code.',
@@ -150,6 +150,13 @@ class ContentWalkerTest extends KernelTestBase {
 
     // Paragraphs can be linted by themselves, and name their host.
     $this->assertSame(['node First > paragraph.field_text:Demo.Delve'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
+
+    // A paragraph the page's latest revision no longer holds stays stored for
+    // the older revision, but is not linted.
+    $first->setNewRevision();
+    $first->set('field_content', [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Really.'])]);
+    $first->save();
+    $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
 
     // All content reaches paragraphs only through their hosts.
     $this->assertSame($this->summarise($walker->bundle('node', 'page')), $this->summarise($walker->all()));

@@ -406,13 +406,49 @@ class ContentWalker {
     foreach (array_chunk($keys, self::CHUNK) as $chunk) {
       $entities = $by_revision ? $storage->loadMultipleRevisions($chunk) : $storage->loadMultiple($chunk);
       foreach ($entities as $entity) {
-        if ($entity instanceof FieldableEntityInterface) {
+        // A component its host no longer holds is not linted, as linting the
+        // host would not reach it.
+        if ($entity instanceof FieldableEntityInterface && (!$this->publishState->isComponent($entity) || $this->isHeld($entity))) {
           array_push($findings, ...$this->entity($entity));
         }
       }
       $this->resetCaches($entity_type->id());
     }
     return $findings;
+  }
+
+  /**
+   * Says whether a component's host still holds it.
+   *
+   * A host's new revision can stop referencing a paragraph, which stays
+   * stored for the older revisions. Linting the host no longer reaches it.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $component
+   *   The component.
+   * @param int $depth
+   *   How many hosts up the search is.
+   *
+   * @return bool
+   *   TRUE when the latest revision of its host holds it, through hosts that
+   *   are held in turn, no deeper than walk() follows. TRUE when the
+   *   component does not say what holds it.
+   */
+  protected function isHeld(FieldableEntityInterface $component, int $depth = 0): bool {
+    if (!method_exists($component, 'getParentEntity') || !$component->hasField('parent_field_name')) {
+      return TRUE;
+    }
+    $parent = $component->getParentEntity();
+    $field = (string) $component->get('parent_field_name')->value;
+    $host = $parent instanceof FieldableEntityInterface ? $this->latest($parent->getEntityTypeId(), $parent->id()) : NULL;
+    if (!$host || $field === '' || !$host->hasField($field) || $depth >= self::MAX_DEPTH) {
+      return FALSE;
+    }
+    foreach ($host->get($field) as $item) {
+      if ((string) $item->get('target_id')->getValue() === (string) $component->id()) {
+        return !$this->publishState->isComponent($host) || $this->isHeld($host, $depth + 1);
+      }
+    }
+    return FALSE;
   }
 
   /**
