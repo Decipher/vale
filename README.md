@@ -110,9 +110,10 @@ None are required. These are supported when they are installed:
    number of rules in your styles.
 
 If you enable the module through a config import, such as `drush deploy`,
-Drupal does not install its optional config. Export
-`views.view.vale_findings` with the rest of your configuration, or the report
-page is missing.
+Drupal does not install its optional config. Export `views.view.vale_findings`
+and `system.action.node_vale_check_prose` with the rest of your
+configuration, or the report page and the **Check prose with Vale** bulk
+action are missing.
 
 ## Configuration
 
@@ -144,7 +145,7 @@ them in **People > Permissions**.
 | Permission | What it allows |
 | --- | --- |
 | Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
-| View the prose linting report | The report, which quotes text from all content, published or not |
+| View the prose linting report | The report and its CSV export, which quote text from all content, published or not |
 | Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
 
 ### Site settings
