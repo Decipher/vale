@@ -76,15 +76,7 @@ class AlertCollector {
    */
   public function add(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): void {
     $this->linted = TRUE;
-    $key = implode("\0", [
-      $entity->getEntityTypeId(),
-      $entity->uuid(),
-      $field,
-      $delta,
-      $alert->rule,
-      $alert->line,
-      $alert->start,
-    ]);
+    $key = $this->key($entity, $field, $delta, $alert);
     // Nothing is loaded here. This runs inside entity validation, and on a
     // site whose workspace manager is decorated, loading an entity at this
     // point made core's workspace conflict check refuse a paragraph that a
@@ -96,6 +88,49 @@ class AlertCollector {
       'delta' => $delta,
       'alert' => $alert,
     ];
+  }
+
+  /**
+   * Removes an alert, once it has become an error that refuses the save.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity the alert is in.
+   * @param string $field
+   *   The field name.
+   * @param int $delta
+   *   The field delta.
+   * @param \Drupal\vale\Alert $alert
+   *   The alert.
+   */
+  public function remove(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): void {
+    unset($this->alerts[$this->key($entity, $field, $delta, $alert)]);
+  }
+
+  /**
+   * Gives the key an alert is collected under.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity the alert is in.
+   * @param string $field
+   *   The field name.
+   * @param int $delta
+   *   The field delta.
+   * @param \Drupal\vale\Alert $alert
+   *   The alert.
+   *
+   * @return string
+   *   The key.
+   */
+  protected function key(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): string {
+    return implode("\0", [
+      $entity->getEntityTypeId(),
+      $entity->uuid(),
+      $field,
+      $delta,
+      $alert->rule,
+      $alert->line,
+      $alert->start,
+    ]);
   }
 
   /**

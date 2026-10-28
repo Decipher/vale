@@ -187,6 +187,9 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
             $this->alertCollector->add($component, $name, $delta, $alert);
             continue;
           }
+          // Validating the component by itself, as the Paragraphs widget
+          // does, listed this error as a warning. Here it refuses the save.
+          $this->alertCollector->remove($component, $name, $delta, $alert);
           $errors->add($constraint->message, [
             '@type' => (string) $component->getEntityType()->getLabel(),
             '@bundle' => $this->alertCollector->label($component),

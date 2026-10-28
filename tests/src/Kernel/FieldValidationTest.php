@@ -233,6 +233,25 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a paragraph's error on publishing is not also a warning.
+   *
+   * The Paragraphs widget validates each paragraph by itself, which lists its
+   * error as a warning that blocks publishing. Publishing the host makes it
+   * the error that refuses the save, so the warning goes.
+   */
+  public function testPublishedParagraphErrorOnce(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $collector = $this->container->get('vale.alert_collector');
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.']);
+    $this->assertSame([], $this->violations($paragraph));
+    $this->assertCount(1, $collector->alerts());
+
+    $violations = $this->violations($this->page(['field_text' => 'Fine.', 'status' => TRUE, 'field_content' => [$paragraph]]));
+    $this->assertStringContainsString('Paragraph "Docs text", Text: Demo.Very', $violations[''][0]);
+    $this->assertSame([], $collector->alerts());
+  }
+
+  /**
    * Tests a paragraph validated by itself, without its host.
    */
   public function testParagraph(): void {
