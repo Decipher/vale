@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\vale\EventSubscriber;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -55,6 +56,8 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    *   The messenger.
    * @param \Psr\Log\LoggerInterface $logger
    *   The vale logger channel.
+   * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entityFieldManager
+   *   The entity field manager.
    */
   public function __construct(
     protected ContentWalker $contentWalker,
@@ -62,6 +65,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     protected ConfigFactoryInterface $configFactory,
     protected MessengerInterface $messenger,
     protected LoggerInterface $logger,
+    protected EntityFieldManagerInterface $entityFieldManager,
   ) {}
 
   /**
@@ -182,19 +186,33 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     if (!$finding->alert instanceof Alert) {
       return $this->t('@where, @field: not checked. @reason', [
         '@where' => $where,
-        '@field' => $finding->field,
+        '@field' => $this->fieldLabel($finding),
         '@reason' => $finding->reason,
       ]);
     }
     $alert = $finding->alert;
     return $this->t('@where, @field: @rule: @message (line @line: "@match")', [
       '@where' => $where,
-      '@field' => $finding->field,
+      '@field' => $this->fieldLabel($finding),
       '@rule' => $alert->rule,
       '@message' => $alert->message,
       '@line' => $alert->line,
       '@match' => $alert->match,
     ]);
+  }
+
+  /**
+   * Gives a finding's field by its label, as save errors name it.
+   *
+   * @param \Drupal\vale\Finding $finding
+   *   The finding.
+   *
+   * @return string
+   *   The field's label, or its machine name when the field is gone.
+   */
+  protected function fieldLabel(Finding $finding): string {
+    $definition = $this->entityFieldManager->getFieldDefinitions($finding->entityType, $finding->bundle)[$finding->field] ?? NULL;
+    return $definition ? (string) $definition->getLabel() : $finding->field;
   }
 
 }
