@@ -176,7 +176,10 @@ final readonly class CheckController implements ContainerInjectionInterface {
     }
 
     // Text in an editor changes with every check, so the result is not kept.
-    // Each check runs Vale, so only a few run at once.
+    // Each check runs Vale, so only a few run at once. The probes for the
+    // version and the styles run first, outside the slot, so a slot lasts
+    // only as long as one Vale run and its lock does not expire mid-check.
+    $this->valeEnvironment->fingerprint();
     $slot = $this->acquireSlot();
     if ($slot === NULL) {
       return new JsonResponse(['message' => 'Vale is busy. Try again shortly.'], 503, ['Retry-After' => '1']);
