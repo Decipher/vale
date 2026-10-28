@@ -39,9 +39,9 @@ and this project adheres to
   plain text, without HTML entities.
 - Under publish-only mode, a paragraph's error that refuses a publish is no
   longer also listed as a warning.
-- The content report drops a bundle's rows when none of its fields is checked
-  any more, and refreshes when a draft revision is deleted. Its pages sort by
-  row as well, so none repeat or go missing.
+- The content report drops a field's rows when Vale is turned off on it, and
+  refreshes when a draft revision is deleted. Its pages sort by row as well,
+  so none repeat or go missing.
 - `drush vale:install` makes Vale executable before it replaces the old
   binary, so a failed install leaves the old one working.
 - A Vale run that failed or timed out is not cached. A failed version or
