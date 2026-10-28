@@ -91,6 +91,11 @@ services:
       - '@config.factory'
       - '@messenger'
       - '@logger.channel.vale'
+      - '@entity_field.manager'
+    tags:
+      - { name: event_subscriber }
+  vale.jsonapi_error_subscriber:
+    class: Drupal\vale\EventSubscriber\JsonApiErrorSubscriber
     tags:
       - { name: event_subscriber }
   vale.finding_storage:

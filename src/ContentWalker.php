@@ -90,11 +90,60 @@ class ContentWalker {
    *   When the entity type or the bundle does not exist.
    */
   public function bundle(string $entity_type_id, string $bundle): array {
+    if (PublishState::isComponentType($this->entityTypeForBundle($entity_type_id, $bundle))) {
+      return $this->componentBundle($entity_type_id, $bundle);
+    }
     $findings = [];
     $after = NULL;
     while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
       array_push($findings, ...$this->lintKeys($entity_type_id, array_keys($keys)));
       $after = end($keys);
+    }
+    return $findings;
+  }
+
+  /**
+   * Lints a bundle of components the way their hosts lint them.
+   *
+   * A host lints the revision of a component that it references, in the
+   * host's translations, and no deeper than walk() follows. So each host is
+   * walked once and only this bundle's findings are kept. A component that
+   * no host holds any more, such as one an older revision replaced, has
+   * none.
+   *
+   * @param string $entity_type_id
+   *   The component entity type.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return \Drupal\vale\Finding[]
+   *   The findings.
+   */
+  protected function componentBundle(string $entity_type_id, string $bundle): array {
+    $storage = $this->entityTypeManager->getStorage($entity_type_id);
+    $roots = [];
+    $hosts = [];
+    $after = NULL;
+    while ($keys = $this->idsAfter($entity_type_id, $bundle, $after, self::CHUNK)) {
+      $components = $storage instanceof RevisionableStorageInterface ? $storage->loadMultipleRevisions(array_keys($keys)) : $storage->loadMultiple($keys);
+      foreach ($components as $component) {
+        $root = $component instanceof FieldableEntityInterface ? $this->root($component, $hosts) : NULL;
+        if ($root) {
+          $roots[implode(':', $root)] = $root;
+        }
+      }
+      $this->resetCaches($entity_type_id);
+      $after = end($keys);
+    }
+    $findings = [];
+    foreach ($roots as [$type, $id]) {
+      $host = $this->latest($type, $id);
+      foreach ($host ? $this->entity($host) : [] as $finding) {
+        if ($finding->entityType === $entity_type_id && $finding->bundle === $bundle) {
+          $findings[] = $finding;
+        }
+      }
+      $this->resetCaches($type);
     }
     return $findings;
   }
@@ -413,6 +462,47 @@ class ContentWalker {
       $this->resetCaches($entity_type->id());
     }
     return $findings;
+  }
+
+  /**
+   * Finds the top-level entity that a component belongs to.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $component
+   *   The component.
+   * @param array<string, array{string, int|string}|null> $hosts
+   *   The roots already found for hosts that are components, keyed by their
+   *   entity type and id, so each is loaded once.
+   * @param int $depth
+   *   How many component hosts up the search is.
+   *
+   * @return array{string, int|string}|null
+   *   The entity type and id of the first host that is not a component, or
+   *   NULL when the component has no host, or its hosts go deeper than walk()
+   *   follows.
+   */
+  protected function root(FieldableEntityInterface $component, array &$hosts = [], int $depth = 0): ?array {
+    // A component type names the fields that record its host.
+    $entity_type = $component->getEntityType();
+    $host = [];
+    foreach (['type', 'id'] as $part) {
+      $name = (string) $entity_type->get('entity_revision_parent_' . $part . '_field');
+      $host[] = $name !== '' && $component->hasField($name) ? (string) $component->get($name)->value : '';
+    }
+    [$type, $id] = $host;
+    $definition = $type !== '' && $id !== '' ? $this->entityTypeManager->getDefinition($type, FALSE) : NULL;
+    if (!$definition) {
+      return NULL;
+    }
+    if (!PublishState::isComponentType($definition)) {
+      return [$type, $id];
+    }
+    // A host that is itself a component leads on to its own host.
+    $key = $type . ':' . $id;
+    if (!array_key_exists($key, $hosts)) {
+      $parent = $depth + 1 < self::MAX_DEPTH ? $this->latest($type, $id) : NULL;
+      $hosts[$key] = $parent ? $this->root($parent, $hosts, $depth + 1) : NULL;
+    }
+    return $hosts[$key];
   }
 
   /**
