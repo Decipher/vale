@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Kernel;
 
-use Drupal\Core\File\Exception\FileWriteException;
-use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystem;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Site\Settings;
@@ -298,31 +296,48 @@ class ValeInstallerTest extends KernelTestBase {
     $archive = $this->archive();
     $expected = [
       'mkdir' => 'temporary directory',
-      'move' => 'could not be written',
       'chmod' => 'could not be written',
+      'rename' => 'could not be written',
     ];
     foreach ($expected as $step => $message) {
+      $directory = $this->directory . '/bin-' . $step;
+      if ($step !== 'mkdir') {
+        mkdir($directory);
+        // A directory in the way stops the rename.
+        if ($step === 'rename') {
+          mkdir($directory . '/vale');
+        }
+        else {
+          file_put_contents($directory . '/vale', 'old');
+          chmod($directory . '/vale', 0755);
+        }
+      }
       $stack = HandlerStack::create(new MockHandler([new Response(200, [], $archive)]));
       $installer = new ValeInstaller(new Client(['handler' => $stack]), $this->failingFileSystem($step));
       $error = NULL;
       try {
-        $installer->install($this->directory . '/bin-' . $step, '9.9.9', hash('sha256', $archive), 'Linux_64-bit');
+        $installer->install($directory, '9.9.9', hash('sha256', $archive), 'Linux_64-bit');
       }
       catch (\RuntimeException $e) {
         $error = $e->getMessage();
       }
       $this->assertNotNull($error, "A failed $step was not reported.");
       $this->assertStringContainsString($message, $error);
-      // Nothing is left half-installed.
-      $this->assertFileDoesNotExist($this->directory . '/bin-' . $step . '/vale.new');
+      // Nothing is left half-installed, and a working binary is untouched.
+      $this->assertFileDoesNotExist($directory . '/vale.new');
+      if ($step === 'chmod') {
+        $this->assertSame('old', file_get_contents($directory . '/vale'));
+        $this->assertTrue(is_executable($directory . '/vale'));
+      }
     }
   }
+
 
   /**
    * Makes a file system whose given step fails.
    *
    * @param string $step
-   *   The step that fails: mkdir, move or chmod.
+   *   The step that fails: mkdir or chmod. Any other step fails nothing.
    *
    * @return \Drupal\Core\File\FileSystemInterface
    *   The file system.
@@ -348,16 +363,6 @@ class ValeInstallerTest extends KernelTestBase {
        */
       public function mkdir($uri, $mode = NULL, $recursive = FALSE, $context = NULL) {
         return $this->step === 'mkdir' && str_contains($uri, 'vale-install-') ? FALSE : parent::mkdir($uri, $mode, $recursive, $context);
-      }
-
-      /**
-       * {@inheritdoc}
-       */
-      public function move($source, $destination, $fileExists = FileExists::Rename) {
-        if ($this->step === 'move') {
-          throw new FileWriteException('Move failed.');
-        }
-        return parent::move($source, $destination, $fileExists);
       }
 
       /**
