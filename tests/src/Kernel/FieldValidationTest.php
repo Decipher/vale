@@ -244,6 +244,25 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests that only recent failed runs are remembered.
+   */
+  public function testFailedRunsForgotten(): void {
+    $field = FieldConfig::loadByName('node', 'page', 'field_text');
+    $this->assertInstanceOf(FieldConfig::class, $field);
+    $linter = $this->container->get('vale.field_linter');
+    for ($i = 0; $i <= 50; $i++) {
+      $this->assertFalse($linter->lintText($field, "FAKE_CRASH $i", 'plain_text')->isChecked());
+    }
+    $this->assertCount(51, $this->valeRuns());
+    // Fifty are remembered, so the newest does not run again, and the oldest
+    // does.
+    $linter->lintText($field, 'FAKE_CRASH 50', 'plain_text');
+    $this->assertCount(51, $this->valeRuns());
+    $linter->lintText($field, 'FAKE_CRASH 0', 'plain_text');
+    $this->assertCount(52, $this->valeRuns());
+  }
+
+  /**
    * Tests a paragraph validated by itself, without its host.
    */
   public function testParagraph(): void {

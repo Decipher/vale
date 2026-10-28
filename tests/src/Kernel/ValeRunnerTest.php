@@ -289,6 +289,69 @@ class ValeRunnerTest extends KernelTestBase {
   }
 
   /**
+   * Tests probes that run out of time.
+   */
+  public function testSlowProbes(): void {
+    $this->config('vale.settings')->set('timeout', 1)->save();
+    $this->container->get('cache.vale')->deleteAll();
+    $environment = $this->freshEnvironment();
+    // Symfony's Process passes $_ENV on to Vale.
+    $_ENV['FAKE_PROBE_SLOW'] = '1';
+    try {
+      $this->assertNull($environment->version());
+      $this->assertSame([], $environment->stylesPaths());
+      $status = $environment->status();
+      $this->assertFalse($status['available']);
+      $this->assertStringStartsWith('The binary set in settings.php did not report a Vale version.', $status['description']);
+    }
+    finally {
+      unset($_ENV['FAKE_PROBE_SLOW']);
+    }
+    $this->assertSame('0.0.0-fake', $this->freshEnvironment()->version());
+  }
+
+  /**
+   * Tests that style files that are not rules are skipped.
+   */
+  public function testRulesSkipOtherFiles(): void {
+    $styles = $this->valeDirectory . '/styles';
+    mkdir($styles . '/config');
+    file_put_contents($styles . '/config/Vocab.yml', "level: error\n");
+    file_put_contents($styles . '/Demo/Broken.yml', "level: [\n");
+    file_put_contents($styles . '/Demo/Plain.yml', "Just text.\n");
+    file_put_contents($styles . '/Demo/Odd.yml', "level: loud\nmessage: Odd.\n");
+    $this->container->get('cache.vale')->deleteAll();
+
+    $rules = $this->freshEnvironment()->rules();
+    $this->assertSame(['Demo.Delve', 'Demo.Odd', 'Demo.Really', 'Demo.Very'], array_keys($rules));
+    // An unknown level falls back to a warning.
+    $this->assertSame(Alert::WARNING, $rules['Demo.Odd']['level']);
+  }
+
+  /**
+   * Tests that Vale is not run while it is not set up.
+   */
+  public function testProcessUnavailable(): void {
+    $this->setSetting('vale_binary', NULL);
+    $this->expectException(\LogicException::class);
+    $this->freshEnvironment()->process(['ls-config']);
+  }
+
+  /**
+   * Gives a Vale environment with nothing remembered in memory.
+   *
+   * @return \Drupal\vale\ValeEnvironment
+   *   The environment.
+   */
+  protected function freshEnvironment(): ValeEnvironment {
+    return new ValeEnvironment(
+      $this->container->get('cache.vale'),
+      $this->container->get('config.factory'),
+      $this->container->get('datetime.time'),
+    );
+  }
+
+  /**
    * Tests a styles directory that is missing on this server.
    *
    * The styles paths are cached in a bin all servers share, so a server can
