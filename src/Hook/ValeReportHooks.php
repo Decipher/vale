@@ -20,7 +20,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * The report describes Live. Saving a top-level entity outside a workspace
  * refreshes its rows from its newest revision, through ReportRefresher, and
  * deleting it removes them. A component, such as a paragraph, is reported
- * through its host's save.
+ * through its host's save. A bundle whose fields are no longer checked loses
+ * its rows.
  */
 class ValeReportHooks {
 
@@ -63,6 +64,17 @@ class ValeReportHooks {
   }
 
   /**
+   * Implements hook_entity_revision_delete().
+   *
+   * The report describes the newest revision, which can be a forward draft,
+   * so deleting a revision can change what it should say.
+   */
+  #[Hook('entity_revision_delete')]
+  public function entityRevisionDelete(EntityInterface $entity): void {
+    $this->refresh($entity);
+  }
+
+  /**
    * Implements hook_entity_delete().
    */
   #[Hook('entity_delete')]
@@ -71,6 +83,25 @@ class ValeReportHooks {
       $this->reportRefresher->remove($entity->getEntityTypeId(), $entity->id());
       $this->findingStorage->delete($entity->getEntityTypeId(), $entity->id());
     }
+  }
+
+  /**
+   * Implements hook_ENTITY_TYPE_update() for field_config.
+   *
+   * Turning Vale off on a field can leave a bundle with nothing checked. Its
+   * saves no longer refresh its rows, so they are removed here.
+   */
+  #[Hook('field_config_update')]
+  public function fieldConfigUpdate(): void {
+    $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
+  }
+
+  /**
+   * Implements hook_ENTITY_TYPE_delete() for field_config.
+   */
+  #[Hook('field_config_delete')]
+  public function fieldConfigDelete(): void {
+    $this->fieldConfigUpdate();
   }
 
   /**
