@@ -12,6 +12,9 @@
  * - FAKE_CRASH: fails the way Vale fails, with exit code 2.
  * - FAKE_GARBAGE: prints output that is not JSON.
  * - FAKE_KILLED: is killed by a signal, as the out-of-memory killer would.
+ * The FAKE_PROBE_FAIL environment variable makes --version and ls-config
+ * fail, as a Vale that is out of memory or misconfigured would, and
+ * FAKE_PROBE_SLOW makes them sleep past any time limit.
  *
  * Each lint run appends the --path value to calls.log beside the
  * configuration, so a test can count runs.
@@ -27,6 +30,15 @@ foreach (array_slice($argv, 1) as $argument) {
   }
   else {
     $command = $argument;
+  }
+}
+
+if (isset($options['version']) || $command === 'ls-config') {
+  if (getenv('FAKE_PROBE_FAIL')) {
+    exit(2);
+  }
+  if (getenv('FAKE_PROBE_SLOW')) {
+    sleep(30);
   }
 }
 

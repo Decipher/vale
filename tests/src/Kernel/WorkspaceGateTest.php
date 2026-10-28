@@ -69,14 +69,6 @@ class WorkspaceGateTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Sets the workspace mode.
    *
    * @param string $mode

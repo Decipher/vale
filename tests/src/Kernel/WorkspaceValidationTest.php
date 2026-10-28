@@ -71,14 +71,6 @@ class WorkspaceValidationTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Tests a paragraph saved with findings while its host is in a workspace.
    *
    * Some forms validate the edited paragraph by itself, without its host.

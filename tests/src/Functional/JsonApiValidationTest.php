@@ -68,14 +68,6 @@ class JsonApiValidationTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Sends a JSON:API request as the author.
    *
    * @param string $method

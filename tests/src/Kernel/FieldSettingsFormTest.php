@@ -59,14 +59,6 @@ class FieldSettingsFormTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Builds the Prose checks element for the field.
    *
    * @return array<string, mixed>

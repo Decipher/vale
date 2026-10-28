@@ -126,6 +126,12 @@ display:
           field: line
           plugin_id: standard
           order: ASC
+        fid:
+          id: fid
+          table: vale_finding
+          field: fid
+          plugin_id: standard
+          order: ASC
       filters:
         root_bundle:
           id: root_bundle

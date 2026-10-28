@@ -176,7 +176,9 @@ final readonly class CheckController implements ContainerInjectionInterface {
     }
 
     // Text in an editor changes with every check, so the result is not kept.
-    // Each check runs Vale, so only a few run at once.
+    // Each check runs Vale, so only a few run at once. A slot covers the
+    // version and styles probes as well as the lint, because a probe that
+    // failed is not cached and runs again.
     $slot = $this->acquireSlot();
     if ($slot === NULL) {
       return new JsonResponse(['message' => 'Vale is busy. Try again shortly.'], 503, ['Retry-After' => '1']);
@@ -219,8 +221,10 @@ final readonly class CheckController implements ContainerInjectionInterface {
    *   The lock name to release, or NULL when every slot is taken.
    */
   private function acquireSlot(): ?string {
-    // A slot outlives a run by a second, in case the release is missed.
-    $timeout = (float) $this->valeEnvironment->timeout() + 1;
+    // A slot lasts as long as a check can: the version probe, the styles
+    // listing and the lint, each bounded by the timeout. It outlives them by
+    // a second, in case the release is missed.
+    $timeout = 3 * (float) $this->valeEnvironment->timeout() + 1;
     for ($i = 0; $i < self::SLOTS; $i++) {
       if ($this->lockBackend->acquire('vale.check.' . $i, $timeout)) {
         return 'vale.check.' . $i;

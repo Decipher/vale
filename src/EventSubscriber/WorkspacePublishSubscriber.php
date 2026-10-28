@@ -104,22 +104,18 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     }
 
     $findings = $this->contentWalker->workspace((string) $workspace->id());
-    $errors = array_filter($findings, static fn (Finding $finding): bool => $finding->isError());
-    $unchecked = array_filter($findings, static fn (Finding $finding): bool => !$finding->alert instanceof Alert);
     if ($findings === []) {
       return;
     }
+    $errors = array_filter($findings, static fn (Finding $finding): bool => $finding->isError());
+    $unchecked = array_filter($findings, static fn (Finding $finding): bool => !$finding->alert instanceof Alert);
     $block = $block || ($publish_only && ($errors !== [] || ($unchecked !== [] && $fail_closed)));
 
     $ordered = [...$unchecked, ...$errors, ...array_diff_key($findings, $errors, $unchecked)];
     foreach (array_slice($ordered, 0, self::MESSAGE_LIMIT) as $finding) {
+      // Errors and unchecked text are errors only when they stop the publish.
       $message = $this->describe($finding);
-      if ($finding->isError() || $finding->alert === NULL) {
-        $block ? $this->messenger->addError($message) : $this->messenger->addWarning($message);
-      }
-      else {
-        $this->messenger->addWarning($message);
-      }
+      $block && ($finding->isError() || !$finding->alert instanceof Alert) ? $this->messenger->addError($message) : $this->messenger->addWarning($message);
     }
 
     $summary = $this->t('@workspace: @errors, @others, @unchecked.', $context + [

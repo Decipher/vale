@@ -73,7 +73,7 @@ final class ScanForm extends FormBase {
     $form['actions']['submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Check content'),
-      '#disabled' => $bundles === [] || $this->valeEnvironment->unavailableReason() !== NULL,
+      '#disabled' => $bundles === [] || $reason !== NULL,
     ];
     return $form;
   }

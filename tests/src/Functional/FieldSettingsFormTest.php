@@ -46,14 +46,6 @@ class FieldSettingsFormTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Gives the field's stored Vale settings.
    *
    * @return array<string, mixed>

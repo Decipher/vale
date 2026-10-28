@@ -64,14 +64,6 @@ class AlertDisplayTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Collects findings as validation would.
    */
   protected function collect(): void {

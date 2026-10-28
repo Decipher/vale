@@ -63,14 +63,6 @@ class CheckControllerTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Sends a body to the controller.
    *
    * @param mixed $body
@@ -166,6 +158,7 @@ class CheckControllerTest extends KernelTestBase {
     $response = CheckController::create($this->container)->check($request);
     $this->assertSame(429, $response->getStatusCode());
     $this->assertSame('30', $response->headers->get('Retry-After'));
+    $this->assertSame('Too many checks. Try again shortly.', json_decode((string) $response->getContent(), TRUE)['message'] ?? NULL);
   }
 
   /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\field\Entity\FieldConfig;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
@@ -63,14 +64,6 @@ class ContentReportTest extends KernelTestBase {
     $this->installConfig(['filter', 'node', 'vale']);
     $this->setUpVale();
     $this->createValeContentModel();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
   }
 
   /**
@@ -335,6 +328,50 @@ class ContentReportTest extends KernelTestBase {
     ]);
     $rows = iterator_to_array($this->container->get('vale.finding_storage')->rows(), FALSE);
     $this->assertSame(16000, mb_strlen($rows[0]['message']));
+  }
+
+  /**
+   * Tests that a bundle loses its rows when nothing in it is checked.
+   */
+  public function testFieldTurnedOff(): void {
+    $this->savePage('Guide', 'We delve.', 'This is very good.');
+    $this->assertCount(2, $this->report());
+
+    // The field's own rows go. The page still holds prose through its
+    // paragraphs, so their rows stay.
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
+
+    FieldConfig::loadByName('paragraph', 'docs_text', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->assertSame([], $this->report());
+  }
+
+  /**
+   * Tests that a bundle loses its rows when it can no longer hold prose.
+   */
+  public function testHolderFieldDeleted(): void {
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->savePage('Guide', 'We delve.', 'This is very good.');
+    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
+
+    // The page's only checked text was in its paragraphs.
+    FieldConfig::loadByName('node', 'page', 'field_content')?->delete();
+    $this->assertSame([], $this->report());
+  }
+
+  /**
+   * Tests that deleting a forward draft refreshes the report.
+   */
+  public function testDraftDeleted(): void {
+    $page = $this->savePage('Guide', 'Fine.');
+    $page->setNewRevision();
+    $page->isDefaultRevision(FALSE);
+    $page->set('field_text', 'We delve.');
+    $page->save();
+    $this->assertSame(['Guide > node.field_text:Demo.Delve:warning'], $this->report());
+
+    $this->container->get('entity_type.manager')->getStorage('node')->deleteRevision((int) $page->getRevisionId());
+    $this->assertSame([], $this->report());
   }
 
 }
