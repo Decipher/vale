@@ -26,6 +26,22 @@ class FieldLinter {
    * @param \Drupal\vale\ValeRunnerInterface $runner
    *   The Vale runner.
    */
+  /**
+   * How many failed runs are remembered for a request.
+   */
+  protected const int REMEMBERED = 50;
+
+  /**
+   * Results of Vale runs that failed in this request, keyed by their input.
+   *
+   * A successful result is cached by the runner, but a failed one is not. A
+   * publish-only save checks some values twice, so this stops a failing Vale
+   * running again for the same text in the same request.
+   *
+   * @var array<string, \Drupal\vale\LintResult>
+   */
+  protected array $failed = [];
+
   public function __construct(
     protected ValeRunnerInterface $runner,
   ) {}
@@ -61,7 +77,15 @@ class FieldLinter {
   public function lintText(FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
     $settings = FieldSettings::forField($field);
     $extension = in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
-    $result = $this->runner->lint($text, $extension, $settings->name($field), $store);
+    $name = $settings->name($field);
+    $key = hash('sha256', $name . "\0" . $extension . "\0" . $text);
+    $result = $this->failed[$key] ?? $this->runner->lint($text, $extension, $name, $store);
+    if ($result->status === LintResult::FAILED) {
+      $this->failed[$key] = $result;
+      if (count($this->failed) > self::REMEMBERED) {
+        array_shift($this->failed);
+      }
+    }
     return $result->withAlerts($settings->filter($result->alerts));
   }
 

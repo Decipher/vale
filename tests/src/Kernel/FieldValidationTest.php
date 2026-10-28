@@ -221,6 +221,18 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a failing Vale runs once for a value in a publishing save.
+   */
+  public function testFailedRunOnce(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $violations = $this->violations($this->page(['field_text' => 'FAKE_CRASH here.', 'status' => TRUE]));
+    $this->assertStringContainsString('Text: Vale could not check this text.', $violations[''][0]);
+    // Both constraints check the page's own text. Vale ran for it once.
+    $this->assertCount(1, $this->valeRuns());
+  }
+
+  /**
    * Tests a paragraph validated by itself, without its host.
    */
   public function testParagraph(): void {

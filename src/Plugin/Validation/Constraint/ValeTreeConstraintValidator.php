@@ -74,13 +74,15 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     ) {
       return;
     }
-    // ValeText has already collected the warnings in the entity's own
-    // fields, and left their errors to this constraint.
+    // ValeText collects the warnings in the entity's own fields, and leaves
+    // their errors to this constraint. It runs after this one, as Drupal
+    // validates the entity before its fields; FieldLinter remembers a failed
+    // run, so the text is not run twice.
     $errors = new FindingList();
     foreach ($value->getFieldDefinitions() as $name => $definition) {
       foreach ($this->fieldLinter->lint($value->get($name)) as $result) {
-        // ValeText has already noted unchecked text in the entity's own
-        // fields, unless it refuses the save.
+        // ValeText notes unchecked text in the entity's own fields, unless
+        // it refuses the save.
         if (!$result->isChecked() && $this->configFactory->get('vale.settings')->get('fail_closed')) {
           $errors->add($constraint->uncheckedFieldMessage, [
             '@field' => (string) $definition->getLabel(),
