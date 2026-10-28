@@ -324,27 +324,32 @@ class ValeEnvironment {
    *   Whether Vale can be run, a short value and a longer description.
    */
   public function status(): array {
+    // With fail_closed, text Vale cannot check is refused, not saved.
+    $effect = $this->configFactory->get('vale.settings')->get('fail_closed')
+      ? $this->t('Saves of text checked with Vale are refused until this is fixed.')
+      : $this->t('Content is saved without being checked.');
     $reason = $this->unavailableReason();
+    if ($reason === NULL && $this->version() === NULL) {
+      $reason = (string) $this->t('The binary set in settings.php did not report a Vale version.');
+    }
     if ($reason !== NULL) {
       return [
         'available' => FALSE,
-        'value' => 'Not available',
-        'description' => $reason . ' Content is saved without being checked.',
-      ];
-    }
-    $version = $this->version();
-    if ($version === NULL) {
-      return [
-        'available' => FALSE,
-        'value' => 'Not available',
-        'description' => 'The binary set in settings.php did not report a Vale version. Content is saved without being checked.',
+        'value' => (string) $this->t('Not available'),
+        'description' => $reason . ' ' . $effect,
       ];
     }
     return [
       'available' => TRUE,
-      'value' => $version,
-      'description' => sprintf('Using %s with %s. Its styles hold %d rules.', $this->binary(), $this->configPath(), count($this->rules())),
+      'value' => (string) $this->version(),
+      'description' => (string) $this->formatPlural(
+        count($this->rules()),
+        'Using @binary with @config. Its styles hold 1 rule.',
+        'Using @binary with @config. Its styles hold @count rules.',
+        ['@binary' => $this->binary(), '@config' => $this->configPath()],
+      ),
     ];
   }
+
 
 }

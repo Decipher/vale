@@ -233,6 +233,12 @@ class ValeRunnerTest extends KernelTestBase {
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
     $this->assertFalse($requirement['severity']);
     $this->assertSame('Not available', $requirement['value']);
+    $this->assertStringEndsWith('Content is saved without being checked.', $requirement['description']);
+
+    // With fail_closed, the same text is refused instead.
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
+    $this->assertStringEndsWith('Saves of text checked with Vale are refused until this is fixed.', $requirement['description']);
   }
 
   /**
