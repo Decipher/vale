@@ -37,6 +37,20 @@ and this project adheres to
   in the revision and translations that host uses.
 - Under publish-only mode, JSON:API's 422 detail for a refused publish is
   plain text, without HTML entities.
+- Under publish-only mode, a paragraph's error that refuses a publish is no
+  longer also listed as a warning.
+- The content report drops a bundle's rows when none of its fields is checked
+  any more, and refreshes when a draft revision is deleted. Its pages sort by
+  row as well, so none repeat or go missing.
+- `drush vale:install` makes Vale executable before it replaces the old
+  binary, so a failed install leaves the old one working.
+- A Vale run that failed or timed out is not cached. A failed version or
+  styles probe no longer counts for an hour, and a failing Vale runs once per
+  value in a request.
+- The check endpoint's limit of four checks at once covers Vale's version and
+  styles probes, and a slow check no longer outlasts its slot.
+- The status report says that unchecked text is refused under `fail_closed`,
+  and is fully translatable.
 
 ## 1.0.0-beta1 (2026-10-21)
 
