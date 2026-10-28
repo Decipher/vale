@@ -6,6 +6,8 @@ namespace Drupal\Tests\vale\Traits;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\user\UserInterface;
+use PHPUnit\Framework\Attributes\After;
+use Symfony\Component\Filesystem\Filesystem;
 
 /**
  * Points a test site at a Vale binary and a copy of the Demo style.
@@ -62,18 +64,14 @@ trait ValeTestTrait {
   }
 
   /**
-   * Removes the copied configuration.
+   * Removes the copied configuration after each test.
+   *
+   * @after
    */
+  #[After]
   protected function tearDownVale(): void {
-    if (isset($this->valeDirectory) && is_dir($this->valeDirectory)) {
-      $iterator = new \RecursiveIteratorIterator(
-        new \RecursiveDirectoryIterator($this->valeDirectory, \FilesystemIterator::SKIP_DOTS),
-        \RecursiveIteratorIterator::CHILD_FIRST,
-      );
-      foreach ($iterator as $file) {
-        $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
-      }
-      rmdir($this->valeDirectory);
+    if (isset($this->valeDirectory)) {
+      (new Filesystem())->remove($this->valeDirectory);
     }
   }
 

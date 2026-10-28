@@ -21,6 +21,22 @@ class FieldLinter {
   protected const array PLAIN_TYPES = ['string', 'string_long'];
 
   /**
+   * How many failed runs are remembered for a request.
+   */
+  protected const int REMEMBERED = 50;
+
+  /**
+   * Results of Vale runs that failed in this request, keyed by their input.
+   *
+   * A successful result is cached by the runner, but a failed one is not. A
+   * publish-only save checks some values twice, so this stops a failing Vale
+   * running again for the same text in the same request.
+   *
+   * @var array<string, \Drupal\vale\LintResult>
+   */
+  protected array $failed = [];
+
+  /**
    * Constructs a FieldLinter.
    *
    * @param \Drupal\vale\ValeRunnerInterface $runner
@@ -59,9 +75,37 @@ class FieldLinter {
    *   The result, with only the alerts the field's settings report.
    */
   public function lintText(FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
-    $settings = FieldSettings::forField($field);
+    return $this->lintWith(FieldSettings::forField($field), $field, $text, $format, $store);
+  }
+
+  /**
+   * Lints text with a field's settings already read.
+   *
+   * @param \Drupal\vale\FieldSettings $settings
+   *   The field's settings.
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $field
+   *   The field.
+   * @param string $text
+   *   The text.
+   * @param string|null $format
+   *   The text format, or NULL for plain text.
+   * @param bool $store
+   *   Whether to cache the result.
+   *
+   * @return \Drupal\vale\LintResult
+   *   The result.
+   */
+  protected function lintWith(FieldSettings $settings, FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
     $extension = in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
-    $result = $this->runner->lint($text, $extension, $settings->name($field), $store);
+    $name = $settings->name($field);
+    $key = hash('sha256', $name . "\0" . $extension . "\0" . $text);
+    $result = $this->failed[$key] ?? $this->runner->lint($text, $extension, $name, $store);
+    if ($result->status === LintResult::FAILED) {
+      $this->failed[$key] = $result;
+      if (count($this->failed) > self::REMEMBERED) {
+        array_shift($this->failed);
+      }
+    }
     return $result->withAlerts($settings->filter($result->alerts));
   }
 
@@ -76,7 +120,8 @@ class FieldLinter {
    */
   public function lint(FieldItemListInterface $items): array {
     $field = $items->getFieldDefinition();
-    if (!$this->isEnabled($field)) {
+    $settings = FieldSettings::forField($field);
+    if (!$settings->enabled) {
       return [];
     }
     $results = [];
@@ -87,7 +132,7 @@ class FieldLinter {
       }
       $format = $item->getProperties()['format'] ?? NULL;
       $format = $format?->getValue();
-      $results[$delta] = $this->lintText($field, $value, is_string($format) ? $format : NULL);
+      $results[$delta] = $this->lintWith($settings, $field, $value, is_string($format) ? $format : NULL);
     }
     return $results;
   }

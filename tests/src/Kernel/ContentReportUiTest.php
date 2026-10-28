@@ -85,14 +85,6 @@ class ContentReportUiTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Tests the default view, with its link to each page and to the export.
    */
   public function testView(): void {

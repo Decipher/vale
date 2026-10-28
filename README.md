@@ -11,9 +11,9 @@ Vale applies rules for style, tone and terminology. You can write your own, or
 use a published style such as Microsoft, Google, write-good or proselint. This
 module runs those rules on the text fields you choose, whenever a save
 validates the content, as forms, JSON:API and REST do. An alert at error
-level stops the save and is marked on the field, or in publish-only mode, only
-the save that publishes. Warnings and suggestions are shown to the author, and
-the content saves.
+level stops the save and is marked on the field. In publish-only mode, it
+stops only the save that publishes. Warnings and suggestions are shown to the
+author, and the content saves.
 
 ![A save refused: two alerts listed, and the field marked](docs/screenshots/save-refused.png)
 
@@ -79,8 +79,8 @@ None are required. These are supported when they are installed:
 
    This downloads the latest Vale release for the machine it runs on, into
    `bin/` beside your web root, and checks it against the SHA-256 the release
-   publishes. Add `--vale-version=3.24.0` for a given version, or `--sha256`
-   to check against a hash you trust. It needs an installed site, and works on
+   publishes. Add `--vale-version=3.24.0` to pin a version, or `--sha256` to
+   check against a hash you trust. It needs an installed site, and works on
    Linux and macOS. Run it in the image or container that will run Vale. In a
    build with no database, download a
    [release](https://github.com/vale-cli/vale/releases) yourself and check its
@@ -110,9 +110,10 @@ None are required. These are supported when they are installed:
    number of rules in your styles.
 
 If you enable the module through a config import, such as `drush deploy`,
-Drupal does not install its optional config. Export
-`views.view.vale_findings` with the rest of your configuration, or the report
-page is missing.
+Drupal does not install its optional config. Export `views.view.vale_findings`
+and `system.action.node_vale_check_prose` with the rest of your
+configuration, or the report page and the **Check prose with Vale** bulk
+action are missing.
 
 ## Configuration
 
@@ -144,7 +145,7 @@ them in **People > Permissions**.
 | Permission | What it allows |
 | --- | --- |
 | Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
-| View the prose linting report | The report, which quotes text from all content, published or not |
+| View the prose linting report | The report and its CSV export, which quote text from all content, published or not |
 | Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
 
 ### Site settings
@@ -225,9 +226,10 @@ Add `id` to check text for an entity that exists.
 
 The user needs the **Use the Vale check endpoint** permission and the right
 to edit that field. Without `id`, they also need the right to create that
-bundle. With `id`, they need the right to edit that entity instead. With a cookie session, send an
-`X-CSRF-Token` header from `/session/token`. Too many requests get a 429.
-Four checks run at once across the site, and a check past that gets a 503.
+bundle. With `id`, they need the right to edit that entity instead. With a
+cookie session, send an `X-CSRF-Token` header from `/session/token`. Too many
+requests from one user get a 429. At most four checks run at once across the
+site, and a check past that gets a 503.
 
 ## FAQ
 
@@ -246,14 +248,14 @@ overuse, and the module applies them like any other rule.
 **A:** Content saves, and the author is told it was not checked. When Vale
 is missing or its configuration cannot be read, the status report also shows
 a warning for the server it ran on. A timeout or a failed run shows only to
-the author. `drush vale:lint` and the workspace `block` mode fail instead, so
-an unchecked deploy does not pass. To refuse the save instead, set
+the author. `drush vale:lint` and the workspace `block` mode fail, so an
+unchecked deploy does not pass. To refuse the save as well, set
 `fail_closed`.
 
 **Q: Does it check Canvas pages?**
 
-**A:** Not yet. Canvas keeps a page's text in component props, not in fields
-you can opt in. Node fields on a Drupal CMS site are checked, including node
+**A:** No. Canvas keeps a page's text in component props, not in fields you
+can opt in. Node fields on a Drupal CMS site are checked, including node
 text that Canvas renders through a content template.
 
 **Q: How much does the result cache hold?**

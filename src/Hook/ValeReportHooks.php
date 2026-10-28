@@ -7,8 +7,10 @@ namespace Drupal\vale\Hook;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\SynchronizableInterface;
+use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\vale\ContentWalker;
+use Drupal\vale\FieldSettings;
 use Drupal\vale\FindingStorage;
 use Drupal\vale\PublishState;
 use Drupal\vale\ReportRefresher;
@@ -20,7 +22,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * The report describes Live. Saving a top-level entity outside a workspace
  * refreshes its rows from its newest revision, through ReportRefresher, and
  * deleting it removes them. A component, such as a paragraph, is reported
- * through its host's save.
+ * through its host's save. A bundle whose fields are no longer checked loses
+ * its rows.
  */
 class ValeReportHooks {
 
@@ -63,6 +66,17 @@ class ValeReportHooks {
   }
 
   /**
+   * Implements hook_entity_revision_delete().
+   *
+   * The report describes the newest revision, which can be a forward draft,
+   * so deleting a revision can change what it should say.
+   */
+  #[Hook('entity_revision_delete')]
+  public function entityRevisionDelete(EntityInterface $entity): void {
+    $this->refresh($entity);
+  }
+
+  /**
    * Implements hook_entity_delete().
    */
   #[Hook('entity_delete')]
@@ -71,6 +85,30 @@ class ValeReportHooks {
       $this->reportRefresher->remove($entity->getEntityTypeId(), $entity->id());
       $this->findingStorage->delete($entity->getEntityTypeId(), $entity->id());
     }
+  }
+
+  /**
+   * Implements hook_ENTITY_TYPE_update() for field_config.
+   *
+   * A field with Vale turned off loses its rows. That can also leave a bundle
+   * with nothing checked, whose saves no longer refresh its rows, so those
+   * are removed too.
+   */
+  #[Hook('field_config_update')]
+  public function fieldConfigUpdate(FieldConfigInterface $field): void {
+    if (!FieldSettings::forField($field)->enabled) {
+      $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
+    }
+    $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
+  }
+
+  /**
+   * Implements hook_ENTITY_TYPE_delete() for field_config.
+   */
+  #[Hook('field_config_delete')]
+  public function fieldConfigDelete(FieldConfigInterface $field): void {
+    $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
+    $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
   }
 
   /**

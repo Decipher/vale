@@ -198,15 +198,18 @@ class ValeInstaller {
         throw new \RuntimeException(sprintf('The directory %s does not exist or cannot be written.', $directory));
       }
       $binary = rtrim($directory, '/') . '/vale';
-      // Copy next to the target, then move it into place. A move in one
-      // directory is a rename, which is atomic, so a Vale run never reads a
-      // part-written file. move() gives the file the site's default mode, so
-      // it is made executable after.
+      // Copy next to the target and make it executable, then rename it into
+      // place. A rename in one directory is atomic, so a Vale run never reads
+      // a part-written or non-executable file, and a failure before it leaves
+      // the old binary as it was. FileSystem::move() is not used because it
+      // resets the mode after the rename.
       try {
         $staged = $this->fileSystem->copy($work . '/vale', $binary . '.new', FileExists::Rename);
-        $binary = $this->fileSystem->move($staged, $binary, FileExists::Replace);
-        if (!$this->fileSystem->chmod($binary, 0755)) {
-          throw new FileException(sprintf('%s could not be made executable.', $binary));
+        if (!$this->fileSystem->chmod($staged, 0755)) {
+          throw new FileException(sprintf('%s could not be made executable.', $staged));
+        }
+        if (!@rename($staged, $binary)) {
+          throw new FileException(sprintf('%s could not be moved to %s.', $staged, $binary));
         }
         return $binary;
       }

@@ -73,14 +73,6 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Gives the validation messages of an entity, keyed by property path.
    *
    * @return array<string, string[]>
@@ -218,6 +210,56 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertSame([''], array_keys($violations));
     $this->assertStringContainsString('Text: Vale could not check this text.', $violations[''][0]);
     $this->assertStringContainsString('Paragraph "Docs text", Text: Vale could not check this text.', $violations[''][0]);
+  }
+
+  /**
+   * Tests that a failing Vale runs once for a value in a publishing save.
+   */
+  public function testFailedRunOnce(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $violations = $this->violations($this->page(['field_text' => 'FAKE_CRASH here.', 'status' => TRUE]));
+    $this->assertStringContainsString('Text: Vale could not check this text.', $violations[''][0]);
+    // Both constraints check the page's own text. Vale ran for it once.
+    $this->assertCount(1, $this->valeRuns());
+  }
+
+  /**
+   * Tests that a paragraph's error on publishing is not also a warning.
+   *
+   * The Paragraphs widget validates each paragraph by itself, which lists its
+   * error as a warning that blocks publishing. Publishing the host makes it
+   * the error that refuses the save, so the warning goes.
+   */
+  public function testPublishedParagraphErrorOnce(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $collector = $this->container->get('vale.alert_collector');
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.']);
+    $this->assertSame([], $this->violations($paragraph));
+    $this->assertCount(1, $collector->alerts());
+
+    $violations = $this->violations($this->page(['field_text' => 'Fine.', 'status' => TRUE, 'field_content' => [$paragraph]]));
+    $this->assertStringContainsString('Paragraph "Docs text", Text: Demo.Very', $violations[''][0]);
+    $this->assertSame([], $collector->alerts());
+  }
+
+  /**
+   * Tests that only recent failed runs are remembered.
+   */
+  public function testFailedRunsForgotten(): void {
+    $field = FieldConfig::loadByName('node', 'page', 'field_text');
+    $this->assertInstanceOf(FieldConfig::class, $field);
+    $linter = $this->container->get('vale.field_linter');
+    for ($i = 0; $i <= 50; $i++) {
+      $this->assertFalse($linter->lintText($field, "FAKE_CRASH $i", 'plain_text')->isChecked());
+    }
+    $this->assertCount(51, $this->valeRuns());
+    // Fifty are remembered, so the newest does not run again, and the oldest
+    // does.
+    $linter->lintText($field, 'FAKE_CRASH 50', 'plain_text');
+    $this->assertCount(51, $this->valeRuns());
+    $linter->lintText($field, 'FAKE_CRASH 0', 'plain_text');
+    $this->assertCount(52, $this->valeRuns());
   }
 
   /**

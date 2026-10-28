@@ -62,6 +62,45 @@ class FindingStorage {
   }
 
   /**
+   * Removes the rows of one field.
+   *
+   * @param string $entity_type
+   *   The entity type the field is on.
+   * @param string $bundle
+   *   The bundle the field is on.
+   * @param string $field
+   *   The field name.
+   */
+  public function clearField(string $entity_type, string $bundle, string $field): void {
+    $this->database->delete(self::TABLE)
+      ->condition('entity_type', $entity_type)
+      ->condition('bundle', $bundle)
+      ->condition('field', $field)
+      ->execute();
+  }
+
+  /**
+   * Removes the rows of every bundle not in a list.
+   *
+   * @param list<string> $bundles
+   *   The bundles to keep, as "entity_type:bundle".
+   */
+  public function clearBundlesExcept(array $bundles): void {
+    $stored = $this->database->select(self::TABLE, 'f')
+      ->fields('f', ['root_type', 'root_bundle'])
+      ->distinct()
+      ->execute();
+    foreach ($stored as $row) {
+      if (!in_array($row->root_type . ':' . $row->root_bundle, $bundles, TRUE)) {
+        $this->database->delete(self::TABLE)
+          ->condition('root_type', $row->root_type)
+          ->condition('root_bundle', $row->root_bundle)
+          ->execute();
+      }
+    }
+  }
+
+  /**
    * Removes every row, before everything is scanned again.
    */
   public function clearAll(): void {
