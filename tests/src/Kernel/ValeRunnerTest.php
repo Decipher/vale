@@ -271,6 +271,26 @@ class ValeRunnerTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a probe that failed is tried again, not cached.
+   */
+  public function testFailedProbesNotCached(): void {
+    $environment = $this->container->get('vale.environment');
+    // Setting up Vale has already probed it.
+    $this->container->get('cache.vale')->deleteAll();
+    // Symfony's Process passes $_ENV on to Vale.
+    $_ENV['FAKE_PROBE_FAIL'] = '1';
+    try {
+      $this->assertNull($environment->version());
+      $this->assertSame([], $environment->stylesPaths());
+    }
+    finally {
+      unset($_ENV['FAKE_PROBE_FAIL']);
+    }
+    $this->assertSame('0.0.0-fake', $environment->version());
+    $this->assertSame([$this->valeDirectory . '/styles'], $environment->stylesPaths());
+  }
+
+  /**
    * Tests a styles directory that is missing on this server.
    *
    * The styles paths are cached in a bin all servers share, so a server can

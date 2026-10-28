@@ -169,7 +169,11 @@ class ValeEnvironment {
     catch (ProcessException) {
       // A binary that cannot report its version is not Vale.
     }
-    $this->cache->set($cid, $version, $this->time->getRequestTime() + static::PROBE_LIFETIME);
+    // Only a reported version is cached. A run that failed, timed out or
+    // could not start may succeed on the next request.
+    if ($version !== NULL) {
+      $this->cache->set($cid, $version, $this->time->getRequestTime() + static::PROBE_LIFETIME);
+    }
     return $version;
   }
 
@@ -191,20 +195,21 @@ class ValeEnvironment {
     if ($cached = $this->cache->get($cid)) {
       return $cached->data;
     }
-    $paths = [];
     try {
       $process = $this->process(['ls-config']);
       $process->run();
-      $listing = json_decode($process->getOutput(), TRUE);
-      foreach (is_array($listing) && is_array($listing['Paths'] ?? NULL) ? $listing['Paths'] : [] as $path) {
-        if (is_string($path) && is_dir($path)) {
-          $paths[] = $path;
-        }
-      }
     }
     catch (ProcessException) {
-      // No paths are known, so no rules are known.
+      // A run that timed out or could not start is not cached.
+      return [];
     }
+    $listing = $process->isSuccessful() ? json_decode($process->getOutput(), TRUE) : NULL;
+    if (!is_array($listing) || !is_array($listing['Paths'] ?? NULL)) {
+      // No paths are known, so no rules are known. A failed listing is not
+      // cached, so a style change is not missed for an hour.
+      return [];
+    }
+    $paths = array_values(array_filter($listing['Paths'], static fn (mixed $path): bool => is_string($path) && is_dir($path)));
     $this->cache->set($cid, $paths, $this->time->getRequestTime() + static::PROBE_LIFETIME);
     return $paths;
   }
