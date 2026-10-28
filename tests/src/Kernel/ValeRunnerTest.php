@@ -300,8 +300,8 @@ class ValeRunnerTest extends KernelTestBase {
    * Tests a styles directory that is missing on this server.
    *
    * The styles paths are cached in a bin all servers share, so a server can
-   * read a path it does not have. The value saves unchecked, not with an
-   * error page.
+   * read a path it does not have. The missing path is skipped, and Vale still
+   * runs, rather than the save failing with an error page.
    */
   public function testMissingStylesDirectory(): void {
     $environment = $this->container->get('vale.environment');

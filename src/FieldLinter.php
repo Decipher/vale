@@ -75,7 +75,27 @@ class FieldLinter {
    *   The result, with only the alerts the field's settings report.
    */
   public function lintText(FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
-    $settings = FieldSettings::forField($field);
+    return $this->lintWith(FieldSettings::forField($field), $field, $text, $format, $store);
+  }
+
+  /**
+   * Lints text with a field's settings already read.
+   *
+   * @param \Drupal\vale\FieldSettings $settings
+   *   The field's settings.
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $field
+   *   The field.
+   * @param string $text
+   *   The text.
+   * @param string|null $format
+   *   The text format, or NULL for plain text.
+   * @param bool $store
+   *   Whether to cache the result.
+   *
+   * @return \Drupal\vale\LintResult
+   *   The result.
+   */
+  protected function lintWith(FieldSettings $settings, FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
     $extension = in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
     $name = $settings->name($field);
     $key = hash('sha256', $name . "\0" . $extension . "\0" . $text);
@@ -100,7 +120,8 @@ class FieldLinter {
    */
   public function lint(FieldItemListInterface $items): array {
     $field = $items->getFieldDefinition();
-    if (!$this->isEnabled($field)) {
+    $settings = FieldSettings::forField($field);
+    if (!$settings->enabled) {
       return [];
     }
     $results = [];
@@ -111,7 +132,7 @@ class FieldLinter {
       }
       $format = $item->getProperties()['format'] ?? NULL;
       $format = $format?->getValue();
-      $results[$delta] = $this->lintText($field, $value, is_string($format) ? $format : NULL);
+      $results[$delta] = $this->lintWith($settings, $field, $value, is_string($format) ? $format : NULL);
     }
     return $results;
   }

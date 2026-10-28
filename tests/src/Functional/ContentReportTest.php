@@ -128,7 +128,7 @@ class ContentReportTest extends BrowserTestBase {
       'node_bulk_form[1]' => TRUE,
       'action' => 'node_vale_check_prose',
     ], 'Apply to selected items');
-    $this->assertSession()->pageTextContains('Checked 2 items: 1 errors and 1 other alerts.');
+    $this->assertSession()->pageTextContains('Checked 2 items: 1 error and 1 other alert.');
     $this->drupalGet('admin/reports/vale');
     $this->assertSession()->pageTextContains('Demo.Very');
   }

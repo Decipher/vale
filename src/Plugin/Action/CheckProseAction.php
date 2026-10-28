@@ -88,12 +88,14 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
       $this->messenger()->addError($reason);
       return;
     }
+    $checked = 0;
     $errors = 0;
     $others = 0;
     foreach ($entities as $entity) {
       if (!$entity instanceof FieldableEntityInterface) {
         continue;
       }
+      $checked++;
       // Views lists the default revision. The report holds the newest one.
       $latest = $this->contentWalker->latest($entity->getEntityTypeId(), $entity->id()) ?? $entity;
       $findings = $this->contentWalker->entity($latest);
@@ -102,10 +104,10 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
         $finding->isError() ? $errors++ : $others++;
       }
     }
-    $this->messenger()->addStatus($this->t('Checked @count items: @errors errors and @others other alerts. See the prose linting report.', [
-      '@count' => count($entities),
-      '@errors' => $errors,
-      '@others' => $others,
+    $this->messenger()->addStatus($this->t('Checked @items: @errors and @others. See the prose linting report.', [
+      '@items' => $this->formatPlural($checked, '1 item', '@count items'),
+      '@errors' => $this->formatPlural($errors, '1 error', '@count errors'),
+      '@others' => $this->formatPlural($others, '1 other alert', '@count other alerts'),
     ]));
   }
 
