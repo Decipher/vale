@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\Query\QueryInterface;
 use Drupal\Core\Entity\RevisionableStorageInterface;
+use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -540,7 +541,8 @@ class ContentWalker {
     // translation, so only the default translation lints it.
     $translation = $entity instanceof TranslatableInterface && !$entity->isDefaultTranslation();
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
-      $values = $translation && !$definition->isTranslatable() ? [] : $this->fieldLinter->lint($entity->get($name));
+      $items = $entity->get($name);
+      $values = $translation && !$definition->isTranslatable() ? [] : $this->fieldLinter->lint($items);
       foreach ($values as $delta => $result) {
         $base = [
           $entity->getEntityTypeId(),
@@ -558,9 +560,11 @@ class ContentWalker {
           $findings[] = new Finding(...$base, alert: $alert, host: $host, langcode: $langcode);
         }
       }
-      if ($definition->getType() === 'entity_reference_revisions' && $depth < self::MAX_DEPTH) {
-        foreach ($entity->get($name) as $item) {
-          $component = $this->publishState->component($item->get('entity')->getValue(), $langcode);
+      if ($definition->getType() === 'entity_reference_revisions' && $depth < self::MAX_DEPTH && $items instanceof EntityReferenceFieldItemListInterface) {
+        // Entity Reference Revisions loads the referenced revisions of the
+        // whole field at once.
+        foreach ($items->referencedEntities() as $target) {
+          $component = $this->publishState->component($target, $langcode);
           // A component without this translation is linted with the default
           // translation.
           if ($component && ($component->language()->getId() === $langcode || !$translation)) {
