@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Kernel;
 
-use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\node\Entity\Node;
@@ -65,14 +64,6 @@ class ContentReportTest extends KernelTestBase {
     $this->installConfig(['filter', 'node', 'vale']);
     $this->setUpVale();
     $this->createValeContentModel();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
   }
 
   /**
@@ -365,9 +356,7 @@ class ContentReportTest extends KernelTestBase {
     $page->save();
     $this->assertSame(['Guide > node.field_text:Demo.Delve:warning'], $this->report());
 
-    $storage = $this->container->get('entity_type.manager')->getStorage('node');
-    $this->assertInstanceOf(RevisionableStorageInterface::class, $storage);
-    $storage->deleteRevision((int) $page->getRevisionId());
+    $this->container->get('entity_type.manager')->getStorage('node')->deleteRevision((int) $page->getRevisionId());
     $this->assertSame([], $this->report());
   }
 
