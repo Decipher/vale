@@ -109,6 +109,28 @@ class WorkspaceValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests a paragraph of a published page saved by itself in a workspace.
+   *
+   * The workspace tracks the save, so the live page does not change.
+   */
+  public function testPublishedParagraphInWorkspace(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $page = Node::create([
+      'type' => 'page',
+      'title' => 'Guide',
+      'status' => TRUE,
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])],
+    ]);
+    $page->save();
+
+    $this->switchToWorkspace('stage');
+    $paragraph = Paragraph::load($page->get('field_content')->target_id);
+    $this->assertInstanceOf(ParagraphInterface::class, $paragraph);
+    $paragraph->set('field_text', 'This is very good.');
+    $this->assertCount(0, $paragraph->validate());
+  }
+
+  /**
    * Tests that editing published content in a workspace is a draft save.
    *
    * Under publish-only mode, an error stops only the save that publishes.

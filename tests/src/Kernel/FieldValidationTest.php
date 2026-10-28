@@ -409,6 +409,12 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertSame([], $this->violations($paragraph));
     $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
 
+    // A paragraph saved with no host is not live.
+    $orphan = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $orphan->save();
+    $orphan->set('field_text', 'This is very good.');
+    $this->assertSame([], $this->violations($orphan));
+
     // A paragraph the published host no longer shows is not live either.
     $this->container->get('vale.alert_collector')->reset();
     $page->set('field_content', [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]);
@@ -438,6 +444,19 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertInstanceOf(Paragraph::class, $child);
     $child->set('field_text', 'This is very good.');
     $this->assertSame([''], array_keys($this->violations($child)));
+
+    // A paragraph nested more than 10 levels deep is not followed to its
+    // host. The publishing save of the host reports it as unchecked.
+    $deep = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $top = $deep;
+    for ($i = 0; $i < 11; $i++) {
+      $top = Paragraph::create(['type' => 'docs_section', 'field_children' => [$top]]);
+    }
+    $this->page(['status' => TRUE, 'field_content' => [$top]])->save();
+    $deep = Paragraph::load($deep->id());
+    $this->assertInstanceOf(Paragraph::class, $deep);
+    $deep->set('field_text', 'This is very good.');
+    $this->assertSame([], $this->violations($deep));
 
     // Once the host is not published, the nested text is not live.
     $page->setUnpublished()->save();

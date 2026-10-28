@@ -49,8 +49,6 @@ class PublishState {
 
   /**
    * Whether the request builds a form.
-   *
-   * @var bool
    */
   protected bool $inForm = FALSE;
 
@@ -171,7 +169,7 @@ class PublishState {
         return FALSE;
       }
       $reference = ['target_id' => (string) $entity->id(), 'target_revision_id' => (string) $revision_id];
-      $shown = array_filter($parent->get($field)->getValue(), static fn (array $value): bool => array_map('strval', array_intersect_key($value, $reference)) == $reference);
+      $shown = array_filter($parent->get($field)->getValue(), static fn (array $value): bool => array_map(strval(...), array_intersect_key($value, $reference)) == $reference);
       if (!$shown) {
         return FALSE;
       }
