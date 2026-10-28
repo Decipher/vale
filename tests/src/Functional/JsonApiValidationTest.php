@@ -221,13 +221,13 @@ class JsonApiValidationTest extends BrowserTestBase {
     ));
 
     // Publishing it is refused, for the page's text and for its paragraph,
-    // although the PATCH names neither field. Core's JSON:API gives entity
-    // violations without decoding their HTML.
+    // although the PATCH names neither field. The detail is plain text, one
+    // alert a line, as core gives a field violation's.
     [$status, $document] = $this->patch($page, ['status' => TRUE]);
     $this->assertSame(422, $status);
     $this->assertSame(['/data'], array_column(array_column($document['errors'], 'source'), 'pointer'));
     $this->assertSame([
-      "Entity is not valid: Text: Demo.Very: Avoid &#039;Very&#039;. (line 1: \"Very\")<br>\nParagraph \"Docs text\", Text: Demo.Very: Avoid &#039;very&#039;. (line 1: \"very\")",
+      "Entity is not valid: Text: Demo.Very: Avoid 'Very'. (line 1: \"Very\")\nParagraph \"Docs text\", Text: Demo.Very: Avoid 'very'. (line 1: \"very\")",
     ], array_column($document['errors'], 'detail'));
   }
 
