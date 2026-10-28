@@ -84,3 +84,27 @@ function vale_entity_update(EntityInterface $entity): void {
 function vale_entity_delete(EntityInterface $entity): void {
   \Drupal::service(ValeReportHooks::class)->entityDelete($entity);
 }
+
+/**
+ * Implements hook_entity_revision_delete().
+ */
+#[LegacyHook]
+function vale_entity_revision_delete(EntityInterface $entity): void {
+  \Drupal::service(ValeReportHooks::class)->entityRevisionDelete($entity);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update() for field_config.
+ */
+#[LegacyHook]
+function vale_field_config_update(): void {
+  \Drupal::service(ValeReportHooks::class)->fieldConfigUpdate();
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_delete() for field_config.
+ */
+#[LegacyHook]
+function vale_field_config_delete(): void {
+  \Drupal::service(ValeReportHooks::class)->fieldConfigDelete();
+}
