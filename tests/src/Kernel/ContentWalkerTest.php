@@ -117,7 +117,7 @@ class ContentWalkerTest extends KernelTestBase {
    * Tests linting a bundle, with paragraphs and forward revisions.
    */
   public function testBundle(): void {
-    $this->savePage([
+    $first = $this->savePage([
       'title' => 'First',
       'field_text' => 'This is very good.',
       'field_code' => 'Very, very code.',
@@ -150,6 +150,22 @@ class ContentWalkerTest extends KernelTestBase {
 
     // Paragraphs can be linted by themselves, and name their host.
     $this->assertSame(['node First > paragraph.field_text:Demo.Delve'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
+
+    // A paragraph the page's latest revision no longer holds stays stored for
+    // the older revision, but is not linted.
+    $first->setNewRevision();
+    $first->set('field_content', [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Really.'])]);
+    $first->save();
+    $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
+
+    // Linting a paragraph by itself names its host too.
+    $held = $first->get('field_content')->entity;
+    $this->assertInstanceOf(Paragraph::class, $held);
+    $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->entity($held)));
+
+    // A paragraph saved with no host is not linted either.
+    Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.'])->save();
+    $this->assertSame(['node First > paragraph.field_text:Demo.Really'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
 
     // All content reaches paragraphs only through their hosts.
     $this->assertSame($this->summarise($walker->bundle('node', 'page')), $this->summarise($walker->all()));
@@ -263,6 +279,77 @@ class ContentWalkerTest extends KernelTestBase {
     ], $this->summarise($findings));
     $this->assertSame(['fr', 'fr'], array_map(static fn (Finding $finding): string => $finding->langcode, $findings));
     $this->assertSame('Guide FR', $findings[1]->label);
+
+    // The paragraph bundle gives what linting the page gives for it.
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+  }
+
+  /**
+   * Tests a paragraph that only a translation of its page holds.
+   */
+  public function testBundleTranslatedReference(): void {
+    $this->installConfig(['language']);
+    ConfigurableLanguage::createFromLangcode('fr')->save();
+    $manager = $this->container->get('content_translation.manager');
+    $manager->setEnabled('node', 'page', TRUE);
+    $manager->setEnabled('paragraph', 'docs_text', TRUE);
+    // Each translation holds its own paragraphs.
+    FieldConfig::loadByName('node', 'page', 'field_content')?->set('translatable', TRUE)->save();
+
+    $page = $this->savePage([
+      'title' => 'Guide',
+      'field_text' => 'Fine.',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])],
+    ]);
+    $page->addTranslation('fr', [
+      'title' => 'Guide FR',
+      'field_text' => 'Fine.',
+      'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.', 'langcode' => 'fr'])],
+    ])->save();
+
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+  }
+
+  /**
+   * Tests a paragraph held by another paragraph.
+   */
+  public function testBundleNestedHost(): void {
+    ParagraphsType::create(['id' => 'group', 'label' => 'Group'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_items',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_items', 'entity_type' => 'paragraph', 'bundle' => 'group'])->save();
+    $group = Paragraph::create([
+      'type' => 'group',
+      'field_items' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.'])],
+    ]);
+    $this->savePage(['title' => 'Guide', 'field_text' => 'Fine.', 'field_content' => [$group]]);
+
+    $walker = $this->container->get('vale.content_walker');
+    $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
+
+    // Without the group, nothing holds the inner paragraph.
+    Paragraph::load($group->id())?->delete();
+    $this->assertSame([], $walker->bundle('paragraph', 'docs_text'));
+  }
+
+  /**
+   * Tests that a paragraph bundle lints the revision its page references.
+   */
+  public function testBundleHeldRevision(): void {
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.']);
+    $this->savePage(['title' => 'Guide', 'field_text' => 'Fine.', 'field_content' => [$paragraph]]);
+    // A newer revision of the paragraph that the page does not reference.
+    $paragraph = Paragraph::load($paragraph->id());
+    $this->assertInstanceOf(Paragraph::class, $paragraph);
+    $paragraph->setNewRevision();
+    $paragraph->set('field_text', 'Really.');
+    $paragraph->save();
+
+    $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
   }
 
   /**
