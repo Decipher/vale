@@ -6,33 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 1.0.0 (2026-10-28)
 
 ### Added
 
-- A development recipe, applied by `make provision`, that creates a Page
-  content type whose body is checked with Vale, so a fresh development site
-  has a field to lint: create a Page, or run `drush vale:check`. The Vale
-  binary, its configuration and the settings wiring are installed with it,
-  so the stack lints out of the box.
+- [#3632782](https://www.drupal.org/project/vale/issues/3632782): Drupal 12
+  support, alongside Drupal 10.3 and 11.
+- A development recipe that `make provision` applies. A fresh development
+  site gets a Page type whose body is checked with Vale, with Vale installed
+  and configured.
 
 ### Changed
 
-- Each prose error starts with the field's label, such as "Body:
-  Vale.Repetition: ...", so the same alert in two fields shows for each. The
-  message for text Vale could not check names its field too, and JSON:API's
-  422 detail reads `body.0.value: Body: ...`
-  ([#3632984](https://www.drupal.org/project/vale/issues/3632984)).
+- [#3632984](https://www.drupal.org/project/vale/issues/3632984): Each prose
+  error starts with its field's label, such as `Body: Vale.Repetition: ...`,
+  so the same alert in two fields is listed for each. JSON:API's 422 detail
+  includes the label too.
+- The workspace publish check names each field by its label as well.
 
 ### Fixed
 
-- Publish-only mode no longer refuses an edit of published content inside a
-  workspace. The save drafts within the workspace, where nothing is live yet;
-  the workspace publish check still stops on its errors. That check now stops
-  on them even in `advise` mode, and on unchecked text while `fail_closed`,
-  because under publish-only the workspace's publish is the publishing save.
-  Content a workspace does not track, which saves straight to Live, keeps
-  its publishing refusal.
+- [#3632983](https://www.drupal.org/project/vale/issues/3632983):
+  `drush vale:lint ENTITY_TYPE:BUNDLE` refuses a bundle with nothing checked
+  by Vale, instead of printing an empty table that read as a pass.
+- [#3633410](https://www.drupal.org/project/vale/issues/3633410): Under
+  publish-only mode, an edit of published content inside a workspace saves
+  as a draft. Publishing the workspace stops on its errors, in `advise` mode
+  as well as `block`.
+- Linting a paragraph bundle reports only paragraphs that a host still holds,
+  in the revision and translations that host uses.
+- Under publish-only mode, JSON:API's 422 detail for a refused publish is
+  plain text, without HTML entities.
+- Under publish-only mode, a paragraph's error that refuses a publish is no
+  longer also listed as a warning.
+- The content report drops a field's rows when Vale is turned off on it, and
+  refreshes when a draft revision is deleted. Its pages sort by row as well,
+  so none repeat or go missing.
+- `drush vale:install` makes Vale executable before it replaces the old
+  binary, so a failed install leaves the old one working.
+- A Vale run that failed or timed out is not cached. A failed version or
+  styles probe no longer counts for an hour, and a failing Vale runs once per
+  value in a request.
+- The check endpoint's limit of four checks at once covers Vale's version and
+  styles probes, and a slow check no longer outlasts its slot.
+- The status report says that unchecked text is refused under `fail_closed`,
+  and is fully translatable.
 
 ## 1.0.0-beta1 (2026-10-21)
 
