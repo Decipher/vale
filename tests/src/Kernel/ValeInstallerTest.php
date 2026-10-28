@@ -16,6 +16,7 @@ use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Psr\Http\Message\RequestInterface;
+use Symfony\Component\Filesystem\Filesystem as SymfonyFilesystem;
 
 /**
  * Tests installing Vale from a release archive.
@@ -57,7 +58,7 @@ class ValeInstallerTest extends KernelTestBase {
    * {@inheritdoc}
    */
   protected function tearDown(): void {
-    exec('rm -rf ' . escapeshellarg($this->directory));
+    (new SymfonyFilesystem())->remove($this->directory);
     parent::tearDown();
   }
 
@@ -331,7 +332,6 @@ class ValeInstallerTest extends KernelTestBase {
       }
     }
   }
-
 
   /**
    * Makes a file system whose given step fails.

@@ -45,14 +45,6 @@ class ContentReportTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Logs in a user with the given permissions and sets up Vale.
    *
    * @param string[] $permissions

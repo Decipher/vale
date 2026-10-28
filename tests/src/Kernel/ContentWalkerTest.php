@@ -78,14 +78,6 @@ class ContentWalkerTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Saves a page.
    *
    * @param array<string, mixed> $values

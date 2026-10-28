@@ -43,14 +43,6 @@ class ValeRunnerTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Gives the runner service.
    */
   protected function runner(): ValeRunnerInterface {

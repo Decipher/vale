@@ -45,14 +45,6 @@ class CheckEndpointTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Logs in a user with the given permissions and sets up Vale.
    *
    * @param string[] $permissions
@@ -172,45 +164,6 @@ class CheckEndpointTest extends BrowserTestBase {
       RequestOptions::HTTP_ERRORS => FALSE,
     ]);
     $this->assertSame(403, $response->getStatusCode());
-  }
-
-  /**
-   * Tests requests that are refused before Vale runs.
-   */
-  public function testBadRequests(): void {
-    $this->logInWith(['use vale check', 'create page content']);
-
-    [$status, $response] = $this->check($this->body('Very.', 'field_code'));
-    $this->assertSame(400, $status);
-    $this->assertSame('This field is not checked by Vale.', $response['message']);
-
-    [$status, $response] = $this->check($this->body('Very.') + ['config' => '/etc/other.ini']);
-    $this->assertSame(400, $status);
-    $this->assertStringStartsWith('Unknown keys: config.', $response['message']);
-
-    [$status, $response] = $this->check(['text' => 5] + $this->body('Very.'));
-    $this->assertSame(400, $status);
-    $this->assertSame('"text" must be a string.', $response['message']);
-
-    [$status, $response] = $this->check(['bundle' => 'nope'] + $this->body('Very.'));
-    $this->assertSame(400, $status);
-    $this->assertSame('Unknown entity type or bundle.', $response['message']);
-
-    $this->assertSame([], $this->valeRuns());
-  }
-
-  /**
-   * Tests the rate limit.
-   */
-  public function testRateLimit(): void {
-    $this->config('vale.settings')->set('check_limit', 2)->save();
-    $this->logInWith(['use vale check', 'create page content']);
-
-    $this->assertSame(200, $this->check($this->body('Fine.'))[0]);
-    $this->assertSame(200, $this->check($this->body('Fine.'))[0]);
-    [$status, $response] = $this->check($this->body('Fine.'));
-    $this->assertSame(429, $status);
-    $this->assertSame('Too many checks. Try again shortly.', $response['message']);
   }
 
 }

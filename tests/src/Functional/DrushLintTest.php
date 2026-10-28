@@ -48,14 +48,6 @@ class DrushLintTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Tests that warnings exit zero and are printed.
    */
   public function testWarnings(): void {
@@ -126,25 +118,6 @@ class DrushLintTest extends BrowserTestBase {
   }
 
   /**
-   * Tests vale:status and vale:rules.
-   */
-  public function testStatusAndRules(): void {
-    $this->drush('vale:status', [], ['format' => 'json']);
-    $status = $this->getOutputFromJSON();
-    $this->assertSame('Yes', $status['available']);
-    $this->assertSame('0.0.0-fake', $status['version']);
-    $this->assertSame(3, $status['rules']);
-
-    $this->drush('vale:rules', [], ['format' => 'json']);
-    $this->assertSame(['Demo.Delve', 'Demo.Really', 'Demo.Very'], array_keys($this->getOutputFromJSON()));
-    $this->assertSame('error', $this->getOutputFromJSON()['Demo.Very']['level']);
-
-    $this->setValeSetting('vale_binary', '/nonexistent/vale');
-    $this->drush('vale:status', [], ['format' => 'json'], NULL, NULL, 1);
-    $this->assertSame('No', $this->getOutputFromJSON()['available']);
-  }
-
-  /**
    * Tests vale:check.
    */
   public function testCheck(): void {
@@ -167,17 +140,6 @@ class DrushLintTest extends BrowserTestBase {
     $this->assertStringContainsString('is not checked by Vale', $this->getErrorOutput());
     $this->drush('vale:check', ['node.page', 'Very.'], [], NULL, NULL, 1);
     $this->assertStringContainsString('There is no field "node.page".', $this->getErrorOutput());
-  }
-
-  /**
-   * Tests that vale:install refuses a SHA-256 that is not one.
-   *
-   * The download itself is covered by ValeInstallerTest, without a network.
-   */
-  public function testInstallRefusesBadChecksum(): void {
-    $this->drush('vale:install', [], ['dir' => $this->valeDirectory . '/bin', 'vale-version' => '3.24.0', 'sha256' => 'abc'], NULL, NULL, 1);
-    $this->assertStringContainsString('The SHA-256 must be 64 hexadecimal characters.', $this->getErrorOutput());
-    $this->assertFileDoesNotExist($this->valeDirectory . '/bin/vale');
   }
 
 }

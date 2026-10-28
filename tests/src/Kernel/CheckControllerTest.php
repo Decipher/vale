@@ -63,14 +63,6 @@ class CheckControllerTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Sends a body to the controller.
    *
    * @param mixed $body

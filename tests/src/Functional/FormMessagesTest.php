@@ -46,14 +46,6 @@ class FormMessagesTest extends BrowserTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Tests that an error is shown on its field and stops the save.
    */
   public function testError(): void {

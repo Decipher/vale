@@ -46,14 +46,6 @@ class FieldSettingsTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Adds a text field to the page bundle.
    *
    * @param string $name

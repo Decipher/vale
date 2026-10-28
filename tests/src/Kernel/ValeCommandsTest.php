@@ -73,14 +73,6 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Gives the commands.
    */
   protected function commands(): ValeCommands {

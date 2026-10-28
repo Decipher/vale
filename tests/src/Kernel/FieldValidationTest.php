@@ -73,14 +73,6 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
-   * {@inheritdoc}
-   */
-  protected function tearDown(): void {
-    $this->tearDownVale();
-    parent::tearDown();
-  }
-
-  /**
    * Gives the validation messages of an entity, keyed by property path.
    *
    * @return array<string, string[]>
