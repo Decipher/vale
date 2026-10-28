@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- In publish-only mode, a paragraph saved by itself, such as over JSON:API,
+  could change a published page's text with an error in it. Paragraphs makes
+  no new revision for such a save, so the page shows the change at once. That
+  save is now refused like a publishing save.
+- `drush vale:lint` labelled a paragraph that only a newer draft holds as a
+  "(previous revision)".
+
 ## 1.0.0 (2026-10-28)
 
 ### Added

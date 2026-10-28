@@ -535,8 +535,12 @@ class ContentWalker {
    *   The findings so far.
    * @param int $depth
    *   How deep the entity is.
+   * @param string|null $label
+   *   The label for a component reached through its parent, or NULL to use
+   *   the entity's own label.
    */
-  protected function walk(FieldableEntityInterface $entity, ?array $host, string $langcode, array &$findings, int $depth): void {
+  protected function walk(FieldableEntityInterface $entity, ?array $host, string $langcode, array &$findings, int $depth, ?string $label = NULL): void {
+    $label ??= (string) $entity->label();
     // A field that is not translatable holds the same values in every
     // translation, so only the default translation lints it.
     $translation = $entity instanceof TranslatableInterface && !$entity->isDefaultTranslation();
@@ -547,7 +551,7 @@ class ContentWalker {
         $base = [
           $entity->getEntityTypeId(),
           (string) $entity->id(),
-          (string) $entity->label(),
+          $label,
           $entity->bundle(),
           $name,
           $delta,
@@ -569,7 +573,11 @@ class ContentWalker {
           // translation.
           if ($component && ($component->language()->getId() === $langcode || !$translation)) {
             $this->loaded[$component->getEntityTypeId()] = TRUE;
-            $this->walk($component, $host ?? Finding::describe($entity), $langcode, $findings, $depth + 1);
+            // Paragraphs labels a paragraph from its host's default revision.
+            // A paragraph in a newer draft is then a "previous revision". The
+            // walk knows the revision that holds it, so it labels it from that
+            // revision instead, in the same form.
+            $this->walk($component, $host ?? Finding::describe($entity), $langcode, $findings, $depth + 1, $label . ' > ' . $definition->getLabel());
           }
         }
       }

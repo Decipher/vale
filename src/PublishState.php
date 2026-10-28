@@ -26,6 +26,11 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 class PublishState {
 
   /**
+   * How deep components are followed up to their host.
+   */
+  private const int MAX_DEPTH = 10;
+
+  /**
    * Constructs a PublishState.
    *
    * @param \Drupal\content_moderation\ModerationInformationInterface|null $moderation
@@ -41,6 +46,39 @@ class PublishState {
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
     protected ?WorkspaceInformationInterface $workspaceInformation = NULL,
   ) {}
+
+  /**
+   * Whether the request builds a form.
+   *
+   * @var bool
+   */
+  protected bool $inForm = FALSE;
+
+  /**
+   * Notes that the request builds a form.
+   *
+   * A form, such as the Paragraphs widget, validates a component as part of
+   * its host's form. The host's save then decides what is published.
+   */
+  public function setInForm(): void {
+    $this->inForm = TRUE;
+  }
+
+  /**
+   * Says whether a save publishes, in the sense of publish-only mode.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity being saved.
+   *
+   * @return bool
+   *   TRUE when the save makes the entity's text public.
+   */
+  public function isPublishingSave(EntityInterface $entity): bool {
+    if ($this->isComponent($entity)) {
+      return $this->isLiveRewrite($entity);
+    }
+    return $this->isBeingPublished($entity);
+  }
 
   /**
    * Says whether a save would publish an entity.
@@ -103,10 +141,55 @@ class PublishState {
   }
 
   /**
+   * Says whether a component's own save changes published text.
+   *
+   * A component is usually published by its host. But a component saved by
+   * itself, such as over JSON:API, often makes no new revision. Then the save
+   * changes the revision that the host's live revision shows. That save
+   * publishes the text.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The component being saved.
+   *
+   * @return bool
+   *   TRUE when the save changes a revision that published content shows.
+   */
+  protected function isLiveRewrite(EntityInterface $entity): bool {
+    if ($this->inForm || !$entity instanceof ContentEntityInterface || $entity->isNew() || $entity->isNewRevision()) {
+      return FALSE;
+    }
+    if ($entity instanceof EntityPublishedInterface && $this->isWorkspaceDraft($entity)) {
+      return FALSE;
+    }
+    $revision_id = $entity->getLoadedRevisionId();
+    // A component can be inside another component. Each one up to the host
+    // must be the revision its parent shows.
+    for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
+      $parent = method_exists($entity, 'getParentEntity') ? $entity->getParentEntity() : NULL;
+      $field = $entity->hasField('parent_field_name') ? $entity->get('parent_field_name')->value : NULL;
+      if (!$parent instanceof ContentEntityInterface || !is_string($field) || !$parent->hasField($field)) {
+        return FALSE;
+      }
+      $reference = ['target_id' => (string) $entity->id(), 'target_revision_id' => (string) $revision_id];
+      $shown = array_filter($parent->get($field)->getValue(), static fn (array $value): bool => array_map('strval', array_intersect_key($value, $reference)) == $reference);
+      if (!$shown) {
+        return FALSE;
+      }
+      if (!$this->isComponent($parent)) {
+        return !$parent instanceof EntityPublishedInterface || $parent->isPublished();
+      }
+      $entity = $parent;
+      $revision_id = $parent->getRevisionId();
+    }
+    return FALSE;
+  }
+
+  /**
    * Says whether an entity is a component of another, such as a paragraph.
    *
-   * A component is published by its host. Its own save is never the moment
-   * of publishing.
+   * A component is published by its host. Its own save is the moment of
+   * publishing only when it changes the revision the host shows. See
+   * isLiveRewrite().
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity.

@@ -361,6 +361,93 @@ class FieldValidationTest extends KernelTestBase {
   }
 
   /**
+   * Tests a paragraph saved by itself under a published host.
+   *
+   * Paragraphs makes no new revision for such a save, so the save changes
+   * the revision the live host shows. In publish-only mode that is a
+   * publishing save.
+   */
+  public function testPublishOnlyComponentSave(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $page = $this->page(['status' => TRUE, 'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]]);
+    $page->save();
+    $paragraph = Paragraph::load($page->get('field_content')->target_id);
+    $this->assertInstanceOf(Paragraph::class, $paragraph);
+
+    // The live text would change, so the save is refused.
+    $paragraph->set('field_text', 'This is very good.');
+    $this->assertSame(
+      ['' => ['Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")']],
+      $this->violations($paragraph),
+    );
+    $this->assertSame([], $this->collected());
+
+    // A new revision of the paragraph is not shown until the host holds it.
+    $paragraph->setNewRevision();
+    $this->assertSame([], $this->violations($paragraph));
+    $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
+    $paragraph->setNewRevision(FALSE);
+
+    // A form validates the paragraph for its host. The host's save decides.
+    $publish_state = $this->container->get('vale.publish_state');
+    $publish_state->setInForm();
+    $this->container->get('vale.alert_collector')->reset();
+    $this->assertSame([], $this->violations($paragraph));
+    $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
+  }
+
+  /**
+   * Tests a paragraph saved by itself under an unpublished host.
+   */
+  public function testPublishOnlyComponentSaveDraftHost(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $page = $this->page(['status' => FALSE, 'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]]);
+    $page->save();
+    $paragraph = Paragraph::load($page->get('field_content')->target_id);
+    $this->assertInstanceOf(Paragraph::class, $paragraph);
+    $paragraph->set('field_text', 'This is very good.');
+    $this->assertSame([], $this->violations($paragraph));
+    $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
+
+    // A paragraph the published host no longer shows is not live either.
+    $this->container->get('vale.alert_collector')->reset();
+    $page->set('field_content', [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]);
+    $page->setPublished()->save();
+    $this->assertSame([], $this->violations($paragraph));
+  }
+
+  /**
+   * Tests a nested paragraph saved by itself under a published host.
+   */
+  public function testPublishOnlyNestedComponentSave(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    ParagraphsType::create(['id' => 'docs_section', 'label' => 'Docs section'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_children',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'cardinality' => -1,
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_children', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
+
+    $section = Paragraph::create(['type' => 'docs_section', 'field_children' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]]);
+    $page = $this->page(['status' => TRUE, 'field_content' => [$section]]);
+    $page->save();
+    $child = Paragraph::load($section->get('field_children')->target_id);
+    $this->assertInstanceOf(Paragraph::class, $child);
+    $child->set('field_text', 'This is very good.');
+    $this->assertSame([''], array_keys($this->violations($child)));
+
+    // Unpublishing the host takes the nested text off the live site.
+    $page->setUnpublished()->save();
+    $child = Paragraph::load($child->id());
+    $this->assertInstanceOf(Paragraph::class, $child);
+    $child->set('field_text', 'This is very good.');
+    $this->assertSame([], $this->violations($child));
+  }
+
+  /**
    * Tests that the paragraph tree is not checked outside publish-only mode.
    */
   public function testNoTreeWithoutPublishOnly(): void {
