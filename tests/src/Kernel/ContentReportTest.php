@@ -337,9 +337,10 @@ class ContentReportTest extends KernelTestBase {
     $this->savePage('Guide', 'We delve.', 'This is very good.');
     $this->assertCount(2, $this->report());
 
-    // The page still holds prose through its paragraphs.
+    // The field's own rows go. The page still holds prose through its
+    // paragraphs, so their rows stay.
     FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
-    $this->assertCount(2, $this->report());
+    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
 
     FieldConfig::loadByName('paragraph', 'docs_text', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
     $this->assertSame([], $this->report());

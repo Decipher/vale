@@ -21,12 +21,6 @@ class FieldLinter {
   protected const array PLAIN_TYPES = ['string', 'string_long'];
 
   /**
-   * Constructs a FieldLinter.
-   *
-   * @param \Drupal\vale\ValeRunnerInterface $runner
-   *   The Vale runner.
-   */
-  /**
    * How many failed runs are remembered for a request.
    */
   protected const int REMEMBERED = 50;
@@ -42,6 +36,12 @@ class FieldLinter {
    */
   protected array $failed = [];
 
+  /**
+   * Constructs a FieldLinter.
+   *
+   * @param \Drupal\vale\ValeRunnerInterface $runner
+   *   The Vale runner.
+   */
   public function __construct(
     protected ValeRunnerInterface $runner,
   ) {}

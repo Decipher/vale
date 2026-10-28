@@ -7,8 +7,10 @@ namespace Drupal\vale\Hook;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\SynchronizableInterface;
+use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\vale\ContentWalker;
+use Drupal\vale\FieldSettings;
 use Drupal\vale\FindingStorage;
 use Drupal\vale\PublishState;
 use Drupal\vale\ReportRefresher;
@@ -88,11 +90,15 @@ class ValeReportHooks {
   /**
    * Implements hook_ENTITY_TYPE_update() for field_config.
    *
-   * Turning Vale off on a field can leave a bundle with nothing checked. Its
-   * saves no longer refresh its rows, so they are removed here.
+   * A field with Vale turned off loses its rows. That can also leave a bundle
+   * with nothing checked, whose saves no longer refresh its rows, so those
+   * are removed too.
    */
   #[Hook('field_config_update')]
-  public function fieldConfigUpdate(): void {
+  public function fieldConfigUpdate(FieldConfigInterface $field): void {
+    if (!FieldSettings::forField($field)->enabled) {
+      $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
+    }
     $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
   }
 
@@ -100,8 +106,9 @@ class ValeReportHooks {
    * Implements hook_ENTITY_TYPE_delete() for field_config.
    */
   #[Hook('field_config_delete')]
-  public function fieldConfigDelete(): void {
-    $this->fieldConfigUpdate();
+  public function fieldConfigDelete(FieldConfigInterface $field): void {
+    $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
+    $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
   }
 
   /**

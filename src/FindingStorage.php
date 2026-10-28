@@ -62,6 +62,24 @@ class FindingStorage {
   }
 
   /**
+   * Removes the rows of one field.
+   *
+   * @param string $entity_type
+   *   The entity type the field is on.
+   * @param string $bundle
+   *   The bundle the field is on.
+   * @param string $field
+   *   The field name.
+   */
+  public function clearField(string $entity_type, string $bundle, string $field): void {
+    $this->database->delete(self::TABLE)
+      ->condition('entity_type', $entity_type)
+      ->condition('bundle', $bundle)
+      ->condition('field', $field)
+      ->execute();
+  }
+
+  /**
    * Removes the rows of every bundle not in a list.
    *
    * @param list<string> $bundles
