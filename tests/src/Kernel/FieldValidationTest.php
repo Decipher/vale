@@ -439,7 +439,7 @@ class FieldValidationTest extends KernelTestBase {
     $child->set('field_text', 'This is very good.');
     $this->assertSame([''], array_keys($this->violations($child)));
 
-    // Unpublishing the host takes the nested text off the live site.
+    // Once the host is not published, the nested text is not live.
     $page->setUnpublished()->save();
     $child = Paragraph::load($child->id());
     $this->assertInstanceOf(Paragraph::class, $child);
