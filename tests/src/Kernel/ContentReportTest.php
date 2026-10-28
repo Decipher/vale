@@ -347,6 +347,19 @@ class ContentReportTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a bundle loses its rows when it can no longer hold prose.
+   */
+  public function testHolderFieldDeleted(): void {
+    FieldConfig::loadByName('node', 'page', 'field_text')?->setThirdPartySetting('vale', 'enabled', FALSE)->save();
+    $this->savePage('Guide', 'We delve.', 'This is very good.');
+    $this->assertSame(['Guide > paragraph.field_text:Demo.Very:error'], $this->report());
+
+    // The page's only checked text was in its paragraphs.
+    FieldConfig::loadByName('node', 'page', 'field_content')?->delete();
+    $this->assertSame([], $this->report());
+  }
+
+  /**
    * Tests that deleting a forward draft refreshes the report.
    */
   public function testDraftDeleted(): void {
