@@ -467,6 +467,18 @@ class FieldValidationTest extends KernelTestBase {
     $child->set('field_text', 'This is very good.');
     $this->assertSame($child->getRevisionId() === $shown ? [''] : [], array_keys($this->violations($child)));
 
+    // A paragraph at level 10 is the deepest that is followed to its host.
+    $deepest = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $top = $deepest;
+    for ($i = 0; $i < 9; $i++) {
+      $top = Paragraph::create(['type' => 'docs_section', 'field_children' => [$top]]);
+    }
+    $this->page(['status' => TRUE, 'field_content' => [$top]])->save();
+    $deepest = Paragraph::load($deepest->id());
+    $this->assertInstanceOf(Paragraph::class, $deepest);
+    $deepest->set('field_text', 'This is very good.');
+    $this->assertSame([''], array_keys($this->violations($deepest)));
+
     // A paragraph nested more than 10 levels deep is not followed to its
     // host. The publishing save of the host reports it as unchecked.
     $deep = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
