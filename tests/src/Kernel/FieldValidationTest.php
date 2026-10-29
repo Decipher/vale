@@ -445,7 +445,8 @@ class FieldValidationTest extends KernelTestBase {
     FieldConfig::create(['field_name' => 'field_children', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
 
     $section = Paragraph::create(['type' => 'docs_section', 'field_children' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.'])]]);
-    $page = $this->page(['status' => TRUE, 'field_content' => [$section]]);
+    // An empty section first: the search passes over it.
+    $page = $this->page(['status' => TRUE, 'field_content' => [Paragraph::create(['type' => 'docs_section']), $section]]);
     $page->save();
     $child = Paragraph::load($section->get('field_children')->target_id);
     $this->assertInstanceOf(Paragraph::class, $child);
