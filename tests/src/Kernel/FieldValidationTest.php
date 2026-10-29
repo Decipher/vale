@@ -452,9 +452,11 @@ class FieldValidationTest extends KernelTestBase {
     $child->set('field_text', 'This is very good.');
     $this->assertSame([''], array_keys($this->violations($child)));
 
-    // A new revision of the section, saved by itself, gives the child a new
-    // revision too. The page still shows the older ones, so a change to the
-    // child's new revision is not live.
+    // A new revision of the section, saved by itself, is not what the page
+    // shows. Stable Entity Reference Revisions keeps the child's revision, so
+    // the page still shows it and the save is refused. Its development branch
+    // gives the child a new revision too, which the page does not show.
+    $shown = $child->getRevisionId();
     $section = Paragraph::load($section->id());
     $this->assertInstanceOf(Paragraph::class, $section);
     $section->setNewRevision();
@@ -462,7 +464,7 @@ class FieldValidationTest extends KernelTestBase {
     $child = Paragraph::load($child->id());
     $this->assertInstanceOf(Paragraph::class, $child);
     $child->set('field_text', 'This is very good.');
-    $this->assertSame([], $this->violations($child));
+    $this->assertSame($child->getRevisionId() === $shown ? [''] : [], array_keys($this->violations($child)));
 
     // A paragraph nested more than 10 levels deep is not followed to its
     // host. The publishing save of the host reports it as unchecked.
