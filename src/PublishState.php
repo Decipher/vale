@@ -9,9 +9,10 @@ use Drupal\content_moderation\ModerationInformationInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\workspaces\WorkspaceInformationInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -41,11 +42,14 @@ class PublishState {
    * @param \Drupal\workspaces\WorkspaceInformationInterface|null $workspaceInformation
    *   The workspace information service. Drupal 11.3 offers it; earlier
    *   versions have none, and there every publishable revision is tracked.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface|null $entityTypeManager
+   *   The entity type manager, to load the revisions a host shows.
    */
   public function __construct(
     protected ?ModerationInformationInterface $moderation = NULL,
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
     protected ?WorkspaceInformationInterface $workspaceInformation = NULL,
+    protected ?EntityTypeManagerInterface $entityTypeManager = NULL,
   ) {}
 
   /**
@@ -200,16 +204,22 @@ class PublishState {
       if ($definition->getType() !== 'entity_reference_revisions') {
         continue;
       }
-      $items = $entity->get($name);
-      if ($definition->getSetting('target_type') === $entity_type_id && in_array($revision_id, array_map(strval(...), array_column($items->getValue(), 'target_revision_id')), TRUE)) {
+      $target_type = (string) $definition->getSetting('target_type');
+      $revision_ids = array_map(strval(...), array_column($entity->get($name)->getValue(), 'target_revision_id'));
+      if ($target_type === $entity_type_id && in_array($revision_id, $revision_ids, TRUE)) {
         return TRUE;
       }
-      if ($depth + 1 < self::MAX_DEPTH && $items instanceof EntityReferenceFieldItemListInterface) {
-        foreach ($items->referencedEntities() as $target) {
-          $component = $this->component($target, $langcode);
-          if ($component instanceof ContentEntityInterface && $this->holds($component, $entity_type_id, $revision_id, $langcode, $depth + 1)) {
-            return TRUE;
-          }
+      if ($depth + 1 >= self::MAX_DEPTH || !$revision_ids || !$this->entityTypeManager) {
+        continue;
+      }
+      // The stored revision ids decide. A field item can hold an entity object
+      // that was changed and saved as a newer revision since it was loaded.
+      $storage = $this->entityTypeManager->getStorage($target_type);
+      assert($storage instanceof RevisionableStorageInterface);
+      foreach ($storage->loadMultipleRevisions($revision_ids) as $target) {
+        $component = $this->component($target, $langcode);
+        if ($component instanceof ContentEntityInterface && $this->holds($component, $entity_type_id, $revision_id, $langcode, $depth + 1)) {
+          return TRUE;
         }
       }
     }
