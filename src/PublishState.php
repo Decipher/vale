@@ -11,6 +11,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\workspaces\WorkspaceInformationInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -53,10 +54,11 @@ class PublishState {
   protected bool $inForm = FALSE;
 
   /**
-   * Notes that the request builds a form.
+   * Notes that the request builds a form for a host.
    *
-   * A form, such as the Paragraphs widget, validates a component as part of
-   * its host's form. The host's save then decides what is published.
+   * Such a form validates a component for its host, as the Paragraphs widget
+   * and the Layout Paragraphs component form do. The host's save then decides
+   * what is published.
    */
   public function setInForm(): void {
     $this->inForm = TRUE;
@@ -159,25 +161,57 @@ class PublishState {
     if ($entity instanceof EntityPublishedInterface && $this->isWorkspaceDraft($entity)) {
       return FALSE;
     }
-    $revision_id = $entity->getLoadedRevisionId();
-    // A component can be inside another component. Each one up to the host
-    // must be the revision its parent shows.
-    for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
-      $parent = method_exists($entity, 'getParentEntity') ? $entity->getParentEntity() : NULL;
-      $field = $entity->hasField('parent_field_name') ? $entity->get('parent_field_name')->value : NULL;
-      if (!$parent instanceof ContentEntityInterface || !is_string($field) || !$parent->hasField($field)) {
+    // Find the host. A component can be inside another component, so this
+    // follows the parents up. Only their ids matter here: the parents'
+    // default revisions need not be the ones the host shows.
+    $host = $entity;
+    for ($depth = 0; $this->isComponent($host); $depth++) {
+      $host = $depth < self::MAX_DEPTH && method_exists($host, 'getParentEntity') ? $host->getParentEntity() : NULL;
+      if (!$host instanceof ContentEntityInterface) {
         return FALSE;
       }
-      $reference = ['target_id' => (string) $entity->id(), 'target_revision_id' => (string) $revision_id];
-      $shown = array_filter($parent->get($field)->getValue(), static fn (array $value): bool => array_map(strval(...), array_intersect_key($value, $reference)) == $reference);
-      if (!$shown) {
-        return FALSE;
+    }
+    if ($host instanceof EntityPublishedInterface && !$host->isPublished()) {
+      return FALSE;
+    }
+    // The live revision of the host must hold the revision being saved.
+    return $this->holds($host, $entity->getEntityTypeId(), (string) $entity->getLoadedRevisionId(), $entity->language()->getId(), 0);
+  }
+
+  /**
+   * Says whether an entity holds a component revision, at any depth.
+   *
+   * @param \Drupal\Core\Entity\ContentEntityInterface $entity
+   *   The entity, in the revision to search.
+   * @param string $entity_type_id
+   *   The component's entity type.
+   * @param string $revision_id
+   *   The component's revision id.
+   * @param string $langcode
+   *   The component's language.
+   * @param int $depth
+   *   How deep the entity is.
+   *
+   * @return bool
+   *   TRUE when the revision is in the entity's components.
+   */
+  protected function holds(ContentEntityInterface $entity, string $entity_type_id, string $revision_id, string $langcode, int $depth): bool {
+    foreach ($entity->getFieldDefinitions() as $name => $definition) {
+      if ($definition->getType() !== 'entity_reference_revisions') {
+        continue;
       }
-      if (!$this->isComponent($parent)) {
-        return !$parent instanceof EntityPublishedInterface || $parent->isPublished();
+      $items = $entity->get($name);
+      if ($definition->getSetting('target_type') === $entity_type_id && in_array($revision_id, array_map(strval(...), array_column($items->getValue(), 'target_revision_id')), TRUE)) {
+        return TRUE;
       }
-      $entity = $parent;
-      $revision_id = $parent->getRevisionId();
+      if ($depth + 1 < self::MAX_DEPTH && $items instanceof EntityReferenceFieldItemListInterface) {
+        foreach ($items->referencedEntities() as $target) {
+          $component = $this->component($target, $langcode);
+          if ($component instanceof ContentEntityInterface && $this->holds($component, $entity_type_id, $revision_id, $langcode, $depth + 1)) {
+            return TRUE;
+          }
+        }
+      }
     }
     return FALSE;
   }

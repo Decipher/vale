@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\vale\Hook;
 
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Messenger\MessengerInterface;
@@ -59,19 +60,25 @@ class ValeFormHooks {
   }
 
   /**
-   * Notes that the request builds a form.
+   * Notes that the request builds a form for a host.
    *
    * It runs on every build, also for a form from the form cache, and before
-   * the form is validated. See PublishState::setInForm().
+   * the form is validated. A component's own entity form saves the component
+   * directly, so it is left out. See PublishState::setInForm().
    *
    * @param array<string, mixed> $form
    *   The form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
    *
    * @return array<string, mixed>
    *   The form.
    */
-  public function markForm(array $form): array {
-    $this->publishState->setInForm();
+  public function markForm(array $form, FormStateInterface $form_state): array {
+    $form_object = $form_state->getFormObject();
+    if (!$form_object instanceof EntityFormInterface || !$this->publishState->isComponent($form_object->getEntity())) {
+      $this->publishState->setInForm();
+    }
     return $form;
   }
 

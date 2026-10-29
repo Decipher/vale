@@ -10,12 +10,14 @@ and this project adheres to
 
 ### Fixed
 
-- In publish-only mode, a paragraph saved by itself, such as over JSON:API,
+- [#3634055](https://www.drupal.org/project/vale/issues/3634055): In
+  publish-only mode, a paragraph saved by itself, such as over JSON:API,
   could change a published page's text with an error in it. Paragraphs makes
   no new revision for such a save, so the page shows the change at once. That
   save is now refused like a publishing save.
-- `drush vale:lint` labelled a paragraph that only a newer draft holds as a
-  "(previous revision)".
+- [#3634055](https://www.drupal.org/project/vale/issues/3634055): A bundle
+  lint labelled a paragraph that only a newer draft holds as a "(previous
+  revision)".
 
 ## 1.0.0 (2026-10-28)
 

@@ -388,9 +388,16 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
     $paragraph->setNewRevision(FALSE);
 
-    // A form validates the paragraph for its host. The host's save decides.
-    $publish_state = $this->container->get('vale.publish_state');
-    $publish_state->setInForm();
+    // The paragraph's own entity form saves it directly, so it is refused.
+    $hooks = $this->container->get(ValeFormHooks::class);
+    $own_form = $this->container->get('entity_type.manager')->getFormObject('paragraph', 'default')->setEntity($paragraph);
+    $hooks->markForm([], (new FormState())->setFormObject($own_form));
+    $this->assertSame([''], array_keys($this->violations($paragraph)));
+
+    // Another form validates the paragraph for its host. The host's save
+    // decides.
+    $host_form = $this->container->get('entity_type.manager')->getFormObject('node', 'default')->setEntity($page);
+    $hooks->markForm([], (new FormState())->setFormObject($host_form));
     $this->container->get('vale.alert_collector')->reset();
     $this->assertSame([], $this->violations($paragraph));
     $this->assertSame(['paragraph.field_text:Demo.Very'], $this->collected());
@@ -444,6 +451,18 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertInstanceOf(Paragraph::class, $child);
     $child->set('field_text', 'This is very good.');
     $this->assertSame([''], array_keys($this->violations($child)));
+
+    // A new revision of the section, saved by itself, gives the child a new
+    // revision too. The page still shows the older ones, so a change to the
+    // child's new revision is not live.
+    $section = Paragraph::load($section->id());
+    $this->assertInstanceOf(Paragraph::class, $section);
+    $section->setNewRevision();
+    $section->save();
+    $child = Paragraph::load($child->id());
+    $this->assertInstanceOf(Paragraph::class, $child);
+    $child->set('field_text', 'This is very good.');
+    $this->assertSame([], $this->violations($child));
 
     // A paragraph nested more than 10 levels deep is not followed to its
     // host. The publishing save of the host reports it as unchecked.
