@@ -224,6 +224,52 @@ class JsonApiValidationTest extends BrowserTestBase {
   }
 
   /**
+   * Tests a PATCH of a paragraph that a published page shows.
+   *
+   * The PATCH makes no new paragraph revision. It would change the live page
+   * without publishing it, so publish-only mode refuses it.
+   */
+  public function testPublishOnlyParagraphPatch(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $page = $this->savedPage(['status' => TRUE, 'field_content' => [$paragraph]]);
+
+    [$status, $document] = $this->request('PATCH', 'paragraph/docs_text/' . $paragraph->uuid(), [
+      'data' => [
+        'type' => 'paragraph--docs_text',
+        'id' => $paragraph->uuid(),
+        'attributes' => ['field_text' => ['value' => 'This is very good.', 'format' => 'plain_text']],
+      ],
+    ]);
+    $this->assertSame(422, $status);
+    $this->assertSame([
+      "Entity is not valid: Text: Demo.Very: Avoid 'very'. (line 1: \"very\")",
+    ], array_column($document['errors'], 'detail'));
+
+    // The live page still shows the text it had.
+    $this->container->get('entity_type.manager')->getStorage('paragraph')->resetCache();
+    $stored = Paragraph::load($paragraph->id());
+    $this->assertInstanceOf(Paragraph::class, $stored);
+    $this->assertSame('Fine.', $stored->get('field_text')->value);
+    $this->assertSame($page->get('field_content')->target_revision_id, $stored->getRevisionId());
+
+    // Under a draft page, the same PATCH saves, and the error is in the meta.
+    $page->setUnpublished()->save();
+    [$status, $document] = $this->request('PATCH', 'paragraph/docs_text/' . $paragraph->uuid(), [
+      'data' => [
+        'type' => 'paragraph--docs_text',
+        'id' => $paragraph->uuid(),
+        'attributes' => ['field_text' => ['value' => 'This is very good.', 'format' => 'plain_text']],
+      ],
+    ]);
+    $this->assertSame(200, $status);
+    $this->assertSame(['field_text:error'], array_map(
+      static fn (array $alert): string => $alert['field'] . ':' . $alert['level'],
+      $document['meta']['vale']['alerts'],
+    ));
+  }
+
+  /**
    * Tests a write while Vale cannot be run.
    */
   public function testUnavailable(): void {

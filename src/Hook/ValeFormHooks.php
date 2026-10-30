@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Drupal\vale\Hook;
 
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
+use Drupal\vale\PublishState;
 
 /**
  * Shows authors the findings that did not stop their save.
@@ -27,10 +29,13 @@ class ValeFormHooks {
    *   The alert collector.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    *   The messenger.
+   * @param \Drupal\vale\PublishState $publishState
+   *   The publish state.
    */
   public function __construct(
     protected AlertCollector $collector,
     protected MessengerInterface $messenger,
+    protected PublishState $publishState,
   ) {}
 
   /**
@@ -50,7 +55,31 @@ class ValeFormHooks {
    */
   #[Hook('form_alter')]
   public function formAlter(array &$form, FormStateInterface $form_state, string $form_id): void {
+    $form['#after_build'][] = [$this, 'markForm'];
     $form['#validate'][] = [$this, 'showAlerts'];
+  }
+
+  /**
+   * Notes that the request builds a form for a host.
+   *
+   * It runs on every build, also for a form from the form cache, and before
+   * the form is validated. A component's own entity form saves the component
+   * directly, so it is left out. See PublishState::setInForm().
+   *
+   * @param array<string, mixed> $form
+   *   The form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return array<string, mixed>
+   *   The form.
+   */
+  public function markForm(array $form, FormStateInterface $form_state): array {
+    $form_object = $form_state->getFormObject();
+    if (!$form_object instanceof EntityFormInterface || !$this->publishState->isComponent($form_object->getEntity())) {
+      $this->publishState->setInForm();
+    }
+    return $form;
   }
 
   /**

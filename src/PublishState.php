@@ -9,6 +9,8 @@ use Drupal\content_moderation\ModerationInformationInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityPublishedInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
@@ -26,6 +28,11 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 class PublishState {
 
   /**
+   * How deep components are followed up to their host.
+   */
+  private const int MAX_DEPTH = 10;
+
+  /**
    * Constructs a PublishState.
    *
    * @param \Drupal\content_moderation\ModerationInformationInterface|null $moderation
@@ -35,12 +42,47 @@ class PublishState {
    * @param \Drupal\workspaces\WorkspaceInformationInterface|null $workspaceInformation
    *   The workspace information service. Drupal 11.3 offers it; earlier
    *   versions have none, and there every publishable revision is tracked.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface|null $entityTypeManager
+   *   The entity type manager, to load the revisions a host shows.
    */
   public function __construct(
     protected ?ModerationInformationInterface $moderation = NULL,
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
     protected ?WorkspaceInformationInterface $workspaceInformation = NULL,
+    protected ?EntityTypeManagerInterface $entityTypeManager = NULL,
   ) {}
+
+  /**
+   * Whether the request builds a form.
+   */
+  protected bool $inForm = FALSE;
+
+  /**
+   * Notes that the request builds a form for a host.
+   *
+   * Such a form validates a component for its host, as the Paragraphs widget
+   * and the Layout Paragraphs component form do. The host's save then decides
+   * what is published.
+   */
+  public function setInForm(): void {
+    $this->inForm = TRUE;
+  }
+
+  /**
+   * Says whether a save publishes, in the sense of publish-only mode.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity being saved.
+   *
+   * @return bool
+   *   TRUE when the save makes the entity's text public.
+   */
+  public function isPublishingSave(EntityInterface $entity): bool {
+    if ($this->isComponent($entity)) {
+      return $this->isLiveRewrite($entity);
+    }
+    return $this->isBeingPublished($entity);
+  }
 
   /**
    * Says whether a save would publish an entity.
@@ -103,10 +145,93 @@ class PublishState {
   }
 
   /**
+   * Says whether a component's own save changes published text.
+   *
+   * A component is usually published by its host. But a component saved by
+   * itself, such as over JSON:API, often makes no new revision. Then the save
+   * changes the revision that the host's live revision shows. That save
+   * publishes the text.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The component being saved.
+   *
+   * @return bool
+   *   TRUE when the save changes a revision that published content shows.
+   */
+  protected function isLiveRewrite(EntityInterface $entity): bool {
+    if ($this->inForm || !$entity instanceof ContentEntityInterface || $entity->isNew() || $entity->isNewRevision()) {
+      return FALSE;
+    }
+    if ($entity instanceof EntityPublishedInterface && $this->isWorkspaceDraft($entity)) {
+      return FALSE;
+    }
+    // Find the host. A component can be inside another component, so this
+    // follows the parents up. Only their ids matter here: the parents'
+    // default revisions need not be the ones the host shows.
+    $host = $entity;
+    for ($depth = 0; $this->isComponent($host); $depth++) {
+      $host = $depth < self::MAX_DEPTH && method_exists($host, 'getParentEntity') ? $host->getParentEntity() : NULL;
+      if (!$host instanceof ContentEntityInterface) {
+        return FALSE;
+      }
+    }
+    if ($host instanceof EntityPublishedInterface && !$host->isPublished()) {
+      return FALSE;
+    }
+    // The live revision of the host must hold the revision being saved.
+    return $this->holds($host, $entity->getEntityTypeId(), (string) $entity->getLoadedRevisionId(), $entity->language()->getId(), 0);
+  }
+
+  /**
+   * Says whether an entity holds a component revision, at any depth.
+   *
+   * @param \Drupal\Core\Entity\ContentEntityInterface $entity
+   *   The entity, in the revision to search.
+   * @param string $entity_type_id
+   *   The component's entity type.
+   * @param string $revision_id
+   *   The component's revision id.
+   * @param string $langcode
+   *   The component's language.
+   * @param int $depth
+   *   How deep the entity is.
+   *
+   * @return bool
+   *   TRUE when the revision is in the entity's components.
+   */
+  protected function holds(ContentEntityInterface $entity, string $entity_type_id, string $revision_id, string $langcode, int $depth): bool {
+    foreach ($entity->getFieldDefinitions() as $name => $definition) {
+      if ($definition->getType() !== 'entity_reference_revisions') {
+        continue;
+      }
+      $target_type = (string) $definition->getSetting('target_type');
+      $revision_ids = array_map(strval(...), array_column($entity->get($name)->getValue(), 'target_revision_id'));
+      if ($target_type === $entity_type_id && in_array($revision_id, $revision_ids, TRUE)) {
+        return TRUE;
+      }
+      if ($depth + 1 >= self::MAX_DEPTH || !$revision_ids || !$this->entityTypeManager) {
+        continue;
+      }
+      // The stored revision ids decide. A field item can hold an entity object
+      // that was changed and saved as a newer revision since it was loaded.
+      $storage = $this->entityTypeManager->getStorage($target_type);
+      assert($storage instanceof RevisionableStorageInterface);
+      foreach ($storage->loadMultipleRevisions($revision_ids) as $target) {
+        $component = $this->component($target, $langcode);
+        if ($component instanceof ContentEntityInterface && $this->holds($component, $entity_type_id, $revision_id, $langcode, $depth + 1)) {
+          return TRUE;
+        }
+      }
+    }
+    return FALSE;
+  }
+
+  /**
    * Says whether an entity is a component of another, such as a paragraph.
    *
-   * A component is published by its host. Its own save is never the moment
-   * of publishing.
+   * A component is published by its host. Its own save is the moment of
+   * publishing only when it changes the revision the host shows. See
+   * isLiveRewrite().
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity.
