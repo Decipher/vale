@@ -114,8 +114,8 @@ final class CheckProseAction extends ActionBase implements ContainerFactoryPlugi
   /**
    * {@inheritdoc}
    */
-  public function execute(mixed $entity = NULL): void {
-    $this->executeMultiple([$entity]);
+  public function execute(?object $object = NULL): void {
+    $this->executeMultiple([$object]);
   }
 
   /**
