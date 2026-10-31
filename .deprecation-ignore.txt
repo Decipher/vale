@@ -1,0 +1,19 @@
+# Deprecations that the phpunit jobs ignore, in addition to the ones core
+# ignores. CI joins this file to core/.deprecation-ignore.txt, because a
+# project ignore file replaces core's.
+#
+# Paragraphs and Entity Reference Revisions are test-only dependencies of vale.
+# Remove each pattern when its upstream issue is in a release.
+
+# Native return types, from the DebugClassLoader.
+# Paragraphs: https://www.drupal.org/i/3615094
+# Entity Reference Revisions: https://www.drupal.org/i/3597771
+%might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drupal\\(paragraphs|entity_reference_revisions)\\%
+
+# paragraphs.install calls module_set_weight(). vale does not.
+# https://www.drupal.org/i/3615094
+%^module_set_weight\(\) is deprecated in drupal:11\.5\.0%
+
+# The spaceless filter in a Paragraphs template.
+# https://www.drupal.org/i/3561807
+%Twig Filter "spaceless" is deprecated in .+/paragraphs/templates/%
