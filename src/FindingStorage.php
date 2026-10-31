@@ -132,8 +132,9 @@ class FindingStorage {
       $transaction->rollBack();
       throw $e;
     }
-    // Drupal 11.5 deprecates a commit by unset(). Older versions have no
-    // commitOrRelease().
+    // Drupal 11.5 deprecates a commit by unset(). commitOrRelease() is in
+    // Drupal 11.3 and later only.
+    // @phpstan-ignore function.alreadyNarrowedType (Not true before Drupal 11.3.)
     if (method_exists($transaction, 'commitOrRelease')) {
       $transaction->commitOrRelease();
     }
