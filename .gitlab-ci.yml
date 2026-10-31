@@ -67,13 +67,19 @@ phpstan:
 
 # Core reads one deprecation ignore file, so the phpunit jobs join core's file
 # and the project's .deprecation-ignore.txt into one.
-# Core 11.5 deprecates SYMFONY_DEPRECATIONS_HELPER whenever it is set, even to
-# the template's 'disabled', so it is unset here. A job variable cannot unset
-# it. DRUPAL_DEPRECATION_FILTER_CONFIG points core at the joined file instead.
+# Core 11.4 and older read the file from SYMFONY_DEPRECATIONS_HELPER. Core 11.5
+# and later read it from DRUPAL_DEPRECATION_FILTER_CONFIG, and deprecate
+# SYMFONY_DEPRECATIONS_HELPER whenever it is set, so there it is unset. A job
+# variable cannot unset it.
 .deprecation-ignores: &deprecation-ignores
   - |
-    cat "$CI_PROJECT_DIR/$_WEB_ROOT/core/.deprecation-ignore.txt" "$CI_PROJECT_DIR/.deprecation-ignore.txt" > "$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"
-    unset SYMFONY_DEPRECATIONS_HELPER
+    IGNORES="$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"
+    cat "$CI_PROJECT_DIR/$_WEB_ROOT/core/.deprecation-ignore.txt" "$CI_PROJECT_DIR/.deprecation-ignore.txt" > "$IGNORES"
+    if grep -q DRUPAL_DEPRECATION_FILTER_CONFIG "$CI_PROJECT_DIR/$_WEB_ROOT/core/tests/Drupal/TestTools/Extension/DeprecationBridge/DeprecationHandler.php"; then
+      unset SYMFONY_DEPRECATIONS_HELPER
+    else
+      export SYMFONY_DEPRECATIONS_HELPER="ignoreFile=$IGNORES"
+    fi
 
 phpunit:
   before_script:
