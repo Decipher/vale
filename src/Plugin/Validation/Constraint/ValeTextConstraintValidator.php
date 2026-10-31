@@ -67,10 +67,11 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     // In publish-only mode an error stops only the save that publishes, and
     // ValeTree reports it on the entity rather than here. JSON:API drops
     // field violations for fields a PATCH does not name, so a PATCH that only
-    // publishes would never see them. A component is never published by its
-    // own save, so its errors are reported when its host is published.
+    // publishes would never see them. A component is usually published by its
+    // host, so its errors are reported when its host is published. But a
+    // component saved by itself can change the text its host shows.
     $publish_only = (bool) $this->configFactory->get('vale.settings')->get('publish_only');
-    $publishing = $publish_only && !$this->publishState->isComponent($entity) && $this->publishState->isBeingPublished($entity);
+    $publishing = $publish_only && $this->publishState->isPublishingSave($entity);
     // With fail_closed, text Vale could not check is refused as an error is.
     $fail_closed = (bool) $this->configFactory->get('vale.settings')->get('fail_closed');
 

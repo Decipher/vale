@@ -167,6 +167,27 @@ class ContentWalkerTest extends KernelTestBase {
   }
 
   /**
+   * Tests the label of a paragraph that only a newer draft holds.
+   *
+   * Paragraphs labels such a paragraph a "previous revision", as it compares
+   * it with the host's default revision. The draft is the revision linted.
+   */
+  public function testDraftParagraphLabel(): void {
+    $page = $this->savePage(['title' => 'First', 'field_text' => 'Fine.']);
+    $page->setNewRevision();
+    $page->isDefaultRevision(FALSE);
+    $page->set('field_content', [Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.'])]);
+    $page->save();
+
+    $walker = $this->container->get('vale.content_walker');
+    foreach (['node' => 'page', 'paragraph' => 'docs_text'] as $entity_type => $bundle) {
+      $findings = $walker->bundle($entity_type, $bundle);
+      $this->assertCount(1, $findings);
+      $this->assertSame('First > Content', $findings[0]->label);
+    }
+  }
+
+  /**
    * Tests that a value Vale could not check is a finding of its own.
    */
   public function testUnchecked(): void {

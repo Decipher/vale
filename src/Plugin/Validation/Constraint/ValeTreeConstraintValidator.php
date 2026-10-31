@@ -69,8 +69,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       !$value instanceof FieldableEntityInterface
       || !$constraint instanceof ValeTreeConstraint
       || !$this->configFactory->get('vale.settings')->get('publish_only')
-      || $this->publishState->isComponent($value)
-      || !$this->publishState->isBeingPublished($value)
+      || !$this->publishState->isPublishingSave($value)
     ) {
       return;
     }
