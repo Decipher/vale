@@ -39,7 +39,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
   /**
    * The output style, built on first use.
    */
-  private ?DrushStyle $style = NULL;
+  private ?DrushStyle $drushStyle = NULL;
 
   /**
    * Constructs a ValeCommands.
@@ -467,7 +467,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    *   The style for this command's input and output.
    */
   private function style(): DrushStyle {
-    return $this->style ??= new DrushStyle($this->input(), $this->output());
+    return $this->drushStyle ??= new DrushStyle($this->input(), $this->output());
   }
 
   /**
