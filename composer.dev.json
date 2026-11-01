@@ -31,6 +31,12 @@
         }
     },
     "extra": {
+        "drupal-lenient": {
+            "allowed-list": [
+                "drupal/entity_reference_revisions",
+                "drupal/paragraphs"
+            ]
+        },
         "eddy": {
             "drupal-version": "11",
             "version": "5.0.0"

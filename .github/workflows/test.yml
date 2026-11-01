@@ -82,6 +82,15 @@ jobs:
           key: ${{ runner.os }}-composer-${{ matrix.name }}-${{ steps.composer-cache.outputs.month }}-${{ hashFiles('composer.json', 'composer.dev.json') }}
           restore-keys: ${{ runner.os }}-composer-${{ matrix.name }}-
 
+      # Paragraphs and Entity Reference Revisions, which only the tests use,
+      # do not declare Drupal 12 support yet. The lenient plugin lets Composer
+      # install them anyway, for the packages composer.dev.json lists. It has
+      # to be a global plugin, because assemble resolves the build in one run.
+      - name: Install the lenient Composer plugin
+        run: |
+          composer global config --no-plugins allow-plugins.mglaman/composer-drupal-lenient true
+          composer global require mglaman/composer-drupal-lenient
+
       - name: Install the tooling
         run: ./scripts/eddy-tooling
         env:
@@ -221,6 +230,15 @@ jobs:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ matrix.name }}-${{ steps.composer-cache.outputs.month }}-${{ hashFiles('composer.json', 'composer.dev.json') }}
           restore-keys: ${{ runner.os }}-composer-${{ matrix.name }}-
+
+      # Paragraphs and Entity Reference Revisions, which only the tests use,
+      # do not declare Drupal 12 support yet. The lenient plugin lets Composer
+      # install them anyway, for the packages composer.dev.json lists. It has
+      # to be a global plugin, because assemble resolves the build in one run.
+      - name: Install the lenient Composer plugin
+        run: |
+          composer global config --no-plugins allow-plugins.mglaman/composer-drupal-lenient true
+          composer global require mglaman/composer-drupal-lenient
 
       - name: Install the tooling
         run: ./scripts/eddy-tooling
