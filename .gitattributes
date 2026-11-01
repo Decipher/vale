@@ -6,6 +6,7 @@ CLAUDE.md          export-ignore
 .ahoy.yml          export-ignore
 .circleci          export-ignore
 .cspell.json       export-ignore
+.deprecation-ignore.txt export-ignore
 .devtools          export-ignore
 .editorconfig      export-ignore
 .gitattributes     export-ignore

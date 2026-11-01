@@ -1,0 +1,37 @@
+# Deprecations that the phpunit jobs ignore, in addition to the ones core
+# ignores. CI joins this file to core/.deprecation-ignore.txt, because a
+# project ignore file replaces core's.
+#
+# Paragraphs and Entity Reference Revisions are test-only dependencies of vale.
+# Remove each pattern when its upstream issue is in a release.
+
+# Native return types, from the DebugClassLoader.
+# Paragraphs: https://www.drupal.org/i/3615094
+# Entity Reference Revisions: https://www.drupal.org/i/3597771
+%might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drupal\\(paragraphs|entity_reference_revisions)\\%
+
+# paragraphs.install calls module_set_weight(). vale does not.
+# https://www.drupal.org/i/3615094
+%^module_set_weight\(\) is deprecated in drupal:11\.5\.0%
+
+# The spaceless filter in a Paragraphs template.
+# https://www.drupal.org/i/3561807
+%Twig Filter "spaceless" is deprecated in .+/paragraphs/templates/%
+
+# paragraphs_module_implements_alter() has no #[LegacyModuleImplementsAlter].
+# https://www.drupal.org/i/3618756
+%^paragraphs_module_implements_alter without a #\[LegacyModuleImplementsAlter\] attribute is deprecated%
+
+# entity_reference_revisions.views.inc, and the views_field_default_views_data()
+# call in it. vale does not call that function.
+# https://www.drupal.org/i/3597771
+%^Autoloading hooks in the file \(modules/contrib/entity_reference_revisions/entity_reference_revisions\.views\.inc\) is deprecated%
+%^views_field_default_views_data\(\) is deprecated in drupal:11\.2\.0%
+
+# Drush's own classes, from the DebugClassLoader. They are Drush's to fix.
+%might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drush\\%
+
+# vale's own view. Drupal 11.2 adds a table CSS class to a view without one,
+# with this deprecation. Drupal 10's schema has no such key, so the view
+# cannot carry it while vale supports Drupal 10.
+%^The update to add a default table CSS class for view "vale_findings" is deprecated in drupal:11\.2\.0%

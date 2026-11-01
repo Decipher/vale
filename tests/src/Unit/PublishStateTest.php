@@ -34,7 +34,7 @@ class PublishStateTest extends UnitTestCase {
    *   The manager.
    */
   private function manager(bool $active): WorkspaceManagerInterface {
-    $manager = $this->createMock(WorkspaceManagerInterface::class);
+    $manager = $this->createStub(WorkspaceManagerInterface::class);
     $manager->method('hasActiveWorkspace')->willReturn($active);
     return $manager;
   }
@@ -49,7 +49,7 @@ class PublishStateTest extends UnitTestCase {
    *   The information service.
    */
   private function information(bool $tracked): WorkspaceInformationInterface {
-    $information = $this->createMock(WorkspaceInformationInterface::class);
+    $information = $this->createStub(WorkspaceInformationInterface::class);
     $information->method('isEntitySupported')->willReturn($tracked);
     return $information;
   }
@@ -64,9 +64,9 @@ class PublishStateTest extends UnitTestCase {
    *   The node.
    */
   private function node(bool $revisionable): NodeInterface {
-    $entity_type = $this->createMock(EntityTypeInterface::class);
+    $entity_type = $this->createStub(EntityTypeInterface::class);
     $entity_type->method('isRevisionable')->willReturn($revisionable);
-    $node = $this->createMock(NodeInterface::class);
+    $node = $this->createStub(NodeInterface::class);
     $node->method('getEntityType')->willReturn($entity_type);
     $node->method('isPublished')->willReturn(TRUE);
     $node->method('isNew')->willReturn(FALSE);
