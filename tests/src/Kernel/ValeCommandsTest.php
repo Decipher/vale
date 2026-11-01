@@ -167,6 +167,34 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
+   * Tests that vale:sync runs Vale's sync and reports the rules loaded.
+   */
+  public function testSync(): void {
+    $commands = $this->commands();
+    $output = new BufferedOutput();
+    $commands->setInput(new ArrayInput([]));
+    $commands->setOutput($output);
+    $this->assertSame(0, $commands->sync()->getExitCode());
+    $text = $output->fetch();
+    $this->assertStringContainsString('Synced 1 package(s)', $text);
+    $this->assertStringContainsString('3 rules', $text);
+
+    // A sync that Vale cannot finish, such as with no network, fails.
+    $_ENV['FAKE_SYNC_FAIL'] = '1';
+    try {
+      $commands->setOutput($output);
+      $this->assertSame(1, $commands->sync()->getExitCode());
+      $this->assertStringContainsString('could not fetch', $output->fetch());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_FAIL']);
+    }
+
+    $this->setSetting('vale_binary', NULL);
+    $this->assertSame(1, $this->commands()->sync()->getExitCode());
+  }
+
+  /**
    * Tests vale:check.
    */
   public function testCheck(): void {
@@ -260,7 +288,7 @@ class ValeCommandsTest extends KernelTestBase {
       }
     }
     sort($commands);
-    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status'], $commands);
+    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status', 'vale:sync'], $commands);
   }
 
 }
