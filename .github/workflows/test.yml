@@ -31,6 +31,10 @@ jobs:
             php-version: 8.5
             drupal-version: 11
 
+          - name: lint-d12
+            php-version: 8.5
+            drupal-version: 12
+
     name: ${{ matrix.name }}
 
     env:
@@ -55,20 +59,36 @@ jobs:
         run: npm run lint-spell
         continue-on-error: ${{ vars.CI_CSPELL_IGNORE_FAILURE == '1' }}
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: /tmp/composer-cache
-          key: ${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php-version }}
           extensions: gd, sqlite, pdo_sqlite
 
+      - name: Prepare Composer cache
+        id: composer-cache
+        run: |
+          {
+            echo "dir=$(composer config cache-files-dir)"
+            echo "month=$(date -u +%Y-%m)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Builds resolve without a lock file, so the key changes monthly to also
+      # cache newer releases.
+      - name: Cache Composer dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ matrix.name }}-${{ steps.composer-cache.outputs.month }}-${{ hashFiles('composer.json', 'composer.dev.json') }}
+          restore-keys: ${{ runner.os }}-composer-${{ matrix.name }}-
+
+      - name: Install the tooling
+        run: ./scripts/eddy-tooling
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Assemble the codebase
-        run: .devtools/assemble
+        run: vendor/bin/eddy-assemble
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -86,8 +106,6 @@ jobs:
         working-directory: build
         run: vendor/bin/rector --clear-cache --dry-run
         continue-on-error: ${{ vars.CI_RECTOR_IGNORE_FAILURE == '1' }}
-
-
 
   test:
     runs-on: ubuntu-26.04
@@ -125,11 +143,22 @@ jobs:
             drupal-version: 11@beta
             stability: canary
 
-    services:
-      chrome:
-        image: selenium/standalone-chromium:latest@sha256:c7c17cd79c62819a8329df00e610dbc4073c279da034a6f37135d454eb0d8870
-        ports:
-          - 4444:4444
+          - name: test-php-min-d12-stable
+            php-version: 8.5
+            drupal-version: 12
+
+          - name: test-php-max-d12-stable
+            php-version: 8.5
+            drupal-version: 12
+
+          - name: test-php-min-d12-legacy
+            php-version: 8.5
+            drupal-version: 12.0.0
+
+          - name: test-php-max-d12-canary
+            php-version: 8.5
+            drupal-version: 12@beta
+            stability: canary
 
     name: ${{ matrix.name }}
 
@@ -147,12 +176,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: /tmp/composer-cache
-          key: ${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
 
       - name: Upgrade sqlite3
         run: |
@@ -173,8 +196,8 @@ jobs:
           # Tests run with assertions, as Drupal's own CI does.
           ini-values: zend.assertions=1
 
-      # Disable Symfony deprecations helper for PHP 8.4+ until minor
-      # versions of Drupal 10 and 11 fully support newer PHP versions.
+      # Disable Symfony deprecations helper for PHP 8.4+ until every tested
+      # Drupal version fully supports newer PHP versions.
       # @see https://www.drupal.org/project/drupal/issues/1267246
       - name: Update SYMFONY_DEPRECATIONS_HELPER for PHP 8.4+
         run: |
@@ -182,19 +205,40 @@ jobs:
             echo "SYMFONY_DEPRECATIONS_HELPER=disabled" >> "$GITHUB_ENV"
           fi
 
+      - name: Prepare Composer cache
+        id: composer-cache
+        run: |
+          {
+            echo "dir=$(composer config cache-files-dir)"
+            echo "month=$(date -u +%Y-%m)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Builds resolve without a lock file, so the key changes monthly to also
+      # cache newer releases.
+      - name: Cache Composer dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ matrix.name }}-${{ steps.composer-cache.outputs.month }}-${{ hashFiles('composer.json', 'composer.dev.json') }}
+          restore-keys: ${{ runner.os }}-composer-${{ matrix.name }}-
+
+      - name: Install the tooling
+        run: ./scripts/eddy-tooling
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Assemble the codebase
-        run: .devtools/assemble
+        run: vendor/bin/eddy-assemble
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start built-in PHP server
-        run: .devtools/start
+        run: vendor/bin/eddy-start
         env:
           WEBSERVER_HOST: 0.0.0.0
 
       - name: Provision site
-        run: .devtools/provision
-
+        run: vendor/bin/eddy-provision
 
       - name: Run tests
         if: ${{ env.CI_IS_PHPUNIT_RUNNER == 'true' }}
@@ -204,7 +248,6 @@ jobs:
         env:
           BROWSERTEST_OUTPUT_DIRECTORY: ../.logs/browser_output
           SIMPLETEST_DB: sqlite://tmp/db.sqlite
-          WEBDRIVER_BACKEND: selenium
 
       - name: Upload browser output as an artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

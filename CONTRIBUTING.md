@@ -1,37 +1,50 @@
 # Contributing
 
-This document explains how to set up a local development environment, build
-the site, check coding standards, and run the tests for this extension.
+This document explains how to set up a local development environment, build the site, check coding standards, and run the tests for this extension.
 
 ## Local development
 
 1. Install PHP with SQLite support and Composer
+   - Install Node.js with npm, which the build and the linters use
+   - Install [Ahoy](https://github.com/ahoy-cli/ahoy)
 2. Clone this repository
-3. Run `make build` or `ahoy build`
+3. Build the website:
+
+   ```bash
+   make build
+   ```
+
+   ```bash
+   ahoy build
+   ```
 
 ## Building website
 
-`make build` or `ahoy build` assembles the codebase, starts the PHP server
-and provisions the Drupal website with this extension enabled. These operations
-are executed using scripts within [`.devtools`](.devtools) directory. CI uses
-the same scripts to build and test this extension.
+Building the website assembles the codebase, starts the PHP server and provisions the Drupal website with this extension enabled. These operations are run by the commands of the [`drevops/eddy-tooling`](https://github.com/drevops/eddy-tooling) package, which `scripts/eddy-tooling` installs into `vendor/`. CI uses the same commands to build and test this extension.
 
-The resulting codebase is then placed in the `build` directory. The extension
-files are symlinked into the Drupal site structure.
+Never modify `scripts/eddy-tooling`, by hand or with AI: it comes from Eddy as-is, and a scaffold update replaces it with the release's copy. To change what a tooling command does, declare a patch for the package (see [Patching dependencies](#patching-dependencies)).
+
+The package version is set in `composer.dev.json`. The installer runs Composer only when that version, the patches declared for the package or the contents of a local patch file change, or when one of its commands is missing from `vendor/bin`, so a newer patch release reaches a local checkout once `vendor/` is removed.
+
+The resulting codebase is then placed in the `build` directory. The extension files are symlinked into the Drupal site structure. A PHP server that still serves an earlier build is stopped before the codebase is replaced.
 
 The `build` command is a wrapper for more granular commands:
+
 ```bash
 make assemble     # Assemble the codebase
 make start        # Start the PHP server
 make provision    # Provision the Drupal website
+```
 
+```bash
 ahoy assemble     # Assemble the codebase
 ahoy start        # Start the PHP server
 ahoy provision    # Provision the Drupal website
 ```
 
-The `provision` command is useful for re-installing the Drupal website without
-re-assembling the codebase.
+The `provision` command is useful for re-installing the Drupal website without re-assembling the codebase.
+
+The `info` command prints a read-only summary of the environment, such as the PHP, Drupal and Drush versions, the site URL and the database path. The `reset` command stops the development server and removes the `build`, `.logs` and `vendor` directories.
 
 The provisioned site also applies `recipes/dev_content`, which creates a
 **Page** content type whose body is checked with Vale — create a Page or
@@ -42,59 +55,81 @@ to skip either.
 
 ### Drupal versions
 
-The Drupal version used for the codebase assembly is determined by the
-`DRUPAL_VERSION` variable and defaults to the latest stable version.
+The Drupal version used for the codebase assembly is determined by the `DRUPAL_VERSION` variable and defaults to `extra.eddy.drupal-version` in `composer.dev.json`, the newest Drupal major this extension targets that has a stable release.
 
-You can specify a different version by setting the `DRUPAL_VERSION` environment
-variable before running the `make build` or `ahoy build` command:
+You can specify a different version by setting the `DRUPAL_VERSION` environment variable when building the website:
 
 ```bash
-DRUPAL_VERSION=11 make build        # Drupal 11
-DRUPAL_VERSION=11@alpha make build  # Drupal 11 alpha
-DRUPAL_VERSION=10@beta make build   # Drupal 10 beta
-DRUPAL_VERSION=11.1 make build      # Drupal 11.1
+# Newest stable Drupal 11 release.
+DRUPAL_VERSION=11 make build
+
+# Newest Drupal 11.1.x patch release.
+DRUPAL_VERSION=11.1.0 make build
+
+# Newest Drupal 11 beta, release candidate or stable release.
+DRUPAL_VERSION=11@beta make build
+
+# Newest stable Drupal 12 release, or newest pre-release if none.
+DRUPAL_VERSION=12 make build
 ```
 
-The `minimum-stability` setting in the `composer.json` file is
-automatically adjusted to match the specified Drupal version's stability.
+```bash
+# Newest stable Drupal 11 release.
+DRUPAL_VERSION=11 ahoy build
+
+# Newest Drupal 11.1.x patch release.
+DRUPAL_VERSION=11.1.0 ahoy build
+
+# Newest Drupal 11 beta, release candidate or stable release.
+DRUPAL_VERSION=11@beta ahoy build
+
+# Newest stable Drupal 12 release, or newest pre-release if none.
+DRUPAL_VERSION=12 ahoy build
+```
+
+The build pins Drupal core to the newest release matching `DRUPAL_VERSION` and prints it. A version with no stable release yet resolves to its newest pre-release. When that release requires a newer PHP than the one running the build, the build stops before it changes anything and says which PHP the release needs.
+
+Every other dependency installs its most stable release that supports that core and the PHP running the build, or the `config.platform.php` that `composer.dev.json` or `composer.json` sets, even when the global Composer configuration sets its own. A dependency falls back to a pre-release or a development branch only when no stable release fits, and the build output lists every dependency installed from a development branch.
 
 ### Patching dependencies
 
-To apply patches to the dependencies, add a patch to the `patches` section of
-`composer.json`. Local patches are sourced from the `patches` directory.
+The build installs [`cweagans/composer-patches`](https://github.com/cweagans/composer-patches) 2.x and applies the patches declared in the `patches` section of `composer.dev.json` or `composer.json`. Keep local patch files in the `patches` directory and reference them from `composer.dev.json` by their path:
+
+```json
+"extra": {
+    "patches": {
+        "drupal/core": {
+            "Describe what the patch fixes": "patches/core-fix.patch"
+        }
+    }
+}
+```
+
+A patch that no longer applies fails the build. Patches declared for `drevops/eddy-tooling` don't reach the build: `scripts/eddy-tooling` applies them when it installs the tooling into `vendor/`.
+
+`composer.json` ships with the extension, so composer-patches 2.x on a site that installs the extension applies its patches too. Reference patches declared there by a public URL, since a local `patches/` path doesn't exist on that site.
 
 ### Providing `GITHUB_TOKEN`
 
-To overcome GitHub API rate limits, you may provide a `GITHUB_TOKEN` environment
-variable with a personal access token.
+To overcome GitHub API rate limits, you may provide a `GITHUB_TOKEN` environment variable with a personal access token. The build passes it to its own Composer commands through `COMPOSER_AUTH`, so the global Composer configuration stays as it is.
 
 ### Provisioning the website
 
-The `provision` command installs the Drupal website from the `standard`
-profile with the extension (and any `suggest`'ed extensions) enabled. The
-profile can be changed by setting the `DRUPAL_PROFILE` environment variable.
+The `provision` command installs the Drupal website from the `standard` profile with the extension (and any `drupal/*` modules and themes in `suggest`) enabled. The profile can be changed by setting the `DRUPAL_PROFILE` environment variable.
 
-The website will be available at http://localhost:8000 by default. The
-hostname can be changed by setting the `WEBSERVER_HOST` environment variable.
+The website is served at `http://localhost:8000`, or at the first free port up to 8099 when another process uses 8000, as described below, and the `start` command prints the URL. The hostname can be changed by setting the `WEBSERVER_HOST` environment variable.
 
 The `WEBSERVER_PORT` is resolved with the following precedence:
 
-1. **`WEBSERVER_PORT` exported in the shell** - used as-is. Useful for one-off
-   runs: `WEBSERVER_PORT=9000 make build`.
-2. **`WEBSERVER_PORT` line in the project-root `.env` file** - used as-is.
-   The `start` script does not modify `.env` when this entry is already
-   present, so the same port is reused across `start`, `stop`, `provision`,
-   `drush` and `login` commands.
-3. **Neither is set** - the `start` script discovers the first free port in
-   the range `8000-8099` and writes it to `.env` as `WEBSERVER_PORT=NNNN`.
-   Subsequent commands read this value from `.env`.
+1. **`WEBSERVER_PORT` exported in the shell** - used as-is. Useful for one-off runs: prefix a command with `WEBSERVER_PORT=9000`.
+2. **`WEBSERVER_PORT` line in the project-root `.env` file** - used as-is. The `start` script does not modify `.env` when this entry is already present, so the same port is reused across `start`, `stop`, `provision`, `drush` and `login` commands.
+3. **Neither is set** - the `start` script discovers the first free port in the range `8000-8099` and writes it to `.env` as `WEBSERVER_PORT=NNNN`. Subsequent commands read this value from `.env`.
 
-To force re-discovery, delete `.env` (or just the `WEBSERVER_PORT` line in
-it) and re-run `make start` / `ahoy start`.
+To force re-discovery, delete `.env` (or just the `WEBSERVER_PORT` line in it) and re-run the `start` command.
 
-An SQLite database is created in `/tmp/site_vale.sqlite` file.
-You can browse the contents of the created SQLite database using
-[DB Browser for SQLite](https://sqlitebrowser.org/).
+The `assemble`, `start` and `stop` commands only stop the webserver that serves the project's own `build/web`. When another process holds the port, such as the server of another project that recorded the same port, `assemble` and `stop` leave it running and `start` fails and names it. Stop that process, or set `WEBSERVER_PORT` in `.env` to a free port.
+
+An SQLite database is created in `/tmp/site_vale.sqlite` file. You can browse the contents of the created SQLite database using [DB Browser for SQLite](https://sqlitebrowser.org/).
 
 A one-time login link will be printed to the console.
 
@@ -103,106 +138,106 @@ A one-time login link will be printed to the console.
 PHP step-debugging is supported via [XDebug](https://xdebug.org/docs/install). Install the XDebug PHP extension on your host (`php -v` should mention `with Xdebug`), then toggle it on the development server:
 
 ```bash
-make debug      # restart with XDebug enabled (aliases: debug-on, xdebug, xdebug-on)
-ahoy debug      # same, with ahoy
-
-make start      # restart without XDebug (aliases: debug-off, xdebug-off)
-ahoy start      # same, with ahoy
+make debug      # restart with XDebug enabled
+make start      # restart without XDebug
 ```
 
-The `debug` command probes the running PHP server's command line for `xdebug.mode=debug` and skips the restart if XDebug is already enabled. Code coverage stays on [pcov](https://github.com/krakjoe/pcov) because `xdebug.mode=debug` does not include `coverage`.
+```bash
+ahoy debug      # restart with XDebug enabled
+ahoy start      # restart without XDebug
+```
+
+`debug` is also available as `debug-on`, `xdebug` and `xdebug-on`, and `start` as `debug-off` and `xdebug-off`.
+
+The `debug` command probes the running PHP server's command line for `xdebug.mode=debug` and skips the restart if XDebug is already enabled.
+
+Code coverage stays on [pcov](https://github.com/krakjoe/pcov) because the XDebug settings apply only to the development server, not to the test commands.
 
 To start and stop debug sessions from the browser, install the Xdebug Helper extension: [Chrome](https://chromewebstore.google.com/detail/xdebug-helper-by-jetbrain/aoelhdemabeimdhedkidlnbkfhnhgnhm) / [Firefox](https://addons.mozilla.org/en-US/firefox/addon/xdebug-helper-by-jetbrains/).
 
 ## Coding standards
 
-The `make lint` or `ahoy lint` command checks the codebase using multiple
-tools:
-- PHP code standards checking against `Drupal` and `DrupalPractice` standards.
+The codebase is checked using multiple tools:
+- PHP code standards checking against `Drupal`, `DrupalPractice`, `DrevOps` and `PHPCompatibility` standards.
 - PHP code static analysis with PHPStan.
 - PHP deprecated code analysis and auto-fixing with Drupal Rector.
 
 The configuration files for these tools are located in the root of the codebase.
 
+Run all checks with:
+
+```bash
+make lint
+```
+
+```bash
+ahoy lint
+```
+
 ### Fixing coding standards issues
 
-To fix coding standards issues automatically, run the `make lint-fix` or
-`ahoy lint-fix`. This runs the same tools as `lint` command but with the
-`--fix` option (for the tools that support it).
+To fix coding standards issues automatically, run the same tools with the `--fix` option (for the tools that support it):
+
+```bash
+make lint-fix
+```
+
+```bash
+ahoy lint-fix
+```
 
 ## Testing
 
-The `make test` or `ahoy test` command runs the tests for this extension.
+Run the tests for this extension with:
 
-The tests are located in the `tests/src` directory. The `phpunit.xml` file
-configures PHPUnit to run the tests. It uses Drupal core's bootstrap file
-`web/core/tests/bootstrap.php` to bootstrap the Drupal environment before running
-the tests.
+```bash
+make test
+```
 
-The `test` command is a wrapper for multiple test commands:
+```bash
+ahoy test
+```
+
+The tests are located in the `tests/src` directory. The `phpunit.xml` file configures PHPUnit to run the tests, and `phpunit.d10.xml` replaces it in a Drupal 10 build. Both use Drupal core's bootstrap file `web/core/tests/bootstrap.php` to bootstrap the Drupal environment before running the tests.
+
+Each test suite can also be run on its own:
+
 ```bash
 make test-unit                    # Run Unit tests
 make test-kernel                  # Run Kernel tests
 make test-functional              # Run Functional tests
-make test-functional-javascript   # Run FunctionalJavascript tests
+```
 
+```bash
 ahoy test-unit                    # Run Unit tests
 ahoy test-kernel                  # Run Kernel tests
 ahoy test-functional              # Run Functional tests
-ahoy test-functional-javascript   # Run FunctionalJavascript tests
 ```
-
-### Running FunctionalJavascript tests
-
-FunctionalJavascript tests need a real browser driven via WebDriver. By
-default they use the Google Chrome already installed on your machine - a
-matching `chromedriver` is downloaded automatically on first run, so no
-Docker is required:
-
-```bash
-ahoy start
-ahoy provision
-ahoy test-functional-javascript
-ahoy browser-stop
-```
-
-To run the browser in a Docker Selenium container instead, set
-`WEBDRIVER_BACKEND=selenium`. The container cannot reach the host's
-`localhost`, so start the webserver on all interfaces:
-
-```bash
-WEBSERVER_HOST=0.0.0.0 ahoy start
-ahoy provision
-WEBDRIVER_BACKEND=selenium ahoy test-functional-javascript
-ahoy browser-stop
-```
-
-Either backend gets its own WebDriver port: a free one is claimed starting
-at 4444 and stored in `.env`, so several projects can run FunctionalJavascript
-tests at the same time. Set `WEBDRIVER_PORT` to pin a specific one. Tests
-reach the claimed port because the base class applies it to the WebDriver
-endpoint, so extend `ValeFunctionalJavascriptTestBase` rather than
-`WebDriverTestBase` directly - a test that bypasses it keeps the default
-endpoint from `phpunit.xml` unless it exports its own
-`MINK_DRIVER_ARGS_WEBDRIVER`.
 
 ### Running specific tests
 
-You can run specific tests by passing a path to the test file or PHPUnit CLI
-option (`--filter`, `--group`, etc.) to the `make test` or `ahoy test` command:
+You can run specific tests by passing a path to the test file or PHPUnit CLI option (`--filter`, `--group`, etc.) to the test commands. PHPUnit runs inside `build`, so a test path starts at the extension's symlink in the assembled site:
 
 ```bash
-make test-unit tests/src/Unit/MyUnitTest.php
+make test-unit web/modules/custom/vale/tests/src/Unit/MyUnitTest.php
 make test-unit -- --group=wip
+make test-unit -- --filter=MyUnitTest::testSomething
+```
 
-ahoy test-unit tests/src/Unit/MyUnitTest.php
+Put `--` before the arguments when they include an option, since `make` reads an option on its command line as its own. An argument can't hold a space or name a `make` target, such as `test`, unless it's an option value joined with `=`, as in `--filter='my test'` or `--filter=test`. `make` keeps 1 value per option joined with `=`, so repeat an option with a space instead, as in `--group wip --group slow`.
+
+```bash
+ahoy test-unit web/modules/custom/vale/tests/src/Unit/MyUnitTest.php
 ahoy test-unit -- --group=wip
+ahoy test-unit -- --filter=MyUnitTest::testSomething
 ```
 
 You may also run tests using the `phpunit` command directly:
 
 ```bash
 cd build
-php -d pcov.directory=.. vendor/bin/phpunit tests/src/Unit/MyUnitTest.php
+php -d pcov.directory=.. vendor/bin/phpunit \
+  web/modules/custom/vale/tests/src/Unit/MyUnitTest.php
 php -d pcov.directory=.. vendor/bin/phpunit --group=wip
+php -d pcov.directory=.. vendor/bin/phpunit --filter=MyUnitTest::testSomething
 ```
