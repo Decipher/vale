@@ -236,6 +236,35 @@ class ContentReportTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a failed replace keeps the rows it was replacing.
+   */
+  public function testReplaceRollsBack(): void {
+    $alert = new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 1, 4, 'very');
+    $finding = new Finding('node', '1', 'Page 1', 'page', 'field_text', 0, $alert);
+    $this->container->get('vale.finding_storage')->add([$finding]);
+    // The new rows fail to insert after the old rows are deleted.
+    $storage = new class($this->container->get('database'), $this->container->get('datetime.time')) extends FindingStorage {
+
+      /**
+       * {@inheritdoc}
+       */
+      protected function insert(array $findings, int $now): void {
+        throw new \RuntimeException('Insert failed.');
+      }
+
+    };
+    try {
+      $storage->replace('node', ['1'], [$finding]);
+      $this->fail('The failed insert was not thrown.');
+    }
+    catch (\RuntimeException $e) {
+      $this->assertSame('Insert failed.', $e->getMessage());
+    }
+    $count = $this->container->get('database')->select('vale_finding')->countQuery()->execute()->fetchField();
+    $this->assertSame(1, (int) $count);
+  }
+
+  /**
    * Tests that the queue worker drops an item it cannot read.
    */
   public function testMalformedQueueItem(): void {
