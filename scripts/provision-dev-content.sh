@@ -7,8 +7,9 @@
 # (they arrive as recipes), so without this a fresh `make provision` has no
 # opted-in field to test against. No-ops where this cannot apply: no core
 # Recipe API, a standard profile that still ships the Page type itself
-# (where the recipe would not add its field), a Drush without recipe:apply,
-# or DEV_CONTENT set to 0/false/no/off. The current working directory is the
+# (where the recipe would not add its field), no text_with_summary field type
+# in core (Drupal 12), a Drush without recipe:apply, or DEV_CONTENT set to
+# 0/false/no/off. The current working directory is the
 # project root.
 
 set -eu
@@ -27,6 +28,13 @@ fi
 
 if [ -f build/web/core/profiles/standard/config/install/node.type.page.yml ]; then
   echo "[dev-content] The standard profile already ships a Page type; skipping."
+  exit 0
+fi
+
+# Drupal 12 removes the text_with_summary field type from core, and the
+# recipe's body field uses it.
+if [ ! -d build/web/core/modules/text_with_summary ] && [ ! -f build/web/core/modules/text/src/Plugin/Field/FieldType/TextWithSummaryItem.php ]; then
+  echo "[dev-content] Core has no text_with_summary field type; skipping."
   exit 0
 fi
 
