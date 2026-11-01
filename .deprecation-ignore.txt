@@ -30,3 +30,8 @@
 
 # Drush's own classes, from the DebugClassLoader. They are Drush's to fix.
 %might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drush\\%
+
+# vale's own view. Drupal 11.2 adds a table CSS class to a view without one,
+# with this deprecation. Drupal 10's schema has no such key, so the view
+# cannot carry it while vale supports Drupal 10.
+%^The update to add a default table CSS class for view "vale_findings" is deprecated in drupal:11\.2\.0%
