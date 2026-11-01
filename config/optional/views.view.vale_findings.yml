@@ -198,7 +198,6 @@ display:
           caption: 'Prose linting'
           summary: ''
           empty_table: false
-          class: ''
       row:
         type: fields
       query:
