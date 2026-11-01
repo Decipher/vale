@@ -242,19 +242,32 @@ class ContentReportTest extends KernelTestBase {
     $alert = new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 1, 4, 'very');
     $finding = new Finding('node', '1', 'Page 1', 'page', 'field_text', 0, $alert);
     $this->container->get('vale.finding_storage')->add([$finding]);
-    // The new rows fail to insert after the old rows are deleted.
+    $findings = [];
+    for ($i = 1; $i <= 1200; $i++) {
+      $findings[] = new Finding('node', '1', 'Page 1', 'page', 'field_text', $i, $alert);
+    }
+    // The old rows are deleted and the first batch is written. Then the
+    // second batch fails.
     $storage = new class($this->container->get('database'), $this->container->get('datetime.time')) extends FindingStorage {
+
+      /**
+       * The number of inserts attempted.
+       */
+      public int $calls = 0;
 
       /**
        * {@inheritdoc}
        */
       protected function insert(array $findings, int $now): void {
-        throw new \RuntimeException('Insert failed.');
+        if (++$this->calls > 1) {
+          throw new \RuntimeException('Insert failed.');
+        }
+        parent::insert($findings, $now);
       }
 
     };
     try {
-      $storage->replace('node', ['1'], [$finding]);
+      $storage->replace('node', ['1'], $findings);
       $this->fail('The failed insert was not thrown.');
     }
     catch (\RuntimeException $e) {
