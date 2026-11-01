@@ -15,7 +15,8 @@
  * The FAKE_PROBE_FAIL environment variable makes --version and ls-config
  * fail, as a Vale that is out of memory or misconfigured would, and
  * FAKE_PROBE_SLOW makes them sleep past any time limit. The sync command
- * succeeds, or fails as with no network when FAKE_SYNC_FAIL is set.
+ * succeeds, fails as with no network when FAKE_SYNC_FAIL is set, and is
+ * killed by a signal when FAKE_SYNC_KILLED is set.
  *
  * Each lint run appends the --path value to calls.log beside the
  * configuration, so a test can count runs.
@@ -57,6 +58,10 @@ if ($command === 'ls-config') {
 }
 
 if ($command === 'sync') {
+  if (getenv('FAKE_SYNC_KILLED')) {
+    exec('kill -KILL ' . getmypid());
+    sleep(30);
+  }
   if (getenv('FAKE_SYNC_FAIL')) {
     fwrite(STDERR, "E100 [sync] Runtime error\n\nPackage 'Microsoft' could not fetch: no network.\n");
     exit(2);

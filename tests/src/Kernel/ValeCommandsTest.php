@@ -190,6 +190,18 @@ class ValeCommandsTest extends KernelTestBase {
       unset($_ENV['FAKE_SYNC_FAIL']);
     }
 
+    // A sync that stops before Vale can answer, such as one that is killed,
+    // fails too.
+    $_ENV['FAKE_SYNC_KILLED'] = '1';
+    try {
+      $commands->setOutput($output);
+      $this->assertSame(1, $commands->sync()->getExitCode());
+      $this->assertStringContainsString('signal', $output->fetch());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_KILLED']);
+    }
+
     $this->setSetting('vale_binary', NULL);
     $this->assertSame(1, $this->commands()->sync()->getExitCode());
   }
