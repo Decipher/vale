@@ -14,7 +14,8 @@
  * - FAKE_KILLED: is killed by a signal, as the out-of-memory killer would.
  * The FAKE_PROBE_FAIL environment variable makes --version and ls-config
  * fail, as a Vale that is out of memory or misconfigured would, and
- * FAKE_PROBE_SLOW makes them sleep past any time limit.
+ * FAKE_PROBE_SLOW makes them sleep past any time limit. The sync command
+ * succeeds, or fails as with no network when FAKE_SYNC_FAIL is set.
  *
  * Each lint run appends the --path value to calls.log beside the
  * configuration, so a test can count runs.
@@ -52,6 +53,15 @@ $styles = dirname($config) . '/styles';
 
 if ($command === 'ls-config') {
   print json_encode(['Paths' => [$styles]]);
+  exit(0);
+}
+
+if ($command === 'sync') {
+  if (getenv('FAKE_SYNC_FAIL')) {
+    fwrite(STDERR, "E100 [sync] Runtime error\n\nPackage 'Microsoft' could not fetch: no network.\n");
+    exit(2);
+  }
+  print "SUCCESS  Synced 1 package(s) to '$styles'.\n";
   exit(0);
 }
 
