@@ -96,9 +96,6 @@ None are required. These are supported when they are installed:
    BasedOnStyles = Vale, Microsoft
    ```
 
-   Run `vale sync` beside it to download the styles, and deploy the `styles`
-   directory with your site.
-
 4. Point the site at both, in `settings.php`:
 
    ```php
@@ -106,7 +103,16 @@ None are required. These are supported when they are installed:
    $settings['vale_config'] = $app_root . '/../.vale.ini';
    ```
 
-5. Check **Reports > Status report**. The Vale entry shows the version and the
+5. Download the styles that `.vale.ini` names:
+
+   ```bash
+   drush vale:sync
+   ```
+
+   This runs Vale's sync with the site's configuration, so the styles land
+   in its `StylesPath`. Deploy the `styles` directory with your site.
+
+6. Check **Reports > Status report**. The Vale entry shows the version and the
    number of rules in your styles.
 
 If you enable the module through a config import, such as `drush deploy`,
@@ -177,7 +183,8 @@ checked by Vale is refused, so it never reads as a pass.
 `--format=json` gives one full record per alert. `drush vale:check
 node.page.body "Some text."` lints text, or standard input, as that field
 would, with `--text-format` for its format. `vale:rules` and `vale:status`
-show what is loaded.
+show what is loaded, and `vale:sync` downloads the styles again after you
+change `.vale.ini`.
 
 ### Content report
 

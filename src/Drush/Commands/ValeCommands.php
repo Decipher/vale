@@ -23,6 +23,7 @@ use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
 use Drush\Style\DrushStyle;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
 
 /**
  * Lints stored content from the command line.
@@ -35,6 +36,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    * How many entities --save lints before it writes to the report.
    */
   private const int CHUNK = 50;
+
+  /**
+   * How many seconds vale:sync may take.
+   */
+  private const int SYNC_TIMEOUT = 300;
 
   /**
    * The output style, built on first use.
@@ -278,6 +284,42 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       'rules' => $available ? count($this->valeEnvironment->rules()) : 0,
       'description' => $status['description'],
     ]), $available ? self::EXIT_SUCCESS : self::EXIT_FAILURE);
+  }
+
+  /**
+   * Downloads the styles that the site's .vale.ini names.
+   *
+   * It runs "vale sync" with the site's configuration, so the packages land
+   * in its StylesPath. Run it where the site is built, as for vale:install.
+   *
+   * @return \Consolidation\AnnotatedCommand\CommandResult
+   *   Exit code 0 when the styles were downloaded.
+   */
+  #[CLI\Command(name: 'vale:sync')]
+  #[CLI\Usage(name: 'drush vale:sync', description: 'Download the packages that .vale.ini names into its StylesPath.')]
+  public function sync(): CommandResult {
+    $reason = $this->valeEnvironment->unavailableReason();
+    if ($reason !== NULL) {
+      $this->error('Vale could not be run. ' . $reason);
+      return CommandResult::exitCode(self::EXIT_FAILURE);
+    }
+    // A download takes longer than a lint, so a lint's time limit is too
+    // short.
+    $process = $this->valeEnvironment->process(['sync'])->setTimeout(self::SYNC_TIMEOUT);
+    try {
+      $process->run();
+    }
+    catch (ProcessException $e) {
+      $this->error('Vale could not sync the styles. ' . $e->getMessage());
+      return CommandResult::exitCode(self::EXIT_FAILURE);
+    }
+    if (!$process->isSuccessful()) {
+      $this->error('Vale could not sync the styles. ' . trim($process->getErrorOutput() ?: $process->getOutput()));
+      return CommandResult::exitCode(self::EXIT_FAILURE);
+    }
+    $this->style()->write($process->getOutput());
+    $this->style()->success(sprintf('Vale now loads %d rules.', count($this->valeEnvironment->rules())));
+    return CommandResult::exitCode(self::EXIT_SUCCESS);
   }
 
   /**
