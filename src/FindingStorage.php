@@ -119,14 +119,28 @@ class FindingStorage {
    */
   public function replace(string $entity_type, array $ids, array $findings): void {
     $transaction = $this->database->startTransaction();
-    if ($ids) {
-      $this->database->delete(self::TABLE)
-        ->condition('root_type', $entity_type)
-        ->condition('root_id', array_map(strval(...), $ids), 'IN')
-        ->execute();
+    try {
+      if ($ids) {
+        $this->database->delete(self::TABLE)
+          ->condition('root_type', $entity_type)
+          ->condition('root_id', array_map(strval(...), $ids), 'IN')
+          ->execute();
+      }
+      $this->add($findings);
     }
-    $this->add($findings);
-    unset($transaction);
+    catch (\Throwable $e) {
+      $transaction->rollBack();
+      throw $e;
+    }
+    // Drupal 11.5 deprecates a commit by unset(). commitOrRelease() is in
+    // Drupal 11.3 and later only.
+    // @phpstan-ignore function.alreadyNarrowedType (Not true before Drupal 11.3.)
+    if (method_exists($transaction, 'commitOrRelease')) {
+      $transaction->commitOrRelease();
+    }
+    else {
+      unset($transaction);
+    }
   }
 
   /**

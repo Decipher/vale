@@ -21,6 +21,7 @@ use Drupal\vale\ValeEnvironment;
 use Drupal\vale\ValeInstaller;
 use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
+use Drush\Style\DrushStyle;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -34,6 +35,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
    * How many entities --save lints before it writes to the report.
    */
   private const int CHUNK = 50;
+
+  /**
+   * The output style, built on first use.
+   */
+  private ?DrushStyle $drushStyle = NULL;
 
   /**
    * Constructs a ValeCommands.
@@ -139,7 +145,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
   ): CommandResult {
     $reason = $this->valeEnvironment->unavailableReason();
     if ($reason !== NULL) {
-      $this->logger()?->error('Vale could not be run. ' . $reason);
+      $this->error('Vale could not be run. ' . $reason);
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
 
@@ -179,7 +185,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       }
     }
     catch (\InvalidArgumentException $e) {
-      $this->logger()?->error($e->getMessage());
+      $this->error($e->getMessage());
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
 
@@ -187,7 +193,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     $failed = FALSE;
     foreach ($findings as $finding) {
       if ($finding->alert === NULL) {
-        $this->logger()?->error(sprintf('%s %s, %s: not checked. %s', $finding->entityType, $finding->entityId, $finding->field, $finding->reason));
+        $this->error(sprintf('%s %s, %s: not checked. %s', $finding->entityType, $finding->entityId, $finding->field, $finding->reason));
         $failed = TRUE;
         continue;
       }
@@ -227,19 +233,19 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       );
     }
     catch (\RuntimeException | \InvalidArgumentException $e) {
-      $this->logger()?->error($e->getMessage());
+      $this->error($e->getMessage());
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
-    $this->logger()?->success(sprintf('Installed Vale at %s.', $binary));
-    $this->io()->writeln('Add this to settings.php, with the path to your .vale.ini:');
+    $this->style()->success(sprintf('Installed Vale at %s.', $binary));
+    $this->style()->writeln('Add this to settings.php, with the path to your .vale.ini:');
     // Beside the web root, the path is given from $app_root, so it holds
     // wherever the site is deployed.
     $project = dirname(DRUPAL_ROOT) . '/';
     $setting = str_starts_with($binary, $project)
       ? sprintf("\$app_root . '/../%s'", substr($binary, strlen($project)))
       : sprintf("'%s'", $binary);
-    $this->io()->writeln(sprintf("  \$settings['vale_binary'] = %s;", $setting));
-    $this->io()->writeln("  \$settings['vale_config'] = \$app_root . '/../.vale.ini';");
+    $this->style()->writeln(sprintf("  \$settings['vale_binary'] = %s;", $setting));
+    $this->style()->writeln("  \$settings['vale_config'] = \$app_root . '/../.vale.ini';");
     return CommandResult::exitCode(self::EXIT_SUCCESS);
   }
 
@@ -340,11 +346,11 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       $definition = NULL;
     }
     if (!$definition) {
-      $this->logger()?->error(sprintf('There is no field "%s". Name it as entity_type.bundle.field_name.', $field));
+      $this->error(sprintf('There is no field "%s". Name it as entity_type.bundle.field_name.', $field));
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
     if (!$this->fieldLinter->isEnabled($definition)) {
-      $this->logger()?->error(sprintf('The field "%s" is not checked by Vale.', $field));
+      $this->error(sprintf('The field "%s" is not checked by Vale.', $field));
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
 
@@ -352,7 +358,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       $stdin = $this->stdin();
       // Reading a terminal would wait for input with no prompt.
       if (!$stdin->hasPath() && stream_isatty($stdin->getStream())) {
-        $this->logger()?->error('Give the text as an argument, or pipe it in.');
+        $this->error('Give the text as an argument, or pipe it in.');
         return CommandResult::exitCode(self::EXIT_FAILURE);
       }
       $text = (string) $stdin->contents();
@@ -360,7 +366,7 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
     $format = is_string($options['text-format'] ?? NULL) ? $options['text-format'] : NULL;
     $result = $this->fieldLinter->lintText($definition, $text, $format);
     if (!$result->isChecked()) {
-      $this->logger()?->error('The text was not checked. ' . $result->reason);
+      $this->error('The text was not checked. ' . $result->reason);
       return CommandResult::exitCode(self::EXIT_FAILURE);
     }
 
@@ -449,6 +455,29 @@ final class ValeCommands extends DrushCommands implements StdinAwareInterface {
       'message' => $alert->message,
       'text' => $alert->match,
     ];
+  }
+
+  /**
+   * Gives the output style.
+   *
+   * Drush 14 deprecates logger() and io() on DrushCommands. This style works
+   * on Drush 12, 13 and 14.
+   *
+   * @return \Drush\Style\DrushStyle
+   *   The style for this command's input and output.
+   */
+  private function style(): DrushStyle {
+    return $this->drushStyle ??= new DrushStyle($this->input(), $this->output());
+  }
+
+  /**
+   * Writes an error to the error output.
+   *
+   * @param string $message
+   *   The error.
+   */
+  private function error(string $message): void {
+    $this->style()->getErrorStyle()->error($message);
   }
 
 }

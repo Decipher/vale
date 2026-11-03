@@ -21,6 +21,7 @@ use Drupal\vale\Hook\ValeFieldUiHooks;
 use Drupal\vale\Hook\ValeFormHooks;
 use Drupal\vale\Hook\ValeHelpHooks;
 use Drupal\vale\Hook\ValeReportHooks;
+use Drupal\vale\Hook\ValeViewsHooks;
 
 /**
  * Implements hook_help().
@@ -108,4 +109,12 @@ function vale_field_config_update(FieldConfigInterface $field): void {
 #[LegacyHook]
 function vale_field_config_delete(FieldConfigInterface $field): void {
   \Drupal::service(ValeReportHooks::class)->fieldConfigDelete($field);
+}
+
+/**
+ * Implements hook_views_data().
+ */
+#[LegacyHook]
+function vale_views_data(): array {
+  return \Drupal::service(ValeViewsHooks::class)->viewsData();
 }

@@ -203,6 +203,43 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
+   * Tests that vale:check does not wait on a terminal for input.
+   */
+  public function testCheckStdinTerminal(): void {
+    // A readable device can still fail to open.
+    $terminal = is_readable('/dev/ptmx') ? @fopen('/dev/ptmx', 'r+') : FALSE;
+    if ($terminal === FALSE) {
+      $this->markTestSkipped('This system has no pseudo terminal.');
+    }
+    $commands = $this->commands();
+    // Standard input is a terminal.
+    $commands->setStdinHandler(new class($terminal) extends StdinHandler {
+
+      /**
+       * Constructs the handler.
+       *
+       * @param resource $terminal
+       *   The open pseudo terminal.
+       */
+      public function __construct(private $terminal) {}
+
+      /**
+       * {@inheritdoc}
+       */
+      public function getStream() {
+        return $this->terminal;
+      }
+
+    });
+    $output = new BufferedOutput();
+    $commands->setInput(new ArrayInput([]));
+    $commands->setOutput($output);
+    $result = $commands->check('node.page.field_text', '-', ['text-format' => NULL]);
+    $this->assertSame(1, $result->getExitCode());
+    $this->assertStringContainsString('Give the text as an argument, or pipe it in.', $output->fetch());
+  }
+
+  /**
    * Tests that vale:install installs Vale and says how to set it up.
    */
   public function testInstall(): void {
