@@ -39,7 +39,7 @@
         },
         "eddy": {
             "drupal-version": "11",
-            "version": "5.0.0"
+            "version": "5.1.1"
         },
         "phpcodesniffer-search-depth": 10,
         "patches": {}
