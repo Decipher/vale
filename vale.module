@@ -24,6 +24,10 @@ use Drupal\vale\Hook\ValeReportHooks;
 
 /**
  * Implements hook_help().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_help(string $route_name, RouteMatchInterface $route_match): string {
@@ -32,6 +36,10 @@ function vale_help(string $route_name, RouteMatchInterface $route_match): string
 
 /**
  * Implements hook_form_FORM_ID_alter() for field_config_edit_form.
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_form_field_config_edit_form_alter(array &$form, FormStateInterface $form_state): void {
@@ -40,6 +48,10 @@ function vale_form_field_config_edit_form_alter(array &$form, FormStateInterface
 
 /**
  * Implements hook_entity_type_alter().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_type_alter(array &$entity_types): void {
@@ -48,6 +60,10 @@ function vale_entity_type_alter(array &$entity_types): void {
 
 /**
  * Implements hook_entity_bundle_field_info_alter().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_bundle_field_info_alter(array &$fields, EntityTypeInterface $entity_type, string $bundle): void {
@@ -56,6 +72,10 @@ function vale_entity_bundle_field_info_alter(array &$fields, EntityTypeInterface
 
 /**
  * Implements hook_form_alter().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_form_alter(array &$form, FormStateInterface $form_state, string $form_id): void {
@@ -64,6 +84,10 @@ function vale_form_alter(array &$form, FormStateInterface $form_state, string $f
 
 /**
  * Implements hook_entity_insert().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_insert(EntityInterface $entity): void {
@@ -72,6 +96,10 @@ function vale_entity_insert(EntityInterface $entity): void {
 
 /**
  * Implements hook_entity_update().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_update(EntityInterface $entity): void {
@@ -80,6 +108,10 @@ function vale_entity_update(EntityInterface $entity): void {
 
 /**
  * Implements hook_entity_delete().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_delete(EntityInterface $entity): void {
@@ -88,6 +120,10 @@ function vale_entity_delete(EntityInterface $entity): void {
 
 /**
  * Implements hook_entity_revision_delete().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_entity_revision_delete(EntityInterface $entity): void {
@@ -96,6 +132,10 @@ function vale_entity_revision_delete(EntityInterface $entity): void {
 
 /**
  * Implements hook_ENTITY_TYPE_update() for field_config.
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_field_config_update(FieldConfigInterface $field): void {
@@ -104,6 +144,10 @@ function vale_field_config_update(FieldConfigInterface $field): void {
 
 /**
  * Implements hook_ENTITY_TYPE_delete() for field_config.
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_field_config_delete(FieldConfigInterface $field): void {

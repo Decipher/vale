@@ -3,7 +3,6 @@
     <description>Custom PHPCS Standard, based on Drupal standards.</description>
 
     <file>web/modules/custom</file>
-    <file>web/themes/custom</file>
 
     <rule ref="Drupal"/>
     <rule ref="DrupalPractice"/>
@@ -13,7 +12,8 @@
     <arg name="colors"/>
     <arg value="sp"/>
     <arg name="parallel" value="75"/>
-    <!-- Lint code against platform version specified in composer.json key "config.platform.php". -->
+    <!-- Lint code against the minimum PHP version required in composer.json. -->
+    <config name="testVersion" value="8.3"/>
 
     <!-- Exclude front-end assets. -->
     <exclude-pattern>.*\/node_modules\/.*</exclude-pattern>
