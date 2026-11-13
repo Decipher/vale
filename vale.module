@@ -157,6 +157,10 @@ function vale_field_config_delete(FieldConfigInterface $field): void {
 
 /**
  * Implements hook_views_data().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
  */
 #[LegacyHook]
 function vale_views_data(): array {
