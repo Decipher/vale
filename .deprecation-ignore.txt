@@ -35,3 +35,12 @@
 # with this deprecation. Drupal 10's schema has no such key, so the view
 # cannot carry it while vale supports Drupal 10.
 %^The update to add a default table CSS class for view "vale_findings" is deprecated in drupal:11\.2\.0%
+
+# Procedural hooks in .module files, deprecated in drupal:11.5.0.
+# Change record: https://www.drupal.org/node/3619765
+# No upstream issue yet for either module (searched 2026-11-13).
+%^Code in (paragraphs|entity_reference_revisions)\.module is deprecated in drupal:11\.5\.0%
+
+# Guzzle 8.5 deprecates the user agent helper that core's HTTP client calls.
+# vale does not call it.
+%^Since guzzlehttp/guzzle 8\.5: GuzzleHttp\\Utils::defaultUserAgent\(\) is deprecated%

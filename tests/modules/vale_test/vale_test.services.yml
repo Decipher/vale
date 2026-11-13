@@ -1,0 +1,5 @@
+services:
+  # Drupal 11.1 and later register the hook class by itself. Drupal 10 does
+  # not, and the procedural hooks in vale_test.module fetch it from here.
+  Drupal\vale_test\Hook\ValeTestHooks:
+    autowire: true
