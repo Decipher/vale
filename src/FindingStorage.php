@@ -139,7 +139,10 @@ class FindingStorage {
       $transaction->commitOrRelease();
     }
     else {
+      // Coverage is measured on Drupal 11.3 and later, which never get here.
+      // @codeCoverageIgnoreStart
       unset($transaction);
+      // @codeCoverageIgnoreEnd
     }
   }
 
