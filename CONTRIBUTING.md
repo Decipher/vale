@@ -60,10 +60,13 @@ The `reset` command stops the development server and removes the `build`, `.logs
 
 The provisioned site also applies `recipes/dev_content`, which creates a
 **Page** content type whose body is checked with Vale. Create a Page or
-run `drush vale:check node.page.body` to see it. The recipe also installs the
-Vale binary, its configuration and the settings that point the site at them,
-so the stack lints as soon as it is up. Set `DEV_CONTENT=0` or `DEV_VALE=0`
-to skip either.
+run `make drush vale:check node.page.body` (or `ahoy drush vale:check
+node.page.body`) to see it. Provisioning also installs the Vale binary, its
+configuration and the settings that point the site at them, so the stack
+lints as soon as it is up. Set `DEV_CONTENT=0` or `DEV_VALE=0` to skip either.
+
+Drupal 12 core has no `text_with_summary` field, so provisioning skips the
+recipe there, and the site has no Page content type.
 
 ### Drupal versions
 
@@ -97,6 +100,13 @@ DRUPAL_VERSION=11@beta ahoy build
 
 # Newest stable Drupal 12 release, or newest pre-release if none.
 DRUPAL_VERSION=12 ahoy build
+```
+
+Paragraphs and Entity Reference Revisions, which only the tests use, don't declare Drupal 12 yet. A Drupal 12 build installs them through the lenient Composer plugin, which `extra.drupal-lenient` in `composer.dev.json` configures. CI installs the plugin globally. Install it once before your first Drupal 12 build:
+
+```bash
+composer global config --no-plugins allow-plugins.mglaman/composer-drupal-lenient true
+composer global require mglaman/composer-drupal-lenient
 ```
 
 The build pins Drupal core to the newest release that matches `DRUPAL_VERSION` and prints that release. A version without a stable release resolves to its newest pre-release.

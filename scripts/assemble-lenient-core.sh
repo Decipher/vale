@@ -22,8 +22,10 @@ for package in $packages; do
   [ -d "$directory" ] || continue
   find "$directory" -name '*.info.yml' -print0 | while IFS= read -r -d '' info; do
     if grep -q '^core_version_requirement:' "$info" && ! grep -q "^core_version_requirement:.*\^$major" "$info"; then
-      # Keep any quotes around the value.
-      sed -i -E "s/^core_version_requirement: *(['\"]?)(.*[^'\"])(['\"]?) *$/core_version_requirement: \1\2 || ^$major\3/" "$info"
+      # Keep any quotes around the value. BSD sed reads the flag after -i as a
+      # backup suffix, so write a copy and move it into place.
+      sed -E "s/^core_version_requirement: *(['\"]?)(.*[^'\"])(['\"]?) *$/core_version_requirement: \1\2 || ^$major\3/" "$info" > "$info.tmp"
+      mv "$info.tmp" "$info"
       echo "[lenient-core] Allowed Drupal $major in $info"
     fi
   done
