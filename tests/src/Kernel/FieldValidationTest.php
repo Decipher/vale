@@ -22,6 +22,7 @@ use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\paragraphs\Entity\ParagraphsType;
 use Drupal\user\Entity\User;
 use Drupal\vale\Alert;
+use Drupal\vale\Finding;
 use Drupal\vale\Hook\ValeFormHooks;
 use Drupal\vale\Plugin\Validation\Constraint\ValeTextConstraint;
 use PHPUnit\Framework\Attributes\Group;
@@ -610,6 +611,65 @@ class FieldValidationTest extends KernelTestBase {
     }
     $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
     $this->assertSame([], $this->container->get('vale.alert_collector')->unchecked());
+
+    // A section at the limit that references other content, not a
+    // component, leaves nothing unchecked. Linting never follows such a
+    // reference, however deep.
+    FieldStorageConfig::create([
+      'field_name' => 'field_related',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_related', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
+    $related = $this->page(['title' => 'Related']);
+    $related->save();
+    $paragraph = Paragraph::create(['type' => 'docs_section', 'field_related' => [$related]]);
+    for ($i = 0; $i < 9; $i++) {
+      $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    }
+    $this->config('vale.settings')->set('fail_closed', TRUE)->save();
+    $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
+    $this->config('vale.settings')->set('fail_closed', FALSE)->save();
+    $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
+    $this->assertSame([], $this->container->get('vale.alert_collector')->unchecked());
+  }
+
+  /**
+   * Tests that a publishing save and a scan check components as deep.
+   */
+  public function testParagraphTreeDepthMatchesScan(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    ParagraphsType::create(['id' => 'docs_section', 'label' => 'Docs section'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_children',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'cardinality' => -1,
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_children', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
+    $walker = $this->container->get('vale.content_walker');
+
+    // Text at level 10 is checked by both.
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.']);
+    for ($i = 0; $i < 9; $i++) {
+      $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    }
+    $page = $this->page(['status' => TRUE, 'field_content' => [$paragraph]]);
+    $this->assertSame([''], array_keys($this->violations($page)));
+    $this->assertSame(['Demo.Very'], array_map(static fn (Finding $finding): string => $finding->alert->rule ?? '', $walker->entity($page)));
+
+    // Text at level 11 is checked by neither.
+    $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    $page = $this->page(['status' => TRUE, 'field_content' => [$paragraph]]);
+    $this->container->get('vale.alert_collector')->reset();
+    $this->assertSame([], $this->violations($page));
+    $this->assertSame(
+      ['Components nested more than 10 levels deep were not checked.'],
+      $this->container->get('vale.alert_collector')->unchecked(),
+    );
+    $this->assertSame([], $walker->entity($page));
   }
 
   /**

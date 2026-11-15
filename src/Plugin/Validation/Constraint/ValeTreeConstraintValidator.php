@@ -123,7 +123,9 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
   protected function checkComponents(FieldableEntityInterface $entity, ValeTreeConstraint $constraint, FindingList $errors, int $depth): void {
     if ($depth > self::MAX_DEPTH) {
       foreach ($this->componentFields($entity) as $name) {
-        if (!$entity->get($name)->isEmpty()) {
+        // Only a component would have been checked, as ContentWalker::walk()
+        // follows no other reference.
+        if ($this->holdsComponent($entity, $name)) {
           $reason = (string) new TranslatableMarkup('Components nested more than @depth levels deep were not checked.', ['@depth' => self::MAX_DEPTH]);
           // With fail_closed, unchecked text refuses the save, however deep.
           if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
@@ -201,6 +203,26 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
         }
       }
     }
+  }
+
+  /**
+   * Says whether a reference field of an entity holds a component.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity.
+   * @param string $name
+   *   The name of an entity_reference_revisions field.
+   *
+   * @return bool
+   *   TRUE when an item references a component, such as a paragraph.
+   */
+  protected function holdsComponent(FieldableEntityInterface $entity, string $name): bool {
+    foreach ($entity->get($name) as $item) {
+      if ($this->publishState->component($item->get('entity')->getValue(), $entity->language()->getId())) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**
