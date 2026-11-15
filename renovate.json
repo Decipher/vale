@@ -1,6 +1,6 @@
 {
     "extends": ["config:recommended"],
-    "automerge": true,
+    "automerge": false,
     "rangeStrategy": "bump",
     "lockFileMaintenance": {
         "enabled": true
