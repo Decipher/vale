@@ -83,14 +83,24 @@ class ReportViewUpdateTest extends KernelTestBase {
       $data['display']['default']['display_options']['pager']['options']['items_per_page'] = 100;
     });
 
-    $message = (string) vale_post_update_report_table_fits();
+    $message = vale_post_update_report_table_fits();
+    $this->assertNotNull($message);
 
     $options = $this->config('views.view.vale_findings')->get('display.default.display_options');
     $this->assertSame('Prose linting', $options['style']['options']['caption']);
     $this->assertSame(100, $options['pager']['options']['items_per_page']);
     $this->assertArrayHasKey('root_bundle', $options['fields']);
-    $this->assertStringContainsString('drush config:delete views.view.vale_findings', $message);
-    $this->assertStringContainsString('installOptionalConfig', $message);
+
+    // The two commands in the message install the new view, and nothing else.
+    $arguments = $message->getArguments();
+    $this->assertSame('drush config:delete views.view.vale_findings', $arguments['@delete']);
+    $this->assertSame(1, preg_match('/^drush php:eval "(.+)"$/', $arguments['@install'], $matches));
+    $this->config('views.view.vale_findings')->delete();
+    // phpcs:ignore Drupal.Functions.DiscouragedFunctions.Discouraged
+    eval($matches[1]);
+    $options = $this->config('views.view.vale_findings')->get('display.default.display_options');
+    $this->assertArrayNotHasKey('root_bundle', $options['fields']);
+    $this->assertSame(50, $options['pager']['options']['items_per_page']);
   }
 
   /**

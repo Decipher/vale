@@ -47,7 +47,7 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   if (hash('sha256', serialize($normalise($data))) !== '8a2c8952d872bfb4823472fa4c2a783a4f219d06aecf479e921bb36ce81156b2') {
     return new TranslatableMarkup('The content report view has been changed on this site, so it was kept. To use the new one, run <code>@delete</code> and then <code>@install</code>. That removes your changes to it.', [
       '@delete' => 'drush config:delete ' . $name,
-      '@install' => 'drush php:eval "Drupal::service(\'config.installer\')->installOptionalConfig();"',
+      '@install' => 'drush php:eval "Drupal::entityTypeManager()->getStorage(\'view\')->create((new Drupal\\Core\\Config\\FileStorage(Drupal::service(\'extension.list.module\')->getPath(\'vale\') . \'/config/optional\'))->read(\'' . $name . '\'))->save();"',
     ]);
   }
 

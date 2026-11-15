@@ -143,6 +143,10 @@ class ContentReportUiTest extends KernelTestBase {
     $top = array_values(array_filter($rows, static fn (string $row): bool => str_contains($row, 'Demo.Delve')));
     $this->assertCount(1, $top);
     $this->assertSame(1, substr_count($top[0], 'Guide'));
+    // The page's own row has no second line, so no line break either.
+    $cells = $table->filter('tbody tr')->each(static fn (Crawler $row): string => $row->html());
+    $top_cell = array_values(array_filter($cells, static fn (string $row): bool => str_contains($row, 'Demo.Delve')));
+    $this->assertStringNotContainsString('<br', $top_cell[0]);
     // A paragraph's alert also says where in the page it was found, without
     // naming the page again.
     $component = array_values(array_filter($rows, static fn (string $row): bool => str_contains($row, 'Demo.Very')));
