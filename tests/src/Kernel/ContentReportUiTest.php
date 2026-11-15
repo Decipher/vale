@@ -153,6 +153,9 @@ class ContentReportUiTest extends KernelTestBase {
     $this->assertCount(1, $component);
     $this->assertSame(1, substr_count($component[0], 'Guide'));
     $this->assertStringContainsString('> Content', $component[0]);
+    // Its second line is on a line of its own.
+    $component_cell = array_values(array_filter($cells, static fn (string $row): bool => str_contains($row, 'Demo.Very')));
+    $this->assertStringContainsString('<br', $component_cell[0]);
 
     $this->assertCount(0, $table->filter('caption'));
     $headers = $table->filter('thead th')->each(static fn (Crawler $th): string => trim($th->text()));

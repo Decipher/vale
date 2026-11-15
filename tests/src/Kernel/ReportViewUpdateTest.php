@@ -96,8 +96,11 @@ class ReportViewUpdateTest extends KernelTestBase {
     $this->assertSame('drush config:delete views.view.vale_findings', $arguments['@delete']);
     $this->assertSame(1, preg_match('/^drush php:eval "(.+)"$/', $arguments['@install'], $matches));
     $this->config('views.view.vale_findings')->delete();
+    $before = $this->container->get('config.storage')->listAll();
     // phpcs:ignore Drupal.Functions.DiscouragedFunctions.Discouraged
     eval($matches[1]);
+    $added = array_diff($this->container->get('config.storage')->listAll(), $before);
+    $this->assertSame(['views.view.vale_findings'], array_values($added));
     $options = $this->config('views.view.vale_findings')->get('display.default.display_options');
     $this->assertArrayNotHasKey('root_bundle', $options['fields']);
     $this->assertSame(50, $options['pager']['options']['items_per_page']);
