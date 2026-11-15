@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\vale\Plugin\Validation\Constraint;
 
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\ConstraintViolation;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Joins several findings into one violation message.
@@ -13,6 +17,8 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  * per finding would show an author one finding, and the next only after
  * they fixed it and saved again. One violation per value, with a line per
  * finding, shows them all.
+ *
+ * @internal
  */
 final class FindingList {
 
@@ -46,35 +52,53 @@ final class FindingList {
   }
 
   /**
-   * Gives the joined template and its arguments.
+   * Adds the findings to the context as one violation.
    *
-   * Each finding's template is translated first, with its placeholders kept.
-   * Then its placeholders get its index, so "@rule" in the second finding
-   * becomes "@rule1". The validator translates the joined template again,
-   * which leaves it as it is. Findings are separated by a line break, and a
-   * newline keeps them apart where the markup is stripped, as in JSON:API.
+   * One finding is an ordinary violation, so its template is translated as
+   * it is. Several findings are each translated by themselves, with their own
+   * placeholders, and then joined. So each template is translated once,
+   * whatever findings it is shown with. Findings are separated by a line
+   * break, and a newline keeps them apart where the markup is stripped, as
+   * in JSON:API.
    *
-   * @return array{0: string, 1: array<string, string|int>}
-   *   The template and the arguments.
+   * @param \Symfony\Component\Validator\Context\ExecutionContextInterface $context
+   *   The validation context.
+   * @param \Symfony\Component\Validator\Constraint $constraint
+   *   The constraint the findings break.
+   * @param string $path
+   *   The property path of the violation, relative to the context's path.
    */
-  public function message(): array {
-    $templates = [];
-    $arguments = [];
-    foreach ($this->lines as $index => [$template, $values]) {
-      // Each template is a constraint message, a literal string. With no
-      // arguments, the translation keeps its placeholders.
-      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
-      $translated = (string) new TranslatableMarkup($template);
-      $renames = [];
-      foreach ($values as $name => $value) {
-        $renames[$name] = $name . $index;
-        $arguments[$name . $index] = $value;
-      }
-      // Longest names first, so "@rule" never replaces part of "@rules".
-      uksort($renames, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
-      $templates[] = strtr($translated, $renames);
+  public function addTo(ExecutionContextInterface $context, Constraint $constraint, string $path = ''): void {
+    if ($this->lines === []) {
+      return;
     }
-    return [implode("<br>\n", $templates), $arguments];
+    if (count($this->lines) === 1) {
+      [$template, $arguments] = $this->lines[0];
+      $context->buildViolation($template, $arguments)->atPath($path)->addViolation();
+      return;
+    }
+    $templates = [];
+    $parts = [];
+    foreach ($this->lines as $index => [$template, $arguments]) {
+      $templates[] = $template;
+      // Each template is a constraint message, a literal string.
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      $parts['@finding' . $index] = new TranslatableMarkup($template, $arguments);
+    }
+    // The joined message is already translated. A violation builder would
+    // translate it again, as one new string for each set of findings, so the
+    // violation is added directly.
+    $context->getViolations()->add(new ConstraintViolation(
+      new FormattableMarkup(implode("<br>\n", array_keys($parts)), $parts),
+      implode("<br>\n", $templates),
+      [],
+      $context->getRoot(),
+      $context->getPropertyPath($path),
+      $context->getValue(),
+      NULL,
+      NULL,
+      $constraint,
+    ));
   }
 
 }

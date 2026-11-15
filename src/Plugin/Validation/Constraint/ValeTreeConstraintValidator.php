@@ -102,10 +102,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       }
     }
     $this->checkComponents($value, $constraint, $errors, 1);
-    if (!$errors->isEmpty()) {
-      [$template, $arguments] = $errors->message();
-      $this->context->addViolation($template, $arguments);
-    }
+    $errors->addTo($this->context, $constraint);
   }
 
   /**
