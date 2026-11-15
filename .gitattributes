@@ -4,6 +4,7 @@ AGENTS.md          export-ignore
 CLAUDE.md          export-ignore
 .claude            export-ignore
 .ahoy.yml          export-ignore
+.coderabbit.yaml   export-ignore
 .cspell.json       export-ignore
 .deprecation-ignore.txt export-ignore
 .editorconfig      export-ignore
