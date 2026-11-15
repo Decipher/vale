@@ -295,6 +295,9 @@ class ContentWalkerTest extends KernelTestBase {
 
     // The paragraph bundle gives what linting the page gives for it.
     $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+    // So does linting the paragraph by itself: the French text is named by
+    // the French page.
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->entity(Paragraph::load($paragraph->id()))));
   }
 
   /**
