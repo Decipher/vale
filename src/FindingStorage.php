@@ -28,6 +28,20 @@ class FindingStorage {
   private const int INSERT_BATCH = 500;
 
   /**
+   * How many rows one read of rows() holds.
+   */
+  private const int ROW_PAGE = 1000;
+
+  /**
+   * The columns rows() gives: the ones the CSV export writes, and the id.
+   */
+  private const array ROW_COLUMNS = [
+    'fid', 'root_type', 'root_id', 'root_bundle', 'root_label',
+    'entity_type', 'entity_id', 'bundle', 'langcode', 'field', 'delta',
+    'line', 'span_start', 'span_end', 'level', 'rule', 'message', 'matched', 'scanned',
+  ];
+
+  /**
    * Constructs a FindingStorage.
    *
    * @param \Drupal\Core\Database\Connection $database
@@ -218,7 +232,8 @@ class FindingStorage {
    * Gives the stored rows, one at a time.
    *
    * The filters match as the report's do: the bundle and the level exactly,
-   * and the rule as part of its name.
+   * and the rule as part of its name. Each row holds the columns the CSV
+   * export writes, and its id.
    *
    * @param array{root_bundle?: string, level?: string, rule?: string} $filters
    *   Values to filter on.
@@ -227,19 +242,37 @@ class FindingStorage {
    *   The rows, ordered by root.
    */
   public function rows(array $filters = []): \Generator {
-    $query = $this->database->select(self::TABLE, 'f')->fields('f');
-    foreach (['root_bundle', 'level'] as $column) {
-      if (($filters[$column] ?? '') !== '') {
-        $query->condition('f.' . $column, $filters[$column]);
+    // MySQL buffers a whole result set, so the rows are read a page at a
+    // time. Each page starts after the last row of the one before.
+    $last = NULL;
+    do {
+      $query = $this->database->select(self::TABLE, 'f')->fields('f', self::ROW_COLUMNS);
+      foreach (['root_bundle', 'level'] as $column) {
+        if (($filters[$column] ?? '') !== '') {
+          $query->condition('f.' . $column, $filters[$column]);
+        }
       }
-    }
-    if (($filters['rule'] ?? '') !== '') {
-      $query->condition('f.rule', '%' . $this->database->escapeLike($filters['rule']) . '%', 'LIKE');
-    }
-    $query->orderBy('f.root_type')->orderBy('f.root_id')->orderBy('f.fid');
-    foreach ($query->execute() as $record) {
-      yield (array) $record;
-    }
+      if (($filters['rule'] ?? '') !== '') {
+        $query->condition('f.rule', '%' . $this->database->escapeLike($filters['rule']) . '%', 'LIKE');
+      }
+      if ($last !== NULL) {
+        $query->condition($query->orConditionGroup()
+          ->condition('f.root_type', $last->root_type, '>')
+          ->condition($query->andConditionGroup()
+            ->condition('f.root_type', $last->root_type)
+            ->condition('f.root_id', $last->root_id, '>'))
+          ->condition($query->andConditionGroup()
+            ->condition('f.root_type', $last->root_type)
+            ->condition('f.root_id', $last->root_id)
+            ->condition('f.fid', $last->fid, '>')));
+      }
+      $query->orderBy('f.root_type')->orderBy('f.root_id')->orderBy('f.fid');
+      $records = $query->range(0, self::ROW_PAGE)->execute()->fetchAll();
+      foreach ($records as $record) {
+        yield (array) $record;
+      }
+      $last = end($records) ?: NULL;
+    } while (count($records) === self::ROW_PAGE);
   }
 
   /**
