@@ -15,8 +15,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  *
  * The view is replaced only when it still matches the one that 1.0.0 and
  * 1.0.1 shipped. Values that the site sets or Drupal works out are left
- * out of the match: the UUID, the language, the dependencies and the cache
- * metadata. Key order and value types are ignored too.
+ * out of the match: the UUID, the language, the dependencies, the cache
+ * metadata and the pager's default heading level. Key order and value types
+ * are ignored too.
  */
 function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   $name = 'views.view.vale_findings';
@@ -37,6 +38,10 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   unset($data['uuid'], $data['_core'], $data['langcode'], $data['dependencies']);
   foreach (array_keys($data['display'] ?? []) as $display) {
     unset($data['display'][$display]['cache_metadata']);
+    // Drupal 10 saves the pager's default heading level into the view.
+    if (($data['display'][$display]['display_options']['pager']['options']['pagination_heading_level'] ?? NULL) === 'h4') {
+      unset($data['display'][$display]['display_options']['pager']['options']['pagination_heading_level']);
+    }
   }
   // The hash of the view that 1.0.0 and 1.0.1 shipped, after the same steps.
   if (hash('sha256', serialize($normalise($data))) !== '8a2c8952d872bfb4823472fa4c2a783a4f219d06aecf479e921bb36ce81156b2') {

@@ -59,6 +59,23 @@ class ReportViewUpdateTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a view saved by Drupal 10 still counts as unchanged.
+   *
+   * Drupal 10 saves the pager's default heading level into the view.
+   */
+  public function testDrupal10ViewIsReplaced(): void {
+    $this->installReleasedView(static function (array &$data): void {
+      $data['display']['default']['display_options']['pager']['options']['pagination_heading_level'] = 'h4';
+    });
+
+    $message = (string) vale_post_update_report_table_fits();
+
+    $options = $this->config('views.view.vale_findings')->get('display.default.display_options');
+    $this->assertArrayNotHasKey('root_bundle', $options['fields']);
+    $this->assertStringContainsString('Updated', $message);
+  }
+
+  /**
    * Tests that a view changed on the site is kept, with a way to update it.
    */
   public function testChangedViewIsKept(): void {
