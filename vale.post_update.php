@@ -16,8 +16,8 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  * The view is replaced only when it still matches the one that 1.0.0 and
  * 1.0.1 shipped. Values that the site sets or Drupal works out are left
  * out of the match: the UUID, the language, the dependencies, the cache
- * metadata and the pager's default heading level. Key order and value types
- * are ignored too.
+ * metadata and the pager's default heading level. Value types and the order
+ * of keys are ignored too, except for the order of the view's handlers.
  */
 function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   $name = 'views.view.vale_findings';
@@ -27,12 +27,21 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
     return NULL;
   }
 
-  $normalise = static function (mixed $value) use (&$normalise): mixed {
-    if (is_array($value)) {
-      ksort($value);
-      return array_map($normalise, $value);
+  // Views runs its handlers in the order they are listed, so a site that
+  // only reordered them has changed the view. The order of other keys does
+  // not matter.
+  $ordered = ['fields', 'sorts', 'filters', 'arguments', 'relationships', 'header', 'footer', 'empty'];
+  $normalise = static function (mixed $value, int|string $key = '') use (&$normalise, $ordered): mixed {
+    if (!is_array($value)) {
+      return is_bool($value) ? (string) (int) $value : (string) $value;
     }
-    return is_bool($value) ? (string) (int) $value : (string) $value;
+    if (!in_array($key, $ordered, TRUE)) {
+      ksort($value);
+    }
+    foreach ($value as $child => $item) {
+      $value[$child] = $normalise($item, $child);
+    }
+    return $value;
   };
   $data = $active->getRawData();
   unset($data['uuid'], $data['_core'], $data['langcode'], $data['dependencies']);
@@ -44,7 +53,7 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
     }
   }
   // The hash of the view that 1.0.0 and 1.0.1 shipped, after the same steps.
-  if (hash('sha256', serialize($normalise($data))) !== '8a2c8952d872bfb4823472fa4c2a783a4f219d06aecf479e921bb36ce81156b2') {
+  if (hash('sha256', serialize($normalise($data))) !== '47a1c786fda3c4890284461f1107e3a2a7291f02b396da2ff10d049e2c8f5cc6') {
     return new TranslatableMarkup('The content report view has been changed on this site, so it was kept. To use the new one, run <code>@delete</code> and then <code>@install</code>. That removes your changes to it.', [
       '@delete' => 'drush config:delete ' . $name,
       '@install' => 'drush php:eval "Drupal::entityTypeManager()->getStorage(\'view\')->create((new Drupal\\Core\\Config\\FileStorage(Drupal::service(\'extension.list.module\')->getPath(\'vale\') . \'/config/optional\'))->read(\'' . $name . '\'))->save();"',
@@ -57,7 +66,9 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   $storage = \Drupal::entityTypeManager()->getStorage('view');
   /** @var \Drupal\views\ViewEntityInterface $view */
   $view = $storage->load('vale_findings');
-  // This keeps the view's UUID and works out its dependencies again.
+  // This keeps the view's UUID and its language, and works out its
+  // dependencies again.
+  $shipped['langcode'] = $active->get('langcode');
   $storage->updateFromStorageRecord($view, $shipped)->save();
   return new TranslatableMarkup('Updated the content report view to fit admin themes.');
 }

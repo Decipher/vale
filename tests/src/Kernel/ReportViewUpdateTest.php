@@ -76,6 +76,38 @@ class ReportViewUpdateTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a view whose handlers were only reordered is kept.
+   *
+   * Views runs its handlers in the order they are listed.
+   */
+  public function testReorderedViewIsKept(): void {
+    $this->installReleasedView(static function (array &$data): void {
+      $fields = &$data['display']['default']['display_options']['fields'];
+      $fields = array_reverse($fields, TRUE);
+    });
+
+    $message = (string) vale_post_update_report_table_fits();
+
+    $this->assertArrayHasKey('root_bundle', $this->config('views.view.vale_findings')->get('display.default.display_options.fields'));
+    $this->assertStringContainsString('has been changed on this site', $message);
+  }
+
+  /**
+   * Tests that the replaced view keeps the site's language.
+   */
+  public function testLanguageIsKept(): void {
+    $this->installReleasedView(static function (array &$data): void {
+      $data['langcode'] = 'fr';
+    });
+
+    vale_post_update_report_table_fits();
+
+    $config = $this->config('views.view.vale_findings');
+    $this->assertArrayNotHasKey('root_bundle', $config->get('display.default.display_options.fields'));
+    $this->assertSame('fr', $config->get('langcode'));
+  }
+
+  /**
    * Tests that a view changed on the site is kept, with a way to update it.
    */
   public function testChangedViewIsKept(): void {
