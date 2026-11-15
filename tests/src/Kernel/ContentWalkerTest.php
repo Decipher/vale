@@ -295,6 +295,9 @@ class ContentWalkerTest extends KernelTestBase {
 
     // The paragraph bundle gives what linting the page gives for it.
     $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->bundle('paragraph', 'docs_text')));
+    // So does linting the paragraph by itself: the French text is named by
+    // the French page.
+    $this->assertSame(['node Guide FR > paragraph.field_text:Demo.Very'], $this->summarise($this->container->get('vale.content_walker')->entity(Paragraph::load($paragraph->id()))));
   }
 
   /**
@@ -344,9 +347,47 @@ class ContentWalkerTest extends KernelTestBase {
     $walker = $this->container->get('vale.content_walker');
     $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
 
+    // Linting the inner paragraph by itself names the page as its host, not
+    // the group.
+    $inner = $group->get('field_items')->entity;
+    $this->assertInstanceOf(Paragraph::class, $inner);
+    $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($walker->entity($inner)));
+
     // Without the group, nothing holds the inner paragraph.
     Paragraph::load($group->id())?->delete();
     $this->assertSame([], $walker->bundle('paragraph', 'docs_text'));
+  }
+
+  /**
+   * Tests the host of a paragraph nested deeper than its root is looked for.
+   */
+  public function testNestedHostTooDeep(): void {
+    ParagraphsType::create(['id' => 'group', 'label' => 'Group'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_items',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_items', 'entity_type' => 'paragraph', 'bundle' => 'group'])->save();
+    // Eleven groups, each holding the next, put the text paragraph too deep
+    // for its page to be found.
+    $inner = Paragraph::create(['type' => 'docs_text', 'field_text' => 'We delve.']);
+    $held = $inner;
+    for ($level = 0; $level < 11; $level++) {
+      $held = Paragraph::create(['type' => 'group', 'field_items' => [$held]]);
+    }
+    $this->savePage(['title' => 'Guide', 'field_text' => 'Fine.', 'field_content' => [$held]]);
+
+    // The inner paragraph then names the group that holds it.
+    $inner = Paragraph::load($inner->id());
+    $this->assertInstanceOf(Paragraph::class, $inner);
+    $parent = $inner->getParentEntity();
+    $this->assertInstanceOf(Paragraph::class, $parent);
+    $findings = $this->container->get('vale.content_walker')->entity($inner);
+    $this->assertCount(1, $findings);
+    $this->assertSame('paragraph', $findings[0]->host['entity_type'] ?? NULL);
+    $this->assertSame((string) $parent->id(), (string) ($findings[0]->host['id'] ?? ''));
   }
 
   /**

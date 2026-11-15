@@ -348,10 +348,15 @@ class ContentWalker {
    *   The findings.
    */
   public function entity(FieldableEntityInterface $entity): array {
-    $host = NULL;
-    if ($this->publishState->isComponent($entity) && method_exists($entity, 'getParentEntity')) {
-      $parent = $entity->getParentEntity();
-      $host = $parent instanceof FieldableEntityInterface ? Finding::describe($parent) : NULL;
+    $top = NULL;
+    if ($this->publishState->isComponent($entity)) {
+      // A component's host is the top-level entity, as the report's root is.
+      // One nested deeper than walk() follows names its parent instead.
+      $root = $this->root($entity);
+      $top = $root ? $this->latest(...$root) : NULL;
+      if (!$top && method_exists($entity, 'getParentEntity')) {
+        $top = $entity->getParentEntity();
+      }
     }
     $translations = [$entity];
     if ($entity instanceof TranslatableInterface && $entity->isTranslatable()) {
@@ -362,7 +367,15 @@ class ContentWalker {
     }
     $findings = [];
     foreach ($translations as $translation) {
-      $this->walk($translation, $host, $translation->language()->getId(), $findings, 0);
+      $langcode = $translation->language()->getId();
+      $host = NULL;
+      if ($top instanceof FieldableEntityInterface) {
+        // Each translation is named by the host's text in its language, as
+        // when the host is linted.
+        $named = $top instanceof TranslatableInterface && $top->hasTranslation($langcode) ? $top->getTranslation($langcode) : $top;
+        $host = Finding::describe($named);
+      }
+      $this->walk($translation, $host, $langcode, $findings, 0);
     }
     return $findings;
   }
