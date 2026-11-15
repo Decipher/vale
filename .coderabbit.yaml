@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  auto_review:
+    # CodeRabbit reviews pull requests to the default branch only. Review
+    # those to every release line too, such as 1.0.x for patch releases.
+    base_branches:
+      - '^\d+(\.\d+)?\.x$'
