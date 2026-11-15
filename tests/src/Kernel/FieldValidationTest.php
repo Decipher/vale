@@ -202,6 +202,10 @@ class FieldValidationTest extends KernelTestBase {
     $violations = $this->violations($this->page(['field_text' => 'Fine.']));
     $this->assertSame(['field_text.0.value'], array_keys($violations));
     $this->assertStringStartsWith('Text: Vale could not check this text.', $violations['field_text.0.value'][0]);
+    // A paragraph saved by itself is named in the message.
+    $violations = $this->violations(Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']));
+    $this->assertSame(['field_text.0.value'], array_keys($violations));
+    $this->assertStringStartsWith('Paragraph "Docs text", Text: Vale could not check this text.', $violations['field_text.0.value'][0]);
 
     // In publish-only mode, a draft saves and publishing is refused.
     $this->config('vale.settings')->set('publish_only', TRUE)->save();

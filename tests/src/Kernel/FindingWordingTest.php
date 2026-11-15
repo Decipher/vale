@@ -14,7 +14,9 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
+use Drupal\vale\FindingMessage;
 use Drupal\vale\Hook\ValeFormHooks;
+use Drupal\vale\Plugin\Validation\Constraint\ValeTreeConstraint;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -92,6 +94,18 @@ class FindingWordingTest extends KernelTestBase {
    */
   protected function paragraph(): Paragraph {
     return Paragraph::create(['type' => 'docs_text', 'field_text' => 'This is very good.']);
+  }
+
+  /**
+   * Tests that a component's templates match ValeTree's, word for word.
+   *
+   * The constraint keeps its own literal strings, which translation tools
+   * read. Matching them means each template is translated once.
+   */
+  public function testComponentTemplatesMatch(): void {
+    $constraint = new ValeTreeConstraint();
+    $this->assertSame($constraint->message, FindingMessage::COMPONENT_ALERT);
+    $this->assertSame($constraint->uncheckedMessage, FindingMessage::COMPONENT_UNCHECKED);
   }
 
   /**
