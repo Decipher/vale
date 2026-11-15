@@ -51,10 +51,9 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
     ]);
   }
 
+  // The module ships this file, so it can be read.
+  /** @var array<string, mixed> $shipped */
   $shipped = (new FileStorage(\Drupal::service('extension.list.module')->getPath('vale') . '/config/optional'))->read($name);
-  if (!is_array($shipped)) {
-    return NULL;
-  }
   $storage = \Drupal::entityTypeManager()->getStorage('view');
   /** @var \Drupal\views\ViewEntityInterface $view */
   $view = $storage->load('vale_findings');
