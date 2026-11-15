@@ -344,6 +344,12 @@ class ContentWalkerTest extends KernelTestBase {
     $walker = $this->container->get('vale.content_walker');
     $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($walker->bundle('paragraph', 'docs_text')));
 
+    // Linting the inner paragraph by itself names the page as its host, not
+    // the group.
+    $inner = $group->get('field_items')->entity;
+    $this->assertInstanceOf(Paragraph::class, $inner);
+    $this->assertSame(['node Guide > paragraph.field_text:Demo.Delve'], $this->summarise($walker->entity($inner)));
+
     // Without the group, nothing holds the inner paragraph.
     Paragraph::load($group->id())?->delete();
     $this->assertSame([], $walker->bundle('paragraph', 'docs_text'));
