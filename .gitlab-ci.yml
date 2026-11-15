@@ -23,11 +23,11 @@ include:
 variables:
   OPT_IN_TEST_PREVIOUS_MINOR: 1
   OPT_IN_TEST_NEXT_MINOR: 1
-  # Drupal 12 is core's main branch. Its jobs are in every pipeline, but run
-  # only by hand. From core 11.5, run-tests.sh fails a test on any deprecation,
-  # and Paragraphs, Entity Reference Revisions and vale's Drush commands still
-  # trigger some there.
+  # Drupal 12 is core's main branch. From core 11.5, run-tests.sh fails a test
+  # on any deprecation, so these jobs show new deprecations before stable core
+  # reaches 11.5.
   OPT_IN_TEST_NEXT_MAJOR: 1
+  _AUTORUN_NEXT_MAJOR: 'push-and-mr'
   # The tests use Paragraphs, which does not declare Drupal 12 support yet.
   # vale does not need it at runtime, so the next major jobs install it anyway.
   _LENIENT_ALLOW_LIST: 'paragraphs,entity_reference_revisions'
@@ -65,10 +65,29 @@ phpstan:
     chmod 755 "$CI_PROJECT_DIR/.vale-bin/vale"
     "$CI_PROJECT_DIR/.vale-bin/vale" --version
 
+# Core reads one deprecation ignore file, so the phpunit jobs join core's file
+# and the project's .deprecation-ignore.txt into one.
+# Core 11.4 and older read the file from SYMFONY_DEPRECATIONS_HELPER. Core 11.5
+# and later read it from DRUPAL_DEPRECATION_FILTER_CONFIG, and deprecate
+# SYMFONY_DEPRECATIONS_HELPER whenever it is set, so there it is unset. A job
+# variable cannot unset it.
+.deprecation-ignores: &deprecation-ignores
+  - |
+    IGNORES="$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"
+    cat "$CI_PROJECT_DIR/$_WEB_ROOT/core/.deprecation-ignore.txt" "$CI_PROJECT_DIR/.deprecation-ignore.txt" > "$IGNORES"
+    if grep -q DRUPAL_DEPRECATION_FILTER_CONFIG "$CI_PROJECT_DIR/$_WEB_ROOT/core/tests/Drupal/TestTools/Extension/DeprecationBridge/DeprecationHandler.php"; then
+      unset SYMFONY_DEPRECATIONS_HELPER
+    else
+      export SYMFONY_DEPRECATIONS_HELPER="ignoreFile=$IGNORES"
+    fi
+
 phpunit:
-  before_script: *install-vale
+  before_script:
+    - *install-vale
+    - *deprecation-ignores
   # Every phpunit variant extends this job. One resource group makes them run
   # one at a time, so two variants never share a database server.
   resource_group: vale-phpunit
   variables:
     VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale
+    DRUPAL_DEPRECATION_FILTER_CONFIG: '{"enableProjectIgnores":true,"projectIgnoreFile":"$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"}'
