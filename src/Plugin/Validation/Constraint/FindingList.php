@@ -42,16 +42,6 @@ final class FindingList {
   }
 
   /**
-   * Says whether there are no findings.
-   *
-   * @return bool
-   *   TRUE when nothing was added.
-   */
-  public function isEmpty(): bool {
-    return $this->lines === [];
-  }
-
-  /**
    * Adds the findings to the context as one violation.
    *
    * One finding is an ordinary violation, so its template is translated as
