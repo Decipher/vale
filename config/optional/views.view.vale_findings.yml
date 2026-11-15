@@ -22,24 +22,29 @@ display:
     display_options:
       title: 'Prose linting'
       fields:
+        root_label:
+          id: root_label
+          table: vale_finding
+          field: root_label
+          plugin_id: standard
+          label: ''
+          exclude: true
         root_link:
           id: root_link
           table: vale_finding
           field: root_link
           plugin_id: vale_root_link
           label: Content
-        root_bundle:
-          id: root_bundle
-          table: vale_finding
-          field: root_bundle
-          plugin_id: standard
-          label: Bundle
         label:
           id: label
           table: vale_finding
           field: label
           plugin_id: standard
           label: 'Found in'
+          alter:
+            alter_text: true
+            text: '{% if label != root_label %}{{ label|replace({(root_label ~ '' &gt; ''): ''&gt; ''})|raw }}{% endif %}'
+          hide_empty: true
         langcode:
           id: langcode
           table: vale_finding
@@ -181,9 +186,9 @@ display:
           row_class: ''
           default_row_class: true
           columns:
+            root_label: root_label
             root_link: root_link
-            root_bundle: root_bundle
-            label: label
+            label: root_link
             langcode: langcode
             field: field
             line: line
@@ -192,10 +197,12 @@ display:
             matched: matched
             message: message
           default: '-1'
-          info: {  }
+          info:
+            root_link:
+              separator: '<br>'
           override: true
           sticky: true
-          caption: 'Prose linting'
+          caption: ''
           summary: ''
           empty_table: false
       row:

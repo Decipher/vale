@@ -20,6 +20,7 @@ use Drupal\vale\ScanBatch;
 use Drupal\views\Views;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -121,6 +122,38 @@ class ContentReportUiTest extends KernelTestBase {
 
     $this->assertSame(['page' => 'page'], FindingStorage::bundleOptions());
     $this->assertSame(['error', 'warning', 'suggestion', 'unchecked'], array_keys(FindingStorage::levelOptions()));
+  }
+
+  /**
+   * Tests that the table fits an admin theme.
+   *
+   * Where an alert was found is shown only for a component. The table has
+   * no caption, which Gin's sticky header does not allow for.
+   */
+  public function testTableFits(): void {
+    $view = Views::getView('vale_findings');
+    $this->assertNotNull($view);
+    $build = $view->preview('page_1');
+    $html = (string) $this->container->get('renderer')->renderInIsolation($build);
+    $table = (new Crawler($html))->filter('table');
+
+    $rows = $table->filter('tbody tr')->each(static fn (Crawler $row): string => (string) preg_replace('/\s+/', ' ', trim($row->text())));
+    $this->assertCount(2, $rows);
+    // The page's own field names the page once.
+    $top = array_values(array_filter($rows, static fn (string $row): bool => str_contains($row, 'Demo.Delve')));
+    $this->assertCount(1, $top);
+    $this->assertSame(1, substr_count($top[0], 'Guide'));
+    // A paragraph's alert also says where in the page it was found, without
+    // naming the page again.
+    $component = array_values(array_filter($rows, static fn (string $row): bool => str_contains($row, 'Demo.Very')));
+    $this->assertCount(1, $component);
+    $this->assertSame(1, substr_count($component[0], 'Guide'));
+    $this->assertStringContainsString('> Content', $component[0]);
+
+    $this->assertCount(0, $table->filter('caption'));
+    $headers = $table->filter('thead th')->each(static fn (Crawler $th): string => trim($th->text()));
+    $this->assertNotContains('Bundle', $headers);
+    $this->assertNotContains('Found in', $headers);
   }
 
   /**
