@@ -113,6 +113,10 @@ class FindingTranslationTest extends KernelTestBase {
    *   The strings, each once.
    */
   protected function findingSources(): array {
+    // A rendered finding must never be looked up as a source string.
+    foreach ($this->sources as $source) {
+      $this->assertStringNotContainsString('Demo.Very', $source);
+    }
     return array_values(array_unique(array_filter($this->sources->getArrayCopy(), static fn (string $source): bool => str_contains($source, '@rule') || str_contains($source, '@reason'))));
   }
 
