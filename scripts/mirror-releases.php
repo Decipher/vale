@@ -17,7 +17,7 @@
 
 declare(strict_types=1);
 
-exit(mirror_main($argv));
+exit(mirror_main($_SERVER['argv'] ?? []));
 
 /**
  * Runs the mirror and returns the exit code.

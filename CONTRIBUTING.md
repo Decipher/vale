@@ -262,3 +262,7 @@ php -d pcov.directory=.. vendor/bin/phpunit \
 php -d pcov.directory=.. vendor/bin/phpunit --group=wip
 php -d pcov.directory=.. vendor/bin/phpunit --filter=MyUnitTest::testSomething
 ```
+
+## Releases
+
+Releases are made on [Drupal.org](https://www.drupal.org/project/vale/releases), which is the source of truth for this project. The release tag is then pushed to the GitHub mirror. The `Mirror releases` workflow copies the Drupal.org release notes into a GitHub Release for that tag, and never sends anything back to Drupal.org.
