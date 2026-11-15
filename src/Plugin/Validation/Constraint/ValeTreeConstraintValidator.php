@@ -11,6 +11,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
 use Drupal\vale\FieldLinter;
+use Drupal\vale\FindingMessage;
 use Drupal\vale\PublishState;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Validator\Constraint;
@@ -41,12 +42,15 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
    *   The publish state service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The config factory.
+   * @param \Drupal\vale\FindingMessage $findingMessage
+   *   The finding message builder.
    */
   public function __construct(
     protected FieldLinter $fieldLinter,
     protected AlertCollector $alertCollector,
     protected PublishState $publishState,
     protected ConfigFactoryInterface $configFactory,
+    protected FindingMessage $findingMessage,
   ) {}
 
   /**
@@ -58,6 +62,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       $container->get('vale.alert_collector'),
       $container->get('vale.publish_state'),
       $container->get('config.factory'),
+      $container->get('vale.finding_message'),
     );
   }
 
@@ -78,25 +83,19 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     // validates the entity before its fields; FieldLinter remembers a failed
     // run, so the text is not run twice.
     $errors = new FindingList();
+    // A component saved by itself is named, as it is when its host is
+    // published.
+    $component = $this->findingMessage->component($value);
     foreach ($value->getFieldDefinitions() as $name => $definition) {
       foreach ($this->fieldLinter->lint($value->get($name)) as $result) {
         // ValeText notes unchecked text in the entity's own fields, unless
         // it refuses the save.
         if (!$result->isChecked() && $this->configFactory->get('vale.settings')->get('fail_closed')) {
-          $errors->add($constraint->uncheckedFieldMessage, [
-            '@field' => (string) $definition->getLabel(),
-            '@reason' => $result->reason,
-          ]);
+          $errors->add($component ? $constraint->uncheckedMessage : $constraint->uncheckedFieldMessage, $component + $this->findingMessage->unchecked((string) $definition->getLabel(), $result->reason));
         }
         foreach ($result->isChecked() ? $result->alerts : [] as $alert) {
           if ($alert->level === Alert::ERROR) {
-            $errors->add($constraint->fieldMessage, [
-              '@field' => (string) $definition->getLabel(),
-              '@rule' => $alert->rule,
-              '@message' => $alert->message,
-              '@line' => $alert->line,
-              '@match' => $alert->match,
-            ]);
+            $errors->add($component ? $constraint->message : $constraint->fieldMessage, $component + $this->findingMessage->alert((string) $definition->getLabel(), $alert));
           }
         }
       }
@@ -168,12 +167,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
         $this->alertCollector->markLinted();
         if (!$result->isChecked()) {
           if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
-            $errors->add($constraint->uncheckedMessage, [
-              '@type' => (string) $component->getEntityType()->getLabel(),
-              '@bundle' => $this->alertCollector->label($component),
-              '@field' => (string) $definition->getLabel(),
-              '@reason' => $result->reason,
-            ]);
+            $errors->add($constraint->uncheckedMessage, $this->findingMessage->component($component) + $this->findingMessage->unchecked((string) $definition->getLabel(), $result->reason));
           }
           else {
             $this->alertCollector->addUnchecked($result->reason);
@@ -188,15 +182,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
           // Validating the component by itself, as the Paragraphs widget
           // does, listed this error as a warning. Here it refuses the save.
           $this->alertCollector->remove($component, $name, $delta, $alert);
-          $errors->add($constraint->message, [
-            '@type' => (string) $component->getEntityType()->getLabel(),
-            '@bundle' => $this->alertCollector->label($component),
-            '@field' => (string) $definition->getLabel(),
-            '@rule' => $alert->rule,
-            '@message' => $alert->message,
-            '@line' => $alert->line,
-            '@match' => $alert->match,
-          ]);
+          $errors->add($constraint->message, $this->findingMessage->component($component) + $this->findingMessage->alert((string) $definition->getLabel(), $alert));
         }
       }
     }

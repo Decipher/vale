@@ -378,7 +378,7 @@ class FieldValidationTest extends KernelTestBase {
     // The live text would change, so the save is refused.
     $paragraph->set('field_text', 'This is very good.');
     $this->assertSame(
-      ['' => ['Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")']],
+      ['' => ['Paragraph "Docs text", Text: Demo.Very: Avoid &#039;very&#039;. (line 1: "very")']],
       $this->violations($paragraph),
     );
     $this->assertSame([], $this->collected());
@@ -731,7 +731,7 @@ class FieldValidationTest extends KernelTestBase {
     $this->container->get('form_builder')->submitForm($form, $form_state);
     $warnings = array_map(strval(...), $this->container->get('messenger')->messagesByType('warning'));
     $this->assertCount(1, $warnings);
-    $this->assertStringStartsWith('Docs text, Text: Demo.Delve:', $warnings[0]);
+    $this->assertStringStartsWith('Paragraph "Docs text", Text: Demo.Delve:', $warnings[0]);
   }
 
 }

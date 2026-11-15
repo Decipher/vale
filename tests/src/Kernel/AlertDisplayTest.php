@@ -86,8 +86,8 @@ class AlertDisplayTest extends KernelTestBase {
 
     $warnings = array_map(strval(...), $this->container->get('messenger')->messagesByType('warning'));
     $this->assertSame([
-      'Guide, Text: Demo.Delve: &#039;delve&#039; is an AI tell. (line 1: "delve")',
-      'Guide, Text: Demo.Very: Avoid &#039;very&#039;. (line 2: "Very"). Blocks publishing.',
+      'Content "Guide", Text: Demo.Delve: &#039;delve&#039; is an AI tell. (line 1: "delve")',
+      'Content "Guide", Text: Demo.Very: Avoid &#039;very&#039;. (line 2: "Very"). Blocks publishing.',
       'Prose not checked: Vale ran out of time.',
     ], $warnings);
     $this->assertSame([], $this->container->get('vale.alert_collector')->alerts());

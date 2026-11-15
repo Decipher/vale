@@ -12,6 +12,7 @@ use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
+use Drupal\vale\FindingMessage;
 use Drupal\vale\PublishState;
 
 /**
@@ -31,11 +32,14 @@ class ValeFormHooks {
    *   The messenger.
    * @param \Drupal\vale\PublishState $publishState
    *   The publish state.
+   * @param \Drupal\vale\FindingMessage $findingMessage
+   *   The finding message builder.
    */
   public function __construct(
     protected AlertCollector $collector,
     protected MessengerInterface $messenger,
     protected PublishState $publishState,
+    protected FindingMessage $findingMessage,
   ) {}
 
   /**
@@ -94,13 +98,8 @@ class ValeFormHooks {
     foreach ($this->collector->alerts() as $finding) {
       $alert = $finding['alert'];
       $args = [
-        '@label' => $finding['label'],
-        '@field' => $finding['field_label'],
-        '@rule' => $alert->rule,
-        '@message' => $alert->message,
-        '@line' => $alert->line,
-        '@match' => $alert->match,
-      ];
+        '@label' => $this->findingMessage->where($finding['entity_type'], $finding['bundle'], $finding['label']),
+      ] + $this->findingMessage->alert($finding['field_label'], $alert);
       if ($alert->level === Alert::ERROR) {
         $this->messenger->addWarning($this->t('@label, @field: @rule: @message (line @line: "@match"). Blocks publishing.', $args));
       }

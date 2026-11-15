@@ -12,6 +12,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\vale\Alert;
 use Drupal\vale\ContentWalker;
 use Drupal\vale\Finding;
+use Drupal\vale\FindingMessage;
 use Drupal\vale\ValeEnvironment;
 use Drupal\workspaces\Event\WorkspacePrePublishEvent;
 use Psr\Log\LoggerInterface;
@@ -58,6 +59,8 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    *   The vale logger channel.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entityFieldManager
    *   The entity field manager.
+   * @param \Drupal\vale\FindingMessage $findingMessage
+   *   The finding message builder.
    */
   public function __construct(
     protected ContentWalker $contentWalker,
@@ -66,6 +69,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
     protected MessengerInterface $messenger,
     protected LoggerInterface $logger,
     protected EntityFieldManagerInterface $entityFieldManager,
+    protected FindingMessage $findingMessage,
   ) {}
 
   /**
@@ -171,30 +175,17 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    *   The description, with the content's text escaped.
    */
   protected function describe(Finding $finding): TranslatableMarkup {
-    $where = $this->t('@type "@label"', ['@type' => $finding->entityType, '@label' => $finding->label]);
+    $where = $this->findingMessage->where($finding->entityType, $finding->bundle, $finding->label);
     if ($finding->host) {
-      $where = $this->t('@type "@label", @part', [
-        '@type' => $finding->host['entity_type'],
-        '@label' => $finding->host['label'],
+      $host = $finding->host;
+      $where = $this->t('@type "@label", @part', $this->findingMessage->entity($host['entity_type'], $host['bundle'], $host['label']) + [
         '@part' => $where,
       ]);
     }
     if (!$finding->alert instanceof Alert) {
-      return $this->t('@where, @field: not checked. @reason', [
-        '@where' => $where,
-        '@field' => $this->fieldLabel($finding),
-        '@reason' => $finding->reason,
-      ]);
+      return $this->t('@where, @field: Vale could not check this text. @reason', ['@where' => $where] + $this->findingMessage->unchecked($this->fieldLabel($finding), $finding->reason));
     }
-    $alert = $finding->alert;
-    return $this->t('@where, @field: @rule: @message (line @line: "@match")', [
-      '@where' => $where,
-      '@field' => $this->fieldLabel($finding),
-      '@rule' => $alert->rule,
-      '@message' => $alert->message,
-      '@line' => $alert->line,
-      '@match' => $alert->match,
-    ]);
+    return $this->t('@where, @field: @rule: @message (line @line: "@match")', ['@where' => $where] + $this->findingMessage->alert($this->fieldLabel($finding), $finding->alert));
   }
 
   /**

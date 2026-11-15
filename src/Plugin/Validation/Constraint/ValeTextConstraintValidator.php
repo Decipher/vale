@@ -10,6 +10,7 @@ use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
 use Drupal\vale\FieldLinter;
+use Drupal\vale\FindingMessage;
 use Drupal\vale\PublishState;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Validator\Constraint;
@@ -31,12 +32,15 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
    *   The publish state service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The config factory.
+   * @param \Drupal\vale\FindingMessage $findingMessage
+   *   The finding message builder.
    */
   public function __construct(
     protected FieldLinter $fieldLinter,
     protected AlertCollector $alertCollector,
     protected PublishState $publishState,
     protected ConfigFactoryInterface $configFactory,
+    protected FindingMessage $findingMessage,
   ) {}
 
   /**
@@ -48,6 +52,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
       $container->get('vale.alert_collector'),
       $container->get('vale.publish_state'),
       $container->get('config.factory'),
+      $container->get('vale.finding_message'),
     );
   }
 
@@ -63,6 +68,10 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     // Each message names its field. Drupal drops a message that repeats
     // another, so the same alert in two fields would otherwise show once.
     $label = (string) $value->getFieldDefinition()->getLabel();
+    // A component is named too, as it is when its host is published.
+    $component = $this->findingMessage->component($entity);
+    $message = $component ? FindingMessage::COMPONENT_ALERT : $constraint->message;
+    $unchecked_message = $component ? FindingMessage::COMPONENT_UNCHECKED : $constraint->uncheckedMessage;
 
     // In publish-only mode an error stops only the save that publishes, and
     // ValeTree reports it on the entity rather than here. JSON:API drops
@@ -82,10 +91,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
           $this->alertCollector->addUnchecked($result->reason);
         }
         elseif (!$publish_only) {
-          $this->context->buildViolation($constraint->uncheckedMessage, [
-            '@field' => $label,
-            '@reason' => $result->reason,
-          ])->atPath($delta . '.value')->addViolation();
+          $this->context->buildViolation($unchecked_message, $component + $this->findingMessage->unchecked($label, $result->reason))->atPath($delta . '.value')->addViolation();
         }
         continue;
       }
@@ -95,13 +101,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
           $this->alertCollector->add($entity, $field, $delta, $alert);
         }
         elseif (!$publish_only) {
-          $errors->add($constraint->message, [
-            '@field' => $label,
-            '@rule' => $alert->rule,
-            '@message' => $alert->message,
-            '@line' => $alert->line,
-            '@match' => $alert->match,
-          ]);
+          $errors->add($message, $component + $this->findingMessage->alert($label, $alert));
         }
       }
       $errors->addTo($this->context, $constraint, $delta . '.value');
