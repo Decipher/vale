@@ -12,12 +12,6 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
  * Updates the content report view, unless the site has changed it.
- *
- * The view is replaced only when it still matches the one that 1.0.0 and
- * 1.0.1 shipped. Values that the site sets or Drupal works out are left
- * out of the match: the UUID, the language, the dependencies, the cache
- * metadata and the pager's default heading level. Value types and the order
- * of keys are ignored too, except for the order of the view's handlers.
  */
 function vale_post_update_report_table_fits(): ?TranslatableMarkup {
   $name = 'views.view.vale_findings';
@@ -43,6 +37,10 @@ function vale_post_update_report_table_fits(): ?TranslatableMarkup {
     }
     return $value;
   };
+  // The view is replaced only when it still matches the one that 1.0.0 and
+  // 1.0.1 shipped. Values that the site sets or Drupal works out are left
+  // out of the match: the UUID, the language, the dependencies, the cache
+  // metadata and the pager's default heading level.
   $data = $active->getRawData();
   unset($data['uuid'], $data['_core'], $data['langcode'], $data['dependencies']);
   foreach (array_keys($data['display'] ?? []) as $display) {
