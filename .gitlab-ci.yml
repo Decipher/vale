@@ -91,3 +91,13 @@ phpunit:
   variables:
     VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale
     DRUPAL_DEPRECATION_FILTER_CONFIG: '{"enableProjectIgnores":true,"projectIgnoreFile":"$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"}'
+
+# Drush 15 dropped its command API on 2026-11-16, in favour of core's dr
+# (https://github.com/drush-ops/drush/pull/6673). vale's commands and their
+# test still use it, so the next major jobs install the last Drush 15 commit
+# before that change. Composer keeps the newer commit's dependency list, so the
+# packages that Drush dropped then are required here too. Remove this once the
+# commands work with dr.
+composer (next major):
+  after_script:
+    - 'composer require --dev --no-interaction --update-with-all-dependencies "drush/drush:15.x-dev#46deec1" "consolidation/annotated-command:^4.10.2" "consolidation/config:^3.1.1" "consolidation/filter-via-dot-access-data:^2.0.2" "consolidation/log:^3" "consolidation/output-formatters:^4.6.1" "consolidation/site-alias:^4.1.1" "consolidation/site-process:^5.4.2 || ^6.1" "dflydev/dot-access-data:^3.0.2" "grasmash/yaml-cli:4.x-dev" "laravel/prompts:^0.3.5" "league/container:^4.2.5" "psy/psysh:~0.12" "symfony/event-dispatcher:^7 || ^8"'
