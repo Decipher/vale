@@ -104,10 +104,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
           ]);
         }
       }
-      if (!$errors->isEmpty()) {
-        [$template, $arguments] = $errors->message();
-        $this->context->buildViolation($template, $arguments)->atPath($delta . '.value')->addViolation();
-      }
+      $errors->addTo($this->context, $constraint, $delta . '.value');
     }
   }
 
