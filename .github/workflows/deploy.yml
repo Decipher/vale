@@ -1,3 +1,6 @@
+# Drupal.org is the source of truth for this project, and GitHub is only a
+# mirror of it. Nothing may be pushed from here to Drupal.org, so the
+# DEPLOY_REMOTE secret must stay unset.
 name: Deploy
 
 on:
