@@ -90,7 +90,7 @@ class FormMessagesTest extends BrowserTestBase {
       'field_text[0][value]' => 'We delve.',
     ], 'Save');
     $this->assertSession()->pageTextContains('Page A page has been created.');
-    $this->assertSession()->pageTextContains('A page, Text: Demo.Delve: \'delve\' is an AI tell. (line 1: "delve")');
+    $this->assertSession()->pageTextContains('Content "A page", Text: Demo.Delve: \'delve\' is an AI tell. (line 1: "delve")');
   }
 
   /**

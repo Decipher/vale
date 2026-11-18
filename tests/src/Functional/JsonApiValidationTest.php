@@ -243,7 +243,7 @@ class JsonApiValidationTest extends BrowserTestBase {
     ]);
     $this->assertSame(422, $status);
     $this->assertSame([
-      "Entity is not valid: Text: Demo.Very: Avoid 'very'. (line 1: \"very\")",
+      "Entity is not valid: Paragraph \"Docs text\", Text: Demo.Very: Avoid 'very'. (line 1: \"very\")",
     ], array_column($document['errors'], 'detail'));
 
     // The live page still shows the text it had.
