@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\vale\Kernel;
 
+use Drupal\Core\Database\Database;
 use Drupal\Core\Form\FormState;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
@@ -180,6 +181,86 @@ class ContentReportUiTest extends KernelTestBase {
     $this->assertStringStartsWith('"Root type","Root ID"', $lines[0]);
     $this->assertCount(3, $lines);
     $this->assertStringContainsString("'=SUM(A1)", $lines[2]);
+  }
+
+  /**
+   * Tests that a large export is read a page at a time.
+   *
+   * MySQL buffers a whole result set, so one query for every row can run a
+   * large site out of memory.
+   */
+  public function testExportPages(): void {
+    $database = $this->container->get('database');
+    $database->truncate(FindingStorage::TABLE)->execute();
+
+    // Many rows share a root, so a page can end inside one. Ids are strings,
+    // so "10" sorts before "9".
+    $findings = [];
+    for ($i = 0; $i < 2500; $i++) {
+      $type = $i % 2 ? 'node' : 'taxonomy_term';
+      $findings[] = new Finding(
+        $type,
+        (string) ($i % 37),
+        'Item ' . $i,
+        $type === 'node' ? 'page' : 'tags',
+        'field_text',
+        $i % 3,
+        new Alert($i % 5 ? 'Demo.Very' : 'Demo.Delve', $i % 3 ? Alert::ERROR : Alert::WARNING, 'Avoid "it", ' . $i . '.', 1, $i, $i + 4, '=' . $i),
+      );
+    }
+    $this->container->get('vale.finding_storage')->add($findings);
+
+    $filter_sets = [
+      [],
+      ['level' => 'error'],
+      // Exactly one full page, then an empty one.
+      ['root_bundle' => 'page', 'rule' => 'Very'],
+    ];
+    foreach ($filter_sets as $filters) {
+      // The rows the export should hold, in the order it should hold them.
+      $query = $database->select(FindingStorage::TABLE, 'f')->fields('f', ['fid']);
+      if (isset($filters['level'])) {
+        $query->condition('f.level', $filters['level']);
+      }
+      if (isset($filters['root_bundle'])) {
+        $query->condition('f.root_bundle', $filters['root_bundle']);
+      }
+      if (isset($filters['rule'])) {
+        $query->condition('f.rule', '%' . $filters['rule'] . '%', 'LIKE');
+      }
+      $expected = $query->orderBy('f.root_type')->orderBy('f.root_id')->orderBy('f.fid')->execute()->fetchCol();
+
+      Database::startLog('vale_export');
+      $response = ReportExportController::create($this->container)->export(Request::create('/admin/reports/vale/export', 'GET', $filters));
+      ob_start();
+      $response->sendContent();
+      $csv = (string) ob_get_clean();
+      $log = Database::getLog('vale_export');
+      $reads = array_values(array_filter(
+        array_column($log, 'query'),
+        static fn (string $sql): bool => str_starts_with(ltrim($sql), 'SELECT') && str_contains($sql, FindingStorage::TABLE),
+      ));
+
+      // Each row is the stored row, once and in order. The fid is not
+      // exported, so the row is matched on its start, which is unique.
+      $lines = array_map(static fn (string $line): array => str_getcsv($line, escape: ''), array_filter(explode("\n", $csv)));
+      $this->assertSame('Root type', array_shift($lines)[0]);
+      $starts = $database->select(FindingStorage::TABLE, 'f')->fields('f', ['fid', 'span_start'])->execute()->fetchAllKeyed();
+      $this->assertSame(
+        array_map(static fn ($fid): string => (string) $starts[$fid], $expected),
+        array_column($lines, 11),
+        'The export holds every row for ' . json_encode($filters) . ', in order.',
+      );
+      $this->assertGreaterThanOrEqual(1000, count($expected));
+
+      // It reads in pages, and only the columns it exports.
+      $this->assertGreaterThan(1, count($reads), 'The export reads more than one page.');
+      foreach ($reads as $sql) {
+        $this->assertStringNotContainsString('f.*', $sql);
+        $this->assertStringNotContainsString('f.label', $sql);
+        $this->assertMatchesRegularExpression('/LIMIT /i', $sql);
+      }
+    }
   }
 
   /**
