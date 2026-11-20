@@ -13,7 +13,7 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Alert;
-use Drupal\vale\Drush\Commands\ValeCommands;
+use Drupal\vale\Command\LintCommand;
 use Drupal\vale\Finding;
 use Drupal\vale\FindingStorage;
 use Drupal\vale\Plugin\Action\CheckProseAction;
@@ -21,6 +21,7 @@ use Drupal\vale\ReportRefresher;
 use Drupal\vale\ScanBatch;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Tests the content report's stored findings.
@@ -125,7 +126,7 @@ class ContentReportTest extends KernelTestBase {
   }
 
   /**
-   * Tests that drush vale:lint --save replaces the scope's rows.
+   * Tests that vale:lint --save replaces the scope's rows.
    */
   public function testDrushSave(): void {
     $this->savePage('First', 'We delve.');
@@ -133,19 +134,25 @@ class ContentReportTest extends KernelTestBase {
     // Rows from before a scan of the bundle are replaced, even stale ones.
     $this->container->get('database')->update('vale_finding')->fields(['rule' => 'Stale.Rule'])->execute();
 
-    $commands = ValeCommands::create($this->container);
-    $this->assertSame(0, $commands->lint('node:page', ['workspace' => NULL, 'save' => TRUE])->getExitCode());
+    $lint = new CommandTester(new LintCommand(
+      $this->container->get('vale.content_walker'),
+      $this->container->get('vale.environment'),
+      $this->container->get('vale.finding_storage'),
+      $this->container->get('datetime.time'),
+      $this->container->get('vale.report_refresher'),
+    ));
+    $this->assertSame(0, $lint->execute(['scope' => 'node:page', '--save' => TRUE]));
     $this->assertSame(['First > node.field_text:Demo.Delve:warning'], $this->report());
 
     // A paragraph's findings belong to its page, so its bundle is not saved.
-    $this->assertSame(1, $commands->lint('paragraph:docs_text', ['workspace' => NULL, 'save' => TRUE])->getExitCode());
+    $this->assertSame(1, $lint->execute(['scope' => 'paragraph:docs_text', '--save' => TRUE]));
 
     $this->container->get('database')->update('vale_finding')->fields(['rule' => 'Stale.Rule'])->execute();
-    $commands->lint(NULL, ['workspace' => NULL, 'save' => TRUE]);
+    $lint->execute(['--save' => TRUE]);
     $this->assertSame(['First > node.field_text:Demo.Delve:warning'], $this->report());
 
     // The report is Live, so a workspace cannot be saved to it.
-    $this->assertSame(1, $commands->lint(NULL, ['workspace' => 'stage', 'save' => TRUE])->getExitCode());
+    $this->assertSame(1, $lint->execute(['--workspace' => 'stage', '--save' => TRUE]));
   }
 
   /**
