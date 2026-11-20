@@ -8,12 +8,25 @@ and this project adheres to
 
 ## 1.1.0 (unreleased)
 
+### Added
+
+- [#32](https://github.com/Decipher/vale/issues/32): Checks the text in the
+  components of Canvas pages. A settings form at
+  **Configuration > Content authoring > Canvas page prose checks** turns it on
+  for every prop that Canvas treats as plain or rich prose, with a list of
+  props to leave out. An error refuses publishing the page, and Canvas's
+  review panel links it to its component. The content report, its CSV export
+  and `vale:lint` name the component and prop. Canvas is optional, and
+  nothing changes on a site without it.
+
 ### Changed
 
 - [#3639107](https://www.drupal.org/project/vale/issues/3639107): The commands run under
   core's `dr` and Drush 15, as plain Symfony Console commands. Drush 12, 13
   and 14 still run them as `drush vale:...`. Their names, arguments, exit
   codes and default fields are unchanged.
+- The content report's table has two new columns, `component` and `prop`.
+  Run the database updates after updating.
 
 ### Removed
 

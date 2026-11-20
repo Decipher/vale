@@ -245,8 +245,14 @@ class ContentWalkerTest extends KernelTestBase {
   public function testWithoutRevisions(): void {
     $this->installEntitySchema('entity_test');
     $this->createValeTextField('entity_test', 'entity_test', 'field_text', TRUE);
-    EntityTest::create(['name' => 'Test', 'field_text' => 'We delve.'])->save();
-    $this->assertSame(['entity_test.field_text:Demo.Delve'], $this->summarise($this->container->get('vale.content_walker')->bundle('entity_test', 'entity_test')));
+    $entity = EntityTest::create(['name' => 'Test', 'field_text' => 'We delve.']);
+    $entity->save();
+    $walker = $this->container->get('vale.content_walker');
+    $this->assertSame(['entity_test.field_text:Demo.Delve'], $this->summarise($walker->bundle('entity_test', 'entity_test')));
+
+    // Its latest version is the entity itself, loaded by its id.
+    $this->assertSame('We delve.', $walker->latest('entity_test', $entity->id())?->get('field_text')->value);
+    $this->assertNull($walker->latest('entity_test', 999));
   }
 
   /**

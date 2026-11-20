@@ -9,7 +9,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\field\FieldConfigInterface;
+use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\vale\Alert;
 use Drupal\vale\FieldSettings;
 use Drupal\vale\ValeEnvironment;
@@ -46,7 +46,22 @@ class ValeFieldUiHooks {
     if (!$field instanceof FieldConfigInterface || !in_array($field->getType(), FieldSettings::FIELD_TYPES, TRUE)) {
       return;
     }
+    $form['third_party_settings']['vale'] = $this->settingsElement($field);
+  }
 
+  /**
+   * Builds the Vale settings element for a field.
+   *
+   * The field edit form and the Canvas page settings form both use it. Its
+   * values must sit at third_party_settings[vale] in the form.
+   *
+   * @param \Drupal\Core\Field\FieldConfigInterface $field
+   *   The field, or the base field override of a component tree.
+   *
+   * @return array<string, mixed>
+   *   The element.
+   */
+  public function settingsElement(FieldConfigInterface $field): array {
     $settings = FieldSettings::forField($field);
     $rules = $this->environment->rules();
     $levels = array_combine(Alert::LEVELS, [$this->t('Suggestion'), $this->t('Warning'), $this->t('Error')]);
@@ -87,9 +102,18 @@ class ValeFieldUiHooks {
       ]),
       '#states' => $states,
     ];
+    if ($field->getType() === FieldSettings::COMPONENT_TREE) {
+      $element['skipped_props'] = [
+        '#type' => 'textarea',
+        '#title' => $this->t('Props not to check'),
+        '#default_value' => implode("\n", $settings->skippedProps),
+        '#description' => $this->t('Every prop that holds plain or rich prose is checked, in every component. List prop names to leave out, one per line, such as <code>id</code> or <code>ariaLabel</code>.'),
+        '#rows' => 3,
+        '#states' => $states,
+      ];
+    }
     $element['rules'] = $this->rulesElement($rules, $settings, $levels) + ['#states' => $states];
-
-    $form['third_party_settings']['vale'] = $element;
+    return $element;
   }
 
   /**
@@ -220,12 +244,17 @@ class ValeFieldUiHooks {
       }
     }
 
+    // Prop names are given one per line. Only a component tree has them.
+    $skipped = preg_split('/\s+/', trim((string) ($values['skipped_props'] ?? ''))) ?: [];
+    $skipped = array_values(array_unique(array_filter($skipped, static fn (string $prop): bool => $prop !== '')));
+
     $settings = new FieldSettings(
       TRUE,
       FieldSettings::normalizeLevel($values['min_level'] ?? NULL),
       $disabled,
       $overrides,
       $profile,
+      $skipped,
     );
 
     $form_state->setValueForElement($element, $settings->toArray());

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\vale\Plugin\Validation\Constraint;
 
 use Drupal\Component\Render\FormattableMarkup;
+use Drupal\Component\Render\PlainTextOutput;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -18,6 +20,13 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * they fixed it and saved again. One violation per value, with a line per
  * finding, shows them all.
  *
+ * Canvas's API is different. It lists every violation, and its client shows
+ * each message as text, so markup there shows as "&#039;" and "<br>". Canvas
+ * builds that response in its controllers, not in an exception subscriber,
+ * so it cannot be rewritten as JsonApiErrorSubscriber rewrites JSON:API's.
+ * So in a Canvas API request each finding is its own violation, in plain
+ * text.
+ *
  * @internal
  */
 final class FindingList {
@@ -28,6 +37,50 @@ final class FindingList {
    * @var list<array{0: string, 1: array<string, string|int>}>
    */
   private array $lines = [];
+
+  /**
+   * Constructs a FindingList.
+   *
+   * @param bool $plainText
+   *   Whether to add each finding as its own violation, in plain text.
+   */
+  public function __construct(
+    private readonly bool $plainText = FALSE,
+  ) {}
+
+  /**
+   * Makes a finding list for the route of the current request.
+   *
+   * Canvas's form routes render Drupal forms, which show the markup, so they
+   * keep it.
+   *
+   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
+   *   The current route match.
+   *
+   * @return self
+   *   A finding list in plain text on Canvas's API, in markup elsewhere.
+   */
+  public static function forRoute(RouteMatchInterface $route_match): self {
+    return new self(self::isCanvasApi($route_match));
+  }
+
+  /**
+   * Says whether the current request is to Canvas's API.
+   *
+   * Canvas's API routes are named "canvas.api.", as Canvas's own exception
+   * subscriber checks. Its form routes, named "canvas.api.form.", render
+   * Drupal forms instead.
+   *
+   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
+   *   The current route match.
+   *
+   * @return bool
+   *   TRUE on a Canvas API route that is not a form route.
+   */
+  public static function isCanvasApi(RouteMatchInterface $route_match): bool {
+    $name = (string) $route_match->getRouteName();
+    return str_starts_with($name, 'canvas.api.') && !str_starts_with($name, 'canvas.api.form.');
+  }
 
   /**
    * Adds a finding.
@@ -60,6 +113,25 @@ final class FindingList {
    */
   public function addTo(ExecutionContextInterface $context, Constraint $constraint, string $path = ''): void {
     if ($this->lines === []) {
+      return;
+    }
+    if ($this->plainText) {
+      foreach ($this->lines as [$template, $arguments]) {
+        // Each template is a constraint message, a literal string.
+        // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+        $message = new TranslatableMarkup($template, $arguments);
+        $context->getViolations()->add(new ConstraintViolation(
+          PlainTextOutput::renderFromHtml((string) $message),
+          $template,
+          $arguments,
+          $context->getRoot(),
+          $context->getPropertyPath($path),
+          $context->getValue(),
+          NULL,
+          NULL,
+          $constraint,
+        ));
+      }
       return;
     }
     if (count($this->lines) === 1) {

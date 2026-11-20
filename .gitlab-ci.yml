@@ -28,9 +28,10 @@ variables:
   # reaches 11.5.
   OPT_IN_TEST_NEXT_MAJOR: 1
   _AUTORUN_NEXT_MAJOR: 'push-and-mr'
-  # The tests use Paragraphs, which does not declare Drupal 12 support yet.
-  # vale does not need it at runtime, so the next major jobs install it anyway.
-  _LENIENT_ALLOW_LIST: 'paragraphs,entity_reference_revisions'
+  # The tests use Paragraphs and Canvas, which do not declare Drupal 12
+  # support yet. vale does not need them at runtime, so the next major jobs
+  # install them anyway.
+  _LENIENT_ALLOW_LIST: 'paragraphs,entity_reference_revisions,canvas'
   # The phpunit binary (_PHPUNIT_CONCURRENT: 0) loads phpunit.xml from the
   # project root. That file is the scaffold config for local and GitHub runs.
   # This flag points the binary at the DrupalCI config instead.
@@ -43,6 +44,24 @@ variables:
   # Use run-tests.sh everywhere, as Drupal.org does, so that other GitLab
   # instances fail where Drupal.org fails.
   _PHPUNIT_CONCURRENT: 1
+
+# The Canvas tests and the Canvas code's static analysis need Canvas, which
+# needs Drupal 11.3 or later. It cannot be a development requirement in
+# composer.json, because the scaffold's Drupal 10 builds read that file too.
+# So each composer job on Drupal 11.3 or later adds it to its own copy first,
+# as scripts/assemble-canvas.sh does for a scaffold build.
+.composer-base:
+  before_script:
+    - |
+      # The next major jobs name core's main branch, such as main-dev.
+      # A range such as ~11.0 resolves to the newest 11.x, so only its major
+      # version counts. An exact version must be 11.3 or later.
+      if [[ $DRUPAL_CORE == main* ]] || php -r '$c = $argv[1]; $v = preg_replace("/[^0-9.].*$/", "", ltrim($c, "~^v")); exit((strpbrk($c[0], "~^") !== FALSE ? (int) $v >= 11 : version_compare($v, "11.3", ">=")) ? 0 : 1);' "$DRUPAL_CORE"; then
+        composer require --dev --no-update --no-interaction 'drupal/canvas:^1.13'
+        echo "[canvas] Added Canvas for Drupal $DRUPAL_CORE."
+      else
+        echo "[canvas] Drupal $DRUPAL_CORE cannot run Canvas, so it is not added."
+      fi
 
 # Coding standards and static analysis gate a merge, rather than warn.
 cspell:

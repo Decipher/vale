@@ -169,6 +169,8 @@ class ContentReportUiTest extends KernelTestBase {
   public function testExport(): void {
     $this->container->get('vale.finding_storage')->add([
       new Finding('node', '2', 'Sums', 'page', 'field_text', 0, new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 1, 8, '=SUM(A1)')),
+      // A Canvas page's finding names its component and prop.
+      new Finding('canvas_page', '3', 'Opening hours', 'canvas_page', 'components', 0, new Alert('Demo.Very', Alert::ERROR, 'Avoid it.', 1, 3, 6, 'very'), component: 'a6b5c8f0-4a3e-4c2b-9d4e-1f2a3b4c5d6e', prop: 'heading', componentLabel: 'Notice'),
     ]);
     $controller = ReportExportController::create($this->container);
     $response = $controller->export(Request::create('/admin/reports/vale/export', 'GET', ['level' => 'error', 'rule' => 'Demo.Very']));
@@ -178,8 +180,21 @@ class ContentReportUiTest extends KernelTestBase {
 
     $this->assertSame('text/csv; charset=utf-8', $response->headers->get('Content-Type'));
     $this->assertStringStartsWith('"Root type","Root ID"', $lines[0]);
-    $this->assertCount(3, $lines);
-    $this->assertStringContainsString("'=SUM(A1)", $lines[2]);
+    $this->assertCount(4, $lines);
+    $this->assertStringContainsString("'=SUM(A1)", implode("\n", $lines));
+
+    // The component and prop have columns of their own, after the delta.
+    $header = str_getcsv($lines[0], escape: '');
+    $this->assertSame(['Delta', 'Component UUID', 'Prop', 'Line'], array_slice($header, (int) array_search('Delta', $header, TRUE), 4));
+    $rows = [];
+    foreach (array_slice($lines, 1) as $line) {
+      $row = array_combine($header, str_getcsv($line, escape: ''));
+      $rows[$row['Entity type']] = $row;
+    }
+    $this->assertSame('a6b5c8f0-4a3e-4c2b-9d4e-1f2a3b4c5d6e', $rows['canvas_page']['Component UUID']);
+    $this->assertSame('heading', $rows['canvas_page']['Prop']);
+    $this->assertSame('', $rows['node']['Component UUID']);
+    $this->assertSame('', $rows['node']['Prop']);
   }
 
   /**

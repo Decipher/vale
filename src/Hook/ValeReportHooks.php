@@ -88,13 +88,14 @@ class ValeReportHooks {
   }
 
   /**
-   * Implements hook_ENTITY_TYPE_update() for field_config.
+   * Implements hook_ENTITY_TYPE_update() for field_config and base_field_override.
    *
    * A field with Vale turned off loses its rows. That can also leave a bundle
    * with nothing checked, whose saves no longer refresh its rows, so those
    * are removed too.
    */
   #[Hook('field_config_update')]
+  #[Hook('base_field_override_update')]
   public function fieldConfigUpdate(FieldConfigInterface $field): void {
     if (!FieldSettings::forField($field)->enabled) {
       $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
@@ -103,9 +104,10 @@ class ValeReportHooks {
   }
 
   /**
-   * Implements hook_ENTITY_TYPE_delete() for field_config.
+   * Implements hook_ENTITY_TYPE_delete() for field_config and base_field_override.
    */
   #[Hook('field_config_delete')]
+  #[Hook('base_field_override_delete')]
   public function fieldConfigDelete(FieldConfigInterface $field): void {
     $this->findingStorage->clearField($field->getTargetEntityTypeId(), $field->getTargetBundle(), $field->getName());
     $this->findingStorage->clearBundlesExcept(array_keys($this->contentWalker->scannableBundles()));
