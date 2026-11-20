@@ -12,10 +12,12 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
+use Drupal\vale\Command\LintCommand;
 use Drupal\vale\Plugin\Action\CheckProseAction;
 use Drupal\workspaces\WorkspacePublishException;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Tests the check made before a workspace is published.
@@ -325,6 +327,25 @@ class WorkspaceGateTest extends KernelTestBase {
     $action->executeMultiple([$page]);
     $this->switchToLive();
     $this->assertSame(['Switch to Live to check content for the report.'], $this->messages()['error'] ?? []);
+  }
+
+  /**
+   * Tests that vale:lint --save refuses to write the report in a workspace.
+   */
+  public function testLintSaveRefusedInWorkspace(): void {
+    Node::create(['type' => 'page', 'title' => 'Live page', 'field_text' => 'This is very good.'])->save();
+    $lint = new CommandTester(new LintCommand(
+      $this->container->get('vale.content_walker'),
+      $this->container->get('vale.environment'),
+      $this->container->get('vale.finding_storage'),
+      $this->container->get('datetime.time'),
+      $this->container->get('vale.report_refresher'),
+    ));
+    $this->switchToWorkspace('stage');
+    $this->assertSame(1, $lint->execute(['scope' => 'node:page', '--save' => TRUE], ['capture_stderr_separately' => TRUE]));
+    $this->assertStringContainsString('Switch to Live to check content for the report.', $lint->getErrorOutput());
+    $this->switchToLive();
+    $this->assertSame(0, (int) $this->container->get('database')->select('vale_finding')->countQuery()->execute()->fetchField());
   }
 
 }
