@@ -1,0 +1,49 @@
+'$schema': 'https://git.drupalcode.org/project/drupal/-/raw/HEAD/core/assets/schemas/v1/metadata.schema.json'
+name: Notice
+description: A notice with plain and rich text, a list of points, a choice and a link.
+props:
+  type: object
+  required:
+    - heading
+  properties:
+    heading:
+      type: string
+      title: Heading
+      examples:
+        - 'A short notice'
+    body:
+      type: string
+      title: Body
+      contentMediaType: text/html
+      x-formatting-context: block
+      examples:
+        - '<p>Some text for the notice.</p>'
+    points:
+      type: array
+      title: Points
+      items:
+        type: string
+      examples:
+        - - 'A first point'
+    tone:
+      type: string
+      title: Tone
+      enum:
+        - very
+        - calm
+      meta:enum:
+        very: Very loud
+        calm: Calm
+      examples:
+        - calm
+    link:
+      type: string
+      format: uri-reference
+      title: Link
+      examples:
+        - /very
+    label:
+      type: string
+      title: Accessible label
+      examples:
+        - 'Notice'

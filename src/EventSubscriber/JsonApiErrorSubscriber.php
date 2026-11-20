@@ -18,10 +18,11 @@ use Symfony\Component\Validator\ConstraintViolation;
  * Core's JSON:API decodes the HTML of a field violation's detail, but not of
  * an entity violation's. Under publish-only, Vale reports a refused publish
  * at /data, because JSON:API drops field violations for fields a PATCH does
- * not name. Without this, the detail carries "&#039;" for an apostrophe and
- * "<br>" between alerts. JSON:API does not allow other normalizers, so the
- * violations are rewritten before its exception subscriber normalizes them.
- * Only Vale's violations change.
+ * not name. This holds for errors in a Canvas component tree too, which are
+ * on the tree's field only on Canvas's own API. Without this, the detail
+ * carries "&#039;" for an apostrophe and "<br>" between alerts. JSON:API
+ * does not allow other normalizers, so the violations are rewritten before
+ * its exception subscriber normalizes them. Only Vale's violations change.
  */
 final class JsonApiErrorSubscriber implements EventSubscriberInterface {
 

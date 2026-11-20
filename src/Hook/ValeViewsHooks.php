@@ -79,6 +79,8 @@ class ValeViewsHooks {
     ];
     $data['vale_finding']['field'] = $string($this->t('Field'), $this->t('The field name.'));
     $data['vale_finding']['delta'] = $number($this->t('Delta'), $this->t('The delta of the value.'));
+    $data['vale_finding']['component'] = $string($this->t('Component UUID'), $this->t('For a Canvas component tree, the UUID of the component instance.'));
+    $data['vale_finding']['prop'] = $string($this->t('Prop'), $this->t('For a Canvas component tree, the prop that holds the value.'));
     $data['vale_finding']['rule'] = $string($this->t('Rule'), $this->t('The Vale rule.'));
     $data['vale_finding']['level'] = $string($this->t('Level'), $this->t('error, warning, suggestion, or unchecked.'));
     $data['vale_finding']['level']['filter'] = [

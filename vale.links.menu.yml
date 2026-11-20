@@ -1,0 +1,5 @@
+vale.canvas_settings:
+  title: 'Canvas page prose checks'
+  description: 'Check the text in the components of Canvas pages with Vale.'
+  route_name: vale.canvas_settings
+  parent: system.admin_config_content
