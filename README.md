@@ -61,6 +61,9 @@ None are required. These are supported when they are installed:
   (core): a workspace's changes can be checked before they are published.
 - [Paragraphs](https://www.drupal.org/project/paragraphs): opted-in fields on
   paragraphs are checked, and publishing a page checks its paragraphs.
+- [Canvas](https://www.drupal.org/project/canvas) 1.13 or later, on Drupal
+  11.3 or later: the text in the components of Canvas pages can be checked.
+  See [Canvas pages](#canvas-pages).
 
 ## Installation
 
@@ -140,6 +143,42 @@ field:
 [*.field_summary.*]
 Microsoft.Contractions = NO
 ```
+
+### Canvas pages
+
+A Canvas page keeps its text in the props of its components, not in text
+fields, and Canvas pages have no **Manage fields**. So they have a settings
+form of their own: **Configuration > Content authoring > Canvas page prose
+checks**, at `/admin/config/content/vale/canvas`. It needs the **Administer
+components** permission from Canvas.
+
+**Check with Vale** turns the check on for every component. Each prop that
+Canvas treats as plain or rich prose is checked. Lists of choices, links,
+images and other values that are not prose are left out, as are block
+components. The settings are those of a field, plus **Props not to check**:
+prop names to leave out in every component, one per line, such as `id` or
+`ariaLabel`.
+
+Plain text props are linted as `.txt`, and rich text props with the extension
+for their text format, `canvas_html_block` or `canvas_html_inline`. All
+values are linted under the name `canvas_page.canvas_page.components`.
+
+Publishing a page in Canvas validates it, so an error refuses the publish, as
+it does for a field. Each error names its component and prop, such as
+`Components > Hero > heading: ...`, and Canvas's review panel links it to the
+component. With `publish_only` on, an unpublished page saves with its errors,
+and the save that publishes it is refused. Each translation of a page is
+checked in its own language.
+
+The content report and `dr vale:lint canvas_page:canvas_page` show the
+component and prop too. In the report, **Found in** reads
+`> Components > Hero > heading`. On the command line, the field reads
+`components > Hero > heading`, and JSON output adds the component instance's
+UUID and the prop name by themselves. The CSV export has columns for both.
+
+The settings are third-party settings on the
+`core.base_field_override.canvas_page.canvas_page.components` configuration,
+so they are exported with the rest of the site's configuration.
 
 ### Permissions
 
@@ -264,9 +303,9 @@ unchecked deploy does not pass. To refuse the save as well, set
 
 **Q: Does it check Canvas pages?**
 
-**A:** No. Canvas keeps a page's text in component props, not in fields you
-can opt in. Node fields on a Drupal CMS site are checked, including node
-text that Canvas renders through a content template.
+**A:** Yes, with Canvas 1.13 or later on Drupal 11.3 or later. Turn it on
+in **Canvas page prose checks**, as described under Canvas pages above. Node
+fields that Canvas renders through a content template are checked as fields.
 
 **Q: How much does the result cache hold?**
 

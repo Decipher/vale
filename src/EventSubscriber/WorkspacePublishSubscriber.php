@@ -172,7 +172,13 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    */
   protected function describe(Finding $finding): TranslatableMarkup {
     $where = $this->t('@type "@label"', ['@type' => $finding->entityType, '@label' => $finding->label]);
-    if ($finding->host) {
+    if ($finding->component !== '') {
+      // A value in a component tree is in the host itself. The field label
+      // names its component and prop.
+      $root = $finding->root();
+      $where = $this->t('@type "@label"', ['@type' => $root['entity_type'], '@label' => $root['label']]);
+    }
+    elseif ($finding->host) {
       $where = $this->t('@type "@label", @part', [
         '@type' => $finding->host['entity_type'],
         '@label' => $finding->host['label'],
@@ -208,7 +214,7 @@ class WorkspacePublishSubscriber implements EventSubscriberInterface {
    */
   protected function fieldLabel(Finding $finding): string {
     $definition = $this->entityFieldManager->getFieldDefinitions($finding->entityType, $finding->bundle)[$finding->field] ?? NULL;
-    return $definition ? (string) $definition->getLabel() : $finding->field;
+    return $finding->place($definition ? (string) $definition->getLabel() : $finding->field);
   }
 
 }

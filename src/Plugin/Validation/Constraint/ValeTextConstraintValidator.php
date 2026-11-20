@@ -75,28 +75,33 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
     // With fail_closed, text Vale could not check is refused as an error is.
     $fail_closed = (bool) $this->configFactory->get('vale.settings')->get('fail_closed');
 
-    foreach ($this->fieldLinter->lint($value) as $delta => $result) {
+    foreach ($this->fieldLinter->lintValues($value) as $located) {
       $this->alertCollector->markLinted();
+      $result = $located->result;
+      // A value in a component tree is named by its component and prop, and
+      // the violation points at them, so Canvas links it to the component.
+      $place = $located->place();
+      $named = $place === '' ? $label : $label . ' > ' . $place;
       if (!$result->isChecked()) {
         if (!$fail_closed || ($publish_only && !$publishing)) {
           $this->alertCollector->addUnchecked($result->reason);
         }
         elseif (!$publish_only) {
           $this->context->buildViolation($constraint->uncheckedMessage, [
-            '@field' => $label,
+            '@field' => $named,
             '@reason' => $result->reason,
-          ])->atPath($delta . '.value')->addViolation();
+          ])->atPath($located->path())->addViolation();
         }
         continue;
       }
       $errors = new FindingList();
       foreach ($result->alerts as $alert) {
         if ($alert->level !== Alert::ERROR || ($publish_only && !$publishing)) {
-          $this->alertCollector->add($entity, $field, $delta, $alert);
+          $this->alertCollector->add($entity, $field, $located->delta, $alert, $place);
         }
         elseif (!$publish_only) {
           $errors->add($constraint->message, [
-            '@field' => $label,
+            '@field' => $named,
             '@rule' => $alert->rule,
             '@message' => $alert->message,
             '@line' => $alert->line,
@@ -104,7 +109,7 @@ final class ValeTextConstraintValidator extends ConstraintValidator implements C
           ]);
         }
       }
-      $errors->addTo($this->context, $constraint, $delta . '.value');
+      $errors->addTo($this->context, $constraint, $located->path());
     }
   }
 

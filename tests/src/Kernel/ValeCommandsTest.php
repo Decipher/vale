@@ -148,8 +148,8 @@ class ValeCommandsTest extends KernelTestBase {
     // JSON gives every field, as Drush's did.
     $this->assertSame([
       'host', 'entity', 'entity_type', 'id', 'bundle', 'label', 'language',
-      'host_type', 'host_id', 'host_label', 'field', 'delta', 'line', 'start',
-      'end', 'level', 'rule', 'message', 'text',
+      'host_type', 'host_id', 'host_label', 'field', 'delta', 'component',
+      'prop', 'line', 'start', 'end', 'level', 'rule', 'message', 'text',
     ], array_keys($rows[0]));
 
     // The table shows the default fields only.

@@ -19,7 +19,7 @@ class AlertCollector {
   /**
    * The findings, keyed so a value validated twice is listed once.
    *
-   * @var array<string, array{entity: \Drupal\Core\Entity\FieldableEntityInterface, field: string, delta: int, alert: \Drupal\vale\Alert}>
+   * @var array<string, array{entity: \Drupal\Core\Entity\FieldableEntityInterface, field: string, delta: int, place: string, alert: \Drupal\vale\Alert}>
    */
   protected array $alerts = [];
 
@@ -73,10 +73,13 @@ class AlertCollector {
    *   The value's delta.
    * @param \Drupal\vale\Alert $alert
    *   The finding.
+   * @param string $place
+   *   Where in the value the finding is, such as a component and prop in a
+   *   Canvas component tree, or an empty string.
    */
-  public function add(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): void {
+  public function add(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert, string $place = ''): void {
     $this->linted = TRUE;
-    $key = $this->key($entity, $field, $delta, $alert);
+    $key = $this->key($entity, $field, $delta, $alert, $place);
     // Nothing is loaded here. This runs inside entity validation, and on a
     // site whose workspace manager is decorated, loading an entity at this
     // point made core's workspace conflict check refuse a paragraph that a
@@ -86,6 +89,7 @@ class AlertCollector {
       'entity' => $entity,
       'field' => $field,
       'delta' => $delta,
+      'place' => $place,
       'alert' => $alert,
     ];
   }
@@ -101,9 +105,11 @@ class AlertCollector {
    *   The field delta.
    * @param \Drupal\vale\Alert $alert
    *   The alert.
+   * @param string $place
+   *   Where in the value the alert is, or an empty string.
    */
-  public function remove(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): void {
-    unset($this->alerts[$this->key($entity, $field, $delta, $alert)]);
+  public function remove(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert, string $place = ''): void {
+    unset($this->alerts[$this->key($entity, $field, $delta, $alert, $place)]);
   }
 
   /**
@@ -117,16 +123,19 @@ class AlertCollector {
    *   The field delta.
    * @param \Drupal\vale\Alert $alert
    *   The alert.
+   * @param string $place
+   *   Where in the value the alert is, or an empty string.
    *
    * @return string
    *   The key.
    */
-  protected function key(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert): string {
+  protected function key(FieldableEntityInterface $entity, string $field, int $delta, Alert $alert, string $place = ''): string {
     return implode("\0", [
       $entity->getEntityTypeId(),
       $entity->uuid(),
       $field,
       $delta,
+      $place,
       $alert->rule,
       $alert->line,
       $alert->start,
@@ -169,19 +178,21 @@ class AlertCollector {
    * Gives the findings.
    *
    * @return list<array{entity_type: string, bundle: string, uuid: string, label: string, field: string, field_label: string, delta: int, alert: \Drupal\vale\Alert}>
-   *   The findings, in the order they were found.
+   *   The findings, in the order they were found. A finding in a component
+   *   tree has its component and prop after the field label.
    */
   public function alerts(): array {
     $alerts = [];
     foreach ($this->alerts as $finding) {
       $entity = $finding['entity'];
+      $field_label = (string) $entity->getFieldDefinition($finding['field'])?->getLabel();
       $alerts[] = [
         'entity_type' => $entity->getEntityTypeId(),
         'bundle' => $entity->bundle(),
         'uuid' => (string) $entity->uuid(),
         'label' => $this->label($entity),
         'field' => $finding['field'],
-        'field_label' => (string) $entity->getFieldDefinition($finding['field'])?->getLabel(),
+        'field_label' => $finding['place'] === '' ? $field_label : $field_label . ' > ' . $finding['place'],
         'delta' => $finding['delta'],
         'alert' => $finding['alert'],
       ];

@@ -31,6 +31,8 @@ final readonly class ReportExportController implements ContainerInjectionInterfa
     'langcode' => 'Language',
     'field' => 'Field',
     'delta' => 'Delta',
+    'component' => 'Component',
+    'prop' => 'Prop',
     'line' => 'Line',
     'span_start' => 'Start',
     'span_end' => 'End',

@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Drupal\vale;
 
+use Drupal\Core\Field\FieldConfigInterface as CoreFieldConfigInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\field\FieldConfigInterface;
 
 /**
  * The Vale settings of one field.
  *
- * They are kept as third-party settings on the field's FieldConfig. They can
- * only narrow what Vale reports: drop rules, change a rule's level, or raise
- * the minimum level. A rule the codebase's configuration does not load can
- * never be added, so the settings are safe for anyone who can edit fields.
+ * They are kept as third-party settings on the field's FieldConfig. A Canvas
+ * component tree is a base field, so its settings are kept on a base field
+ * override instead. They can only narrow what Vale reports: drop rules,
+ * change a rule's level, or raise the minimum level. A rule the codebase's
+ * configuration does not load can never be added, so the settings are safe
+ * for anyone who can edit fields.
  */
 final readonly class FieldSettings {
 
@@ -21,6 +24,11 @@ final readonly class FieldSettings {
    * The field types that hold prose.
    */
   public const array FIELD_TYPES = ['text', 'text_long', 'text_with_summary', 'string', 'string_long'];
+
+  /**
+   * The field type of a Canvas component tree.
+   */
+  public const string COMPONENT_TREE = 'component_tree';
 
   /**
    * The form value for a rule that is turned off.
@@ -41,6 +49,8 @@ final readonly class FieldSettings {
    * @param string $profile
    *   The name the field's values are linted under, or an empty string for
    *   "<entity_type>.<bundle>.<field>".
+   * @param string[] $skippedProps
+   *   For a component tree, the component props that are not linted.
    */
   public function __construct(
     public bool $enabled = FALSE,
@@ -48,6 +58,7 @@ final readonly class FieldSettings {
     public array $disabledRules = [],
     public array $levelOverrides = [],
     public string $profile = '',
+    public array $skippedProps = [],
   ) {}
 
   /**
@@ -58,10 +69,13 @@ final readonly class FieldSettings {
    *
    * @return self
    *   Its settings. A field that cannot hold prose, or is not a configurable
-   *   field, is not enabled.
+   *   field, is not enabled. A component tree is enabled by a base field
+   *   override.
    */
   public static function forField(FieldDefinitionInterface $field): self {
-    if (!in_array($field->getType(), self::FIELD_TYPES, TRUE) || !$field instanceof FieldConfigInterface) {
+    $configurable = in_array($field->getType(), self::FIELD_TYPES, TRUE) && $field instanceof FieldConfigInterface;
+    $tree = $field->getType() === self::COMPONENT_TREE && $field instanceof CoreFieldConfigInterface;
+    if ((!$configurable && !$tree) || !$field instanceof CoreFieldConfigInterface) {
       return new self();
     }
     return self::fromArray($field->getThirdPartySettings('vale'));
@@ -93,6 +107,7 @@ final readonly class FieldSettings {
       array_values(array_filter(is_array($values['disabled_rules'] ?? NULL) ? $values['disabled_rules'] : [], is_string(...))),
       $overrides,
       is_string($values['profile'] ?? NULL) ? $values['profile'] : '',
+      array_values(array_filter(is_array($values['skipped_props'] ?? NULL) ? $values['skipped_props'] : [], is_string(...))),
     );
   }
 
@@ -112,21 +127,26 @@ final readonly class FieldSettings {
   /**
    * Gives the settings as stored values.
    *
-   * @return array{enabled: bool, min_level: string, disabled_rules: string[], level_overrides: list<array{rule: string, level: string}>, profile: string}
-   *   The values.
+   * @return array{enabled: bool, min_level: string, disabled_rules: string[], level_overrides: list<array{rule: string, level: string}>, profile: string, skipped_props?: string[]}
+   *   The values. Skipped props are left out when there are none, so other
+   *   fields do not store them.
    */
   public function toArray(): array {
     $overrides = [];
     foreach ($this->levelOverrides as $rule => $level) {
       $overrides[] = ['rule' => $rule, 'level' => $level];
     }
-    return [
+    $values = [
       'enabled' => $this->enabled,
       'min_level' => $this->minLevel,
       'disabled_rules' => $this->disabledRules,
       'level_overrides' => $overrides,
       'profile' => $this->profile,
     ];
+    if ($this->skippedProps !== []) {
+      $values['skipped_props'] = $this->skippedProps;
+    }
+    return $values;
   }
 
   /**

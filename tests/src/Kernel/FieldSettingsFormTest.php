@@ -119,6 +119,20 @@ class FieldSettingsFormTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a field that holds no prose gets no element.
+   */
+  public function testOtherFieldTypes(): void {
+    FieldStorageConfig::create(['field_name' => 'field_count', 'entity_type' => 'node', 'type' => 'integer'])->save();
+    $field = FieldConfig::create(['field_name' => 'field_count', 'entity_type' => 'node', 'bundle' => 'page']);
+    $field->save();
+    $form = ['third_party_settings' => []];
+    $form_state = new FormState();
+    $form_state->setFormObject($this->container->get('entity_type.manager')->getFormObject('field_config', 'edit')->setEntity($field));
+    $this->container->get('class_resolver')->getInstanceFromDefinition(ValeFieldUiHooks::class)->fieldConfigEditFormAlter($form, $form_state);
+    $this->assertSame(['third_party_settings' => []], $form);
+  }
+
+  /**
    * Tests turning the submitted choices into stored settings.
    */
   public function testValidate(): void {
