@@ -19,6 +19,7 @@ use Drupal\vale\Command\InstallCommand;
 use Drupal\vale\Command\LintCommand;
 use Drupal\vale\Command\RulesCommand;
 use Drupal\vale\Command\StatusCommand;
+use Drupal\vale\Command\SyncCommand;
 use Drupal\vale\ValeInstaller;
 use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
@@ -300,6 +301,44 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
+   * Tests that vale:sync runs Vale's sync and reports the rules loaded.
+   */
+  public function testSync(): void {
+    $tester = $this->runCommand(SyncCommand::class);
+    $this->assertSame(0, $tester->getStatusCode());
+    $this->assertStringContainsString('Synced 1 package(s)', $tester->getDisplay());
+    $this->assertStringContainsString('Vale now loads 3 rules.', $tester->getDisplay());
+
+    // A sync that Vale cannot finish, such as with no network, fails.
+    $_ENV['FAKE_SYNC_FAIL'] = '1';
+    try {
+      $tester = $this->runCommand(SyncCommand::class);
+      $this->assertSame(1, $tester->getStatusCode());
+      $this->assertStringContainsString('could not fetch', $tester->getErrorOutput());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_FAIL']);
+    }
+
+    // A sync that stops before Vale can answer, such as one that is killed,
+    // fails too.
+    $_ENV['FAKE_SYNC_KILLED'] = '1';
+    try {
+      $tester = $this->runCommand(SyncCommand::class);
+      $this->assertSame(1, $tester->getStatusCode());
+      $this->assertStringContainsString('signal', $tester->getErrorOutput());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_KILLED']);
+    }
+
+    $this->setSetting('vale_binary', NULL);
+    $tester = $this->runCommand(SyncCommand::class);
+    $this->assertSame(1, $tester->getStatusCode());
+    $this->assertStringContainsString('Vale could not be run.', $tester->getErrorOutput());
+  }
+
+  /**
    * Tests vale:check.
    */
   public function testCheck(): void {
@@ -418,6 +457,7 @@ class ValeCommandsTest extends KernelTestBase {
       LintCommand::class,
       RulesCommand::class,
       StatusCommand::class,
+      SyncCommand::class,
     ];
     $module = dirname(__DIR__, 3);
     // A new command must be added to this test and to drush.services.yml.
@@ -432,7 +472,7 @@ class ValeCommandsTest extends KernelTestBase {
       // Configuring the command checks its arguments and options.
       $this->assertSame($names[$class], $this->command($class)->getName());
     }
-    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status'], array_values($names));
+    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status', 'vale:sync'], array_values($names));
 
     $services = Yaml::decode((string) file_get_contents($module . '/drush.services.yml'))['services'];
     $this->assertEqualsCanonicalizing($classes, array_keys($services));
