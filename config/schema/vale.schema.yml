@@ -56,7 +56,7 @@ vale.settings:
         Range:
           min: 1
 
-field.field.*.*.*.third_party.vale:
+vale.field_settings:
   type: mapping
   label: 'Vale prose checks'
   mapping:
@@ -104,6 +104,25 @@ field.field.*.*.*.third_party.vale:
         Regex:
           pattern: '/^[A-Za-z0-9_.-]*$/'
           message: 'Use only letters, digits, dots, hyphens and underscores.'
+    skipped_props:
+      type: sequence
+      label: 'Component props that are not checked'
+      sequence:
+        type: string
+        label: 'Prop name'
+
+field.field.*.*.*.third_party.vale:
+  type: vale.field_settings
+
+# A Canvas component tree is a base field, so its settings are kept on a base
+# field override.
+core.base_field_override.*.*.*.third_party.vale:
+  type: vale.field_settings
+
+# Canvas gives the override of its page components field a type of its own,
+# so third-party settings on it are looked up under that type.
+core.base_field_override.canvas_page.canvas_page.components.third_party.vale:
+  type: vale.field_settings
 
 action.configuration.vale_check_prose:
   type: action_configuration_default

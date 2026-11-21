@@ -1,0 +1,7 @@
+name: 'Vale Canvas test'
+type: module
+description: 'A single directory component for testing Vale with Canvas pages.'
+package: Testing
+core_version_requirement: ^11.3 || ^12
+dependencies:
+  - canvas:canvas

@@ -37,6 +37,8 @@ services:
     class: Drupal\vale\FieldLinter
     arguments:
       - '@vale.runner'
+      # The Canvas component tree reader is set by ValeServiceProvider.
+      - null
   Drupal\vale\FieldLinter: '@vale.field_linter'
   # Findings that did not stop a save, kept for the rest of the request.
   vale.alert_collector:

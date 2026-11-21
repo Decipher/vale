@@ -78,26 +78,38 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     // validates the entity before its fields; FieldLinter remembers a failed
     // run, so the text is not run twice.
     $errors = new FindingList();
+    $fail_closed = (bool) $this->configFactory->get('vale.settings')->get('fail_closed');
     foreach ($value->getFieldDefinitions() as $name => $definition) {
-      foreach ($this->fieldLinter->lint($value->get($name)) as $result) {
+      foreach ($this->fieldLinter->lintValues($value->get($name)) as $located) {
+        $result = $located->result;
+        // An error in a Canvas component tree is reported at its component
+        // instance and prop, so Canvas's review panel links to the component.
+        // Other errors are joined into one message on the entity.
+        $place = $located->place();
+        $list = $place === '' ? $errors : new FindingList();
+        $field_label = (string) $definition->getLabel();
+        $named = $place === '' ? $field_label : $field_label . ' > ' . $place;
         // ValeText notes unchecked text in the entity's own fields, unless
         // it refuses the save.
-        if (!$result->isChecked() && $this->configFactory->get('vale.settings')->get('fail_closed')) {
-          $errors->add($constraint->uncheckedFieldMessage, [
-            '@field' => (string) $definition->getLabel(),
+        if (!$result->isChecked() && $fail_closed) {
+          $list->add($constraint->uncheckedFieldMessage, [
+            '@field' => $named,
             '@reason' => $result->reason,
           ]);
         }
         foreach ($result->isChecked() ? $result->alerts : [] as $alert) {
           if ($alert->level === Alert::ERROR) {
-            $errors->add($constraint->fieldMessage, [
-              '@field' => (string) $definition->getLabel(),
+            $list->add($constraint->fieldMessage, [
+              '@field' => $named,
               '@rule' => $alert->rule,
               '@message' => $alert->message,
               '@line' => $alert->line,
               '@match' => $alert->match,
             ]);
           }
+        }
+        if ($list !== $errors) {
+          $list->addTo($this->context, $constraint, $name . '.' . $located->path());
         }
       }
     }

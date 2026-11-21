@@ -156,6 +156,30 @@ function vale_field_config_delete(FieldConfigInterface $field): void {
 }
 
 /**
+ * Implements hook_ENTITY_TYPE_update() for base_field_override.
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
+ */
+#[LegacyHook]
+function vale_base_field_override_update(FieldConfigInterface $field): void {
+  \Drupal::service(ValeReportHooks::class)->fieldConfigUpdate($field);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_delete() for base_field_override.
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
+ */
+#[LegacyHook]
+function vale_base_field_override_delete(FieldConfigInterface $field): void {
+  \Drupal::service(ValeReportHooks::class)->fieldConfigDelete($field);
+}
+
+/**
  * Implements hook_views_data().
  *
  * Drupal 11.1 and later never call it, and coverage is measured there.

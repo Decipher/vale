@@ -1,0 +1,5 @@
+<div class="notice notice--{{ tone }}" aria-label="{{ label }}">
+  <h2>{% if link %}<a href="{{ link }}">{{ heading }}</a>{% else %}{{ heading }}{% endif %}</h2>
+  {{ body }}
+  {% if points %}<ul>{% for point in points %}<li>{{ point }}</li>{% endfor %}</ul>{% endif %}
+</div>

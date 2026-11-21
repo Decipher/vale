@@ -48,6 +48,8 @@ final class LintCommand extends Command {
     'host_label' => 'Host label',
     'field' => 'Field',
     'delta' => 'Delta',
+    'component' => 'Component',
+    'prop' => 'Prop',
     'line' => 'Line',
     'start' => 'Start',
     'end' => 'End',
@@ -173,7 +175,7 @@ final class LintCommand extends Command {
     $failed = FALSE;
     foreach ($findings as $finding) {
       if ($finding->alert === NULL) {
-        $this->writeError($input, $output, sprintf('%s %s, %s: not checked. %s', $finding->entityType, $finding->entityId, $finding->field, $finding->reason));
+        $this->writeError($input, $output, sprintf('%s %s, %s: not checked. %s', $finding->entityType, $finding->entityId, $finding->place($finding->field), $finding->reason));
         $failed = TRUE;
         continue;
       }
@@ -242,8 +244,13 @@ final class LintCommand extends Command {
       'host_type' => $host['entity_type'] ?? '',
       'host_id' => $host['id'] ?? '',
       'host_label' => $host['label'] ?? '',
-      'field' => $finding->field,
+      // A value in a Canvas component tree names its component and prop
+      // after the field, so the table shows where it is. The component and
+      // prop are also given by themselves.
+      'field' => $finding->place($finding->field),
       'delta' => $finding->delta,
+      'component' => $finding->component,
+      'prop' => $finding->prop,
       'line' => $alert->line,
       'start' => $alert->start,
       'end' => $alert->end,

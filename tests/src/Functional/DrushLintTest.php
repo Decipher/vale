@@ -82,6 +82,8 @@ class DrushLintTest extends BrowserTestBase {
       'host_label' => 'Guide',
       'field' => 'field_text',
       'delta' => 0,
+      'component' => '',
+      'prop' => '',
       'line' => 1,
       'start' => 4,
       'end' => 8,

@@ -33,10 +33,19 @@ final readonly class Finding {
    * @param string $reason
    *   Why the value could not be checked, or an empty string.
    * @param array{entity_type: string, id: string, bundle: string, label: string}|null $host
-   *   For a component such as a paragraph, the top-level entity it belongs
-   *   to. NULL for a top-level entity.
+   *   For a component such as a paragraph or a Canvas component instance,
+   *   the top-level entity it belongs to. NULL for a top-level entity.
    * @param string $langcode
    *   The language of the translation that holds the value.
+   * @param string $component
+   *   For a value in a Canvas component tree, the UUID of its component
+   *   instance. Otherwise an empty string.
+   * @param string $prop
+   *   For a value in a Canvas component tree, the prop that holds it.
+   *   Otherwise an empty string.
+   * @param string $componentLabel
+   *   For a value in a Canvas component tree, the component instance's
+   *   label. Otherwise an empty string.
    */
   public function __construct(
     public string $entityType,
@@ -49,6 +58,9 @@ final readonly class Finding {
     public string $reason = '',
     public ?array $host = NULL,
     public string $langcode = '',
+    public string $component = '',
+    public string $prop = '',
+    public string $componentLabel = '',
   ) {}
 
   /**
@@ -82,6 +94,19 @@ final readonly class Finding {
       'bundle' => $this->bundle,
       'label' => $this->label,
     ];
+  }
+
+  /**
+   * Names the field, with the component and prop for a component tree.
+   *
+   * @param string $field
+   *   The field's label or name.
+   *
+   * @return string
+   *   Such as "Components > Hero > heading", or the field alone.
+   */
+  public function place(string $field): string {
+    return $this->component === '' ? $field : implode(' > ', [$field, $this->componentLabel, $this->prop]);
   }
 
   /**

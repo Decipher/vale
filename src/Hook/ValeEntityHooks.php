@@ -8,7 +8,7 @@ use Drupal\Core\Entity\ContentEntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Hook\Attribute\Hook;
-use Drupal\field\FieldConfigInterface;
+use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\vale\FieldSettings;
 
 /**
@@ -46,6 +46,9 @@ class ValeEntityHooks {
    */
   #[Hook('entity_bundle_field_info_alter')]
   public function entityBundleFieldInfoAlter(array &$fields, EntityTypeInterface $entity_type, string $bundle): void {
+    // The fields include base field overrides, which is where a Canvas
+    // component tree keeps its settings. FieldSettings only enables a
+    // configurable field, or a component tree's override.
     foreach ($fields as $field) {
       if ($field instanceof FieldConfigInterface && FieldSettings::forField($field)->enabled) {
         $field->addConstraint('ValeText');
