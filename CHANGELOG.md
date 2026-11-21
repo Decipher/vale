@@ -18,6 +18,9 @@ and this project adheres to
   review panel links it to its component. The content report, its CSV export
   and `vale:lint` name the component and prop. Canvas is optional, and
   nothing changes on a site without it.
+- [#3638310](https://www.drupal.org/project/vale/issues/3638310): `vale:sync` downloads
+  the styles that the site's `.vale.ini` names, with Vale's sync, into its
+  `StylesPath`.
 
 ### Changed
 

@@ -37,3 +37,9 @@ services:
       - '@entity_field.manager'
     tags:
       - { name: console.command }
+  Drupal\vale\Command\SyncCommand:
+    class: Drupal\vale\Command\SyncCommand
+    arguments:
+      - '@vale.environment'
+    tags:
+      - { name: console.command }
