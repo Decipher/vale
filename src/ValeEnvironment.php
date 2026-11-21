@@ -191,7 +191,7 @@ class ValeEnvironment {
     if ($this->binary() === NULL || $config === NULL) {
       return [];
     }
-    $cid = 'paths:' . hash('sha256', $config . ':' . file_get_contents($config) . ':' . $this->version());
+    $cid = $this->stylesPathsCid($config);
     if ($cached = $this->cache->get($cid)) {
       return $cached->data;
     }
@@ -212,6 +212,35 @@ class ValeEnvironment {
     $paths = array_values(array_filter($listing['Paths'], static fn (mixed $path): bool => is_string($path) && is_dir($path)));
     $this->cache->set($cid, $paths, $this->time->getRequestTime() + static::PROBE_LIFETIME);
     return $paths;
+  }
+
+  /**
+   * Forgets the styles directories, so they are asked of Vale again.
+   *
+   * Call it after the styles change on disk, such as after "vale sync". The
+   * directories that exist are cached for an hour, so one that a sync creates
+   * would otherwise be missed. The fingerprint and the rules are keyed by the
+   * files they cover, so they follow once the directories are known.
+   */
+  public function resetStylesPaths(): void {
+    $config = $this->configPath();
+    if ($config !== NULL) {
+      $this->cache->delete($this->stylesPathsCid($config));
+    }
+    $this->fingerprint = NULL;
+  }
+
+  /**
+   * Gives the cache ID for the styles directories.
+   *
+   * @param string $config
+   *   The path to the .vale.ini file.
+   *
+   * @return string
+   *   The cache ID.
+   */
+  protected function stylesPathsCid(string $config): string {
+    return 'paths:' . hash('sha256', $config . ':' . file_get_contents($config) . ':' . $this->version());
   }
 
   /**
@@ -281,6 +310,8 @@ class ValeEnvironment {
    *
    * @return array<string, array{level: string, message: string, description: string, link: string}>
    *   The rules, keyed by name and sorted by name.
+   *
+   * @phpstan-impure
    */
   public function rules(): array {
     $cid = 'rules:' . $this->fingerprint();
