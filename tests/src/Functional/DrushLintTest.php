@@ -15,7 +15,9 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests drush vale:lint.
+ * Tests the commands under Drush 12 to 14.
+ *
+ * Those versions find the commands in drush.services.yml.
  *
  * @group vale
  * @runTestsInSeparateProcesses
@@ -89,6 +91,10 @@ class DrushLintTest extends BrowserTestBase {
       'text' => 'delve',
     ], $records[0]);
 
+    // Drush passes --format and --fields on to the command.
+    $this->drush('vale:lint', ['node:page'], ['format' => 'csv', 'fields' => 'entity,rule']);
+    $this->assertSame("Entity,Rule\n\"paragraph 1 (docs_text)\",Demo.Delve", $this->getOutput());
+
     // A bundle with no field opted in says so, rather than passing.
     NodeType::create(['type' => 'bare', 'name' => 'Bare'])->save();
     $this->drush('vale:lint', ['node:bare'], [], NULL, NULL, 1);
@@ -140,6 +146,16 @@ class DrushLintTest extends BrowserTestBase {
     $this->assertStringContainsString('is not checked by Vale', $this->getErrorOutput());
     $this->drush('vale:check', ['node.page', 'Very.'], [], NULL, NULL, 1);
     $this->assertStringContainsString('There is no field "node.page".', $this->getErrorOutput());
+  }
+
+  /**
+   * Tests vale:status and vale:rules.
+   */
+  public function testStatusAndRules(): void {
+    $this->drush('vale:status', [], ['format' => 'json']);
+    $this->assertSame('0.0.0-fake', $this->getOutputFromJSON('version'));
+    $this->drush('vale:rules', [], ['format' => 'json']);
+    $this->assertSame(['Demo.Delve', 'Demo.Really', 'Demo.Very'], array_keys($this->getOutputFromJSON()));
   }
 
 }

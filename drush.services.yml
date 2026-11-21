@@ -1,0 +1,39 @@
+# Drush 12 to 14 do not read core's src/Command, so they find vale's
+# commands here. Core's dr and Drush 15 find the same classes by their
+# #[AsCommand] attribute.
+services:
+  Drupal\vale\Command\LintCommand:
+    class: Drupal\vale\Command\LintCommand
+    arguments:
+      - '@vale.content_walker'
+      - '@vale.environment'
+      - '@vale.finding_storage'
+      - '@datetime.time'
+      - '@vale.report_refresher'
+    tags:
+      - { name: console.command }
+  Drupal\vale\Command\InstallCommand:
+    class: Drupal\vale\Command\InstallCommand
+    arguments:
+      - '@vale.installer'
+    tags:
+      - { name: console.command }
+  Drupal\vale\Command\StatusCommand:
+    class: Drupal\vale\Command\StatusCommand
+    arguments:
+      - '@vale.environment'
+    tags:
+      - { name: console.command }
+  Drupal\vale\Command\RulesCommand:
+    class: Drupal\vale\Command\RulesCommand
+    arguments:
+      - '@vale.environment'
+    tags:
+      - { name: console.command }
+  Drupal\vale\Command\CheckCommand:
+    class: Drupal\vale\Command\CheckCommand
+    arguments:
+      - '@vale.field_linter'
+      - '@entity_field.manager'
+    tags:
+      - { name: console.command }
