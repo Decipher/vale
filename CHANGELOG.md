@@ -21,6 +21,12 @@ and this project adheres to
 - [#3638310](https://www.drupal.org/project/vale/issues/3638310): `vale:sync` downloads
   the styles that the site's `.vale.ini` names, with Vale's sync, into its
   `StylesPath`.
+- [#63](https://github.com/Decipher/vale/issues/63): `vale:install` also
+  installs Vale's browser build, `vale.wasm` and `wasm_exec.js`, from Vale
+  3.26.0, at the binary's version and checked against the release's
+  checksums. It goes in `libraries/vale` under the web root, or in the
+  directory `$settings['vale_wasm']` names. The status report shows its
+  version beside the binary's, and warns when they differ.
 
 ### Changed
 

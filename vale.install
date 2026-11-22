@@ -30,7 +30,11 @@ function vale_requirements(string $phase): array {
   else {
     $requirement['severity'] = $requirement['severity'] ? 0 : 1;
   }
-  return ['vale' => $requirement];
+  $wasm = \Drupal::classResolver(ValeRequirements::class)->wasmRequirement();
+  if (enum_exists(RequirementSeverity::class)) {
+    $wasm['severity'] = RequirementSeverity::from($wasm['severity']);
+  }
+  return ['vale' => $requirement, 'vale_wasm' => $wasm];
 }
 
 /**

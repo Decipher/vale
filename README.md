@@ -93,6 +93,16 @@ None are required. These are supported when they are installed:
    [release](https://github.com/vale-cli/vale/releases) yourself and check its
    checksum.
 
+   From Vale 3.26.0 it also installs Vale's browser build, at the same
+   version. That is Vale compiled to WebAssembly: `vale.wasm` and the
+   `wasm_exec.js` that loads it. They go in `libraries/vale` under your web
+   root, where the site finds them with no setting, and they are checked
+   against the release's checksums file. `--wasm-dir` puts them somewhere
+   else, `--wasm-sha256` checks them against a hash you trust, and
+   `--no-wasm` installs the binary only. Older Vale versions have no browser
+   build, so only the binary is installed. Deploy `libraries/vale` with your
+   site, as you do the binary.
+
 3. Add a `.vale.ini` beside your web root, such as:
 
    ```ini
@@ -120,7 +130,9 @@ None are required. These are supported when they are installed:
    in its `StylesPath`. Deploy the `styles` directory with your site.
 
 6. Check **Reports > Status report**. The Vale entry shows the version and the
-   number of rules in your styles.
+   number of rules in your styles. The Vale browser build entry shows the
+   browser build's version, and warns when it differs from the binary's, is
+   older than 3.26.0, or is not under the web root.
 
 If you enable the module through a config import, such as `drush deploy`,
 Drupal does not install its optional config. Export `views.view.vale_findings`
@@ -198,6 +210,26 @@ them in **People > Permissions**.
 | Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
 | View the prose linting report | The report and its CSV export, which quote text from all content, published or not |
 | Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
+
+### Browser build
+
+If you ship `vale.wasm` and `wasm_exec.js` yourself, put them in a
+directory under the web root and name it in `settings.php`:
+
+```php
+$settings['vale_wasm'] = 'libraries/vale-wasm';
+```
+
+The setting is a path from the web root, an absolute path under it, or a
+stream URI such as `public://vale`. Use the files from one release archive,
+`vale_<version>_wasm.tar.gz`. The status report reads the version from
+`vale.wasm` itself, so no other file is needed.
+
+Browsers load both files with `?v=` and the version on the URL, so a new
+version gets new URLs. Let your web server cache them for a long time, and
+serve `vale.wasm` as `application/wasm`, compressed: it is about 38 MB, and
+9.5 MB with gzip. Drupal's `.htaccess` caches files for two weeks. On nginx,
+add `wasm` to the extensions your static file rule caches.
 
 ### Site settings
 
