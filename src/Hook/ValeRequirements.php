@@ -36,7 +36,9 @@ class ValeRequirements {
   public function runtime(): array {
     $requirement = $this->requirement();
     $requirement['severity'] = $requirement['severity'] ? RequirementSeverity::OK : RequirementSeverity::Warning;
-    return ['vale' => $requirement];
+    $wasm = $this->wasmRequirement();
+    $wasm['severity'] = RequirementSeverity::from($wasm['severity']);
+    return ['vale' => $requirement, 'vale_wasm' => $wasm];
   }
 
   /**
@@ -56,6 +58,24 @@ class ValeRequirements {
       'value' => $status['value'],
       'description' => $status['description'],
       'severity' => $status['available'],
+    ];
+  }
+
+  /**
+   * Builds the requirement for Vale's browser build.
+   *
+   * @return array{title: \Drupal\Core\StringTranslation\TranslatableMarkup, value: string, description: string, severity: int}
+   *   The requirement. Its severity is -1 for information, 0 for OK and 1
+   *   for a warning, which are the values of both the enum and the older
+   *   constants.
+   */
+  public function wasmRequirement(): array {
+    $status = $this->environment->wasmStatus();
+    return [
+      'title' => $this->t('Vale browser build'),
+      'value' => $status['value'],
+      'description' => $status['description'],
+      'severity' => $status['severity'],
     ];
   }
 

@@ -69,11 +69,25 @@ class ValeInstallerTest extends KernelTestBase {
    *   The archive's contents.
    */
   protected function archive(string $binary = "#!/bin/sh\necho 'vale version 9.9.9'\n", string $name = 'vale'): string {
+    return $this->tarball([$name => $binary, 'README.md' => 'Vale']);
+  }
+
+  /**
+   * Builds a compressed tar archive.
+   *
+   * @param array<string, string> $files
+   *   The contents of each file, keyed by name.
+   *
+   * @return string
+   *   The archive's contents.
+   */
+  protected function tarball(array $files): string {
     // A name of its own, since PharData keeps an archive it opened.
     $tar = $this->directory . '/build-' . bin2hex(random_bytes(4)) . '.tar';
     $phar = new \PharData($tar);
-    $phar->addFromString($name, $binary);
-    $phar->addFromString('README.md', 'Vale');
+    foreach ($files as $name => $contents) {
+      $phar->addFromString($name, $contents);
+    }
     $phar->compress(\Phar::GZ);
     $contents = (string) file_get_contents($tar . '.gz');
     unlink($tar);
@@ -373,6 +387,78 @@ class ValeInstallerTest extends KernelTestBase {
       }
 
     };
+  }
+
+  /**
+   * Tests installing the browser build, checked against the checksums file.
+   */
+  public function testInstallWasm(): void {
+    $archive = $this->tarball(['vale.wasm' => "\0asm", 'wasm_exec.js' => '// Go.']);
+    $checksums = hash('sha256', 'other') . "  vale_3.26.0_Linux_64-bit.tar.gz\n"
+      . hash('sha256', $archive) . "  vale_3.26.0_wasm.tar.gz\n";
+    $this->assertTrue($this->installer(new Response(200, [], $checksums), new Response(200, [], $archive))
+      ->installWasm($this->directory . '/wasm', '3.26.0'));
+
+    $this->assertSame("\0asm", file_get_contents($this->directory . '/wasm/vale.wasm'));
+    $this->assertSame('// Go.', file_get_contents($this->directory . '/wasm/wasm_exec.js'));
+    $this->assertSame(0644, fileperms($this->directory . '/wasm/vale.wasm') & 0777);
+    $this->assertSame(['vale.wasm', 'wasm_exec.js'], array_values(array_diff(scandir($this->directory . '/wasm') ?: [], ['.', '..'])));
+    $urls = array_map(static fn (RequestInterface $request): string => (string) $request->getUri(), $this->requests);
+    $this->assertSame([
+      'https://github.com/vale-cli/vale/releases/download/v3.26.0/vale_3.26.0_checksums.txt',
+      'https://github.com/vale-cli/vale/releases/download/v3.26.0/vale_3.26.0_wasm.tar.gz',
+    ], $urls);
+  }
+
+  /**
+   * Tests that a version before 3.26.0 has no browser build to install.
+   */
+  public function testWasmUnavailable(): void {
+    $this->assertFalse($this->installer()->installWasm($this->directory . '/wasm', '3.25.0'));
+    $this->assertSame([], $this->requests);
+    $this->assertDirectoryDoesNotExist($this->directory . '/wasm');
+
+    $this->expectException(\InvalidArgumentException::class);
+    $this->installer()->installWasm($this->directory . '/wasm', '3.26');
+  }
+
+  /**
+   * Tests the ways installing the browser build can fail.
+   */
+  public function testWasmFailures(): void {
+    // An archive without the loader.
+    $archive = $this->tarball(['vale.wasm' => "\0asm"]);
+    try {
+      $this->installer(new Response(200, [], $archive))->installWasm($this->directory . '/wasm', '3.26.0', hash('sha256', $archive));
+      $this->fail('An archive without wasm_exec.js was installed.');
+    }
+    catch (\RuntimeException $e) {
+      $this->assertStringContainsString('vale_3.26.0_wasm.tar.gz has no wasm_exec.js in it.', $e->getMessage());
+    }
+    $this->assertDirectoryDoesNotExist($this->directory . '/wasm');
+
+    // A changed archive.
+    try {
+      $this->installer(new Response(200, [], $archive))->installWasm($this->directory . '/wasm', '3.26.0', str_repeat('0', 64));
+      $this->fail('A changed archive was installed.');
+    }
+    catch (\RuntimeException $e) {
+      $this->assertStringContainsString('It was not installed.', $e->getMessage());
+    }
+
+    // A directory in the way of the loader stops its rename. No staged copy
+    // is left behind.
+    $archive = $this->tarball(['vale.wasm' => "\0asm", 'wasm_exec.js' => '// Go.']);
+    mkdir($this->directory . '/wasm/wasm_exec.js', 0777, TRUE);
+    file_put_contents($this->directory . '/wasm/vale.wasm', 'old');
+    try {
+      $this->installer(new Response(200, [], $archive))->installWasm($this->directory . '/wasm', '3.26.0', hash('sha256', $archive));
+      $this->fail('The browser build was installed over a directory.');
+    }
+    catch (\RuntimeException $e) {
+      $this->assertStringContainsString("Vale's browser build could not be written to", $e->getMessage());
+    }
+    $this->assertSame(['vale.wasm', 'wasm_exec.js'], array_values(array_diff(scandir($this->directory . '/wasm') ?: [], ['.', '..'])));
   }
 
 }

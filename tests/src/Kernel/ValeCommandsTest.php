@@ -409,39 +409,144 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
+   * Builds a compressed tar archive.
+   *
+   * @param array<string, string> $files
+   *   The contents of each file, keyed by name.
+   *
+   * @return string
+   *   The archive's contents.
+   */
+  protected function tarball(array $files): string {
+    $tar = $this->valeDirectory . '/release-' . bin2hex(random_bytes(4)) . '.tar';
+    $phar = new \PharData($tar);
+    foreach ($files as $name => $contents) {
+      $phar->addFromString($name, $contents);
+    }
+    $phar->compress(\Phar::GZ);
+    return (string) file_get_contents($tar . '.gz');
+  }
+
+  /**
+   * Runs vale:install with downloads that come from the given responses.
+   *
+   * @param array<string, mixed> $input
+   *   The options.
+   * @param \GuzzleHttp\Psr7\Response ...$responses
+   *   The responses, in order.
+   *
+   * @return \Symfony\Component\Console\Tester\CommandTester
+   *   The tester, after the run.
+   */
+  protected function runInstall(array $input, Response ...$responses): CommandTester {
+    $client = new Client(['handler' => HandlerStack::create(new MockHandler(array_values($responses)))]);
+    $this->container->set('vale.installer', new ValeInstaller($client, $this->container->get('file_system')));
+    return $this->runCommand(InstallCommand::class, $input);
+  }
+
+  /**
    * Tests that vale:install installs Vale and says how to set it up.
    */
   public function testInstall(): void {
-    $phar = new \PharData($this->valeDirectory . '/release.tar');
-    $phar->addFromString('vale', "#!/bin/sh\necho 'vale version 9.9.9'\n");
-    $phar->compress(\Phar::GZ);
-    $archive = (string) file_get_contents($this->valeDirectory . '/release.tar.gz');
-    $client = new Client(['handler' => HandlerStack::create(new MockHandler([new Response(200, [], $archive)]))]);
-
-    $this->container->set('vale.installer', new ValeInstaller($client, $this->container->get('file_system')));
-    $tester = $this->runCommand(InstallCommand::class, ['--dir' => $this->valeDirectory . '/bin', '--vale-version' => '9.9.9', '--sha256' => hash('sha256', $archive)]);
+    $archive = $this->tarball(['vale' => "#!/bin/sh\necho 'vale version 9.9.9'\n"]);
+    $wasm = $this->tarball(['vale.wasm' => "\0asm", 'wasm_exec.js' => '// Go.']);
+    $options = ['--vale-version' => '9.9.9', '--sha256' => hash('sha256', $archive)];
+    // The browser build is checked against the release's checksums file.
+    $checksums = new Response(200, [], hash('sha256', $wasm) . "  vale_9.9.9_wasm.tar.gz\n");
+    $tester = $this->runInstall(
+      ['--dir' => $this->valeDirectory . '/bin', '--wasm-dir' => $this->valeDirectory . '/wasm'] + $options,
+      new Response(200, [], $archive),
+      $checksums,
+      new Response(200, [], $wasm),
+    );
 
     $this->assertSame(0, $tester->getStatusCode());
     $this->assertTrue(is_executable($this->valeDirectory . '/bin/vale'));
     $this->assertStringContainsString("\$settings['vale_binary'] = '" . $this->valeDirectory . "/bin/vale';", $tester->getDisplay());
+    $this->assertFileExists($this->valeDirectory . '/wasm/vale.wasm');
+    $this->assertFileExists($this->valeDirectory . '/wasm/wasm_exec.js');
+    $this->assertStringContainsString("\$settings['vale_wasm'] = '" . $this->valeDirectory . "/wasm';", $tester->getDisplay());
 
     // A quote in the path is escaped, so the line can be pasted into PHP.
-    $client = new Client(['handler' => HandlerStack::create(new MockHandler([new Response(200, [], $archive)]))]);
-    $this->container->set('vale.installer', new ValeInstaller($client, $this->container->get('file_system')));
-    $tester = $this->runCommand(InstallCommand::class, ['--dir' => $this->valeDirectory . "/vale's-bin", '--vale-version' => '9.9.9', '--sha256' => hash('sha256', $archive)]);
+    $tester = $this->runInstall(['--dir' => $this->valeDirectory . "/vale's-bin", '--no-wasm' => TRUE] + $options, new Response(200, [], $archive));
     $this->assertSame(0, $tester->getStatusCode());
     $this->assertStringContainsString("\$settings['vale_binary'] = '" . $this->valeDirectory . "/vale\\'s-bin/vale';", $tester->getDisplay());
-    // Beside the web root, the setting is given from $app_root.
+    $this->assertStringNotContainsString('browser build', $tester->getDisplay());
+
+    // Beside the web root, the setting is given from $app_root. Under it,
+    // the browser build's setting is too.
     $directory = 'vale-test-' . bin2hex(random_bytes(4));
-    $client = new Client(['handler' => HandlerStack::create(new MockHandler([new Response(200, [], $archive)]))]);
-    $this->container->set('vale.installer', new ValeInstaller($client, $this->container->get('file_system')));
     try {
-      $tester = $this->runCommand(InstallCommand::class, ['--dir' => dirname(DRUPAL_ROOT) . '/' . $directory, '--vale-version' => '9.9.9', '--sha256' => hash('sha256', $archive)]);
+      $tester = $this->runInstall(
+        ['--dir' => dirname(DRUPAL_ROOT) . '/' . $directory, '--wasm-dir' => DRUPAL_ROOT . '/' . $directory . '/', '--wasm-sha256' => hash('sha256', $wasm)] + $options,
+        new Response(200, [], $archive),
+        new Response(200, [], $wasm),
+      );
       $this->assertStringContainsString("\$settings['vale_binary'] = \$app_root . '/../$directory/vale';", $tester->getDisplay());
+      $this->assertStringContainsString("\$settings['vale_wasm'] = \$app_root . '/$directory';", $tester->getDisplay());
     }
     finally {
       $this->container->get('file_system')->deleteRecursive(dirname(DRUPAL_ROOT) . '/' . $directory);
+      $this->container->get('file_system')->deleteRecursive(DRUPAL_ROOT . '/' . $directory);
     }
+  }
+
+  /**
+   * Tests installing the browser build where the site looks by default.
+   */
+  public function testInstallWasmDefault(): void {
+    $default = DRUPAL_ROOT . '/libraries/vale';
+    if (file_exists($default)) {
+      $this->markTestSkipped($default . ' is already there.');
+    }
+    $archive = $this->tarball(['vale' => "#!/bin/sh\necho 'vale version 9.9.9'\n"]);
+    $wasm = $this->tarball(['vale.wasm' => "\0asm", 'wasm_exec.js' => '// Go.']);
+    try {
+      $tester = $this->runInstall(
+        ['--dir' => $this->valeDirectory . '/bin', '--vale-version' => '9.9.9', '--sha256' => hash('sha256', $archive), '--wasm-sha256' => hash('sha256', $wasm)],
+        new Response(200, [], $archive),
+        new Response(200, [], $wasm),
+      );
+      $this->assertSame(0, $tester->getStatusCode());
+      $this->assertFileExists($default . '/vale.wasm');
+      $this->assertStringContainsString("Installed Vale's browser build in", $tester->getDisplay());
+      // The site finds it there with no setting.
+      $this->assertStringNotContainsString('vale_wasm', $tester->getDisplay());
+    }
+    finally {
+      $this->container->get('file_system')->deleteRecursive($default);
+      @rmdir(dirname($default));
+    }
+  }
+
+  /**
+   * Tests vale:install for a version without a browser build, and failures.
+   */
+  public function testInstallWithoutWasm(): void {
+    $archive = $this->tarball(['vale' => "#!/bin/sh\necho 'vale version 3.25.0'\n"]);
+    $options = ['--dir' => $this->valeDirectory . '/bin', '--wasm-dir' => $this->valeDirectory . '/wasm', '--sha256' => hash('sha256', $archive)];
+
+    // Vale 3.25.0 has none, so only the binary is installed.
+    $tester = $this->runInstall(['--vale-version' => '3.25.0'] + $options, new Response(200, [], $archive));
+    $this->assertSame(0, $tester->getStatusCode());
+    $this->assertTrue(is_executable($this->valeDirectory . '/bin/vale'));
+    $this->assertDirectoryDoesNotExist($this->valeDirectory . '/wasm');
+    $this->assertStringContainsString('Vale 3.25.0 has no browser build', $tester->getDisplay());
+
+    // The latest release is found once, and gives both their version.
+    $wasm = $this->tarball(['vale.wasm' => "\0asm", 'wasm_exec.js' => '// Go.']);
+    $tester = $this->runInstall(
+      ['--wasm-sha256' => str_repeat('0', 64)] + $options,
+      new Response(302, ['Location' => 'https://github.com/vale-cli/vale/releases/tag/v3.26.0']),
+      new Response(200, [], $archive),
+      new Response(200, [], $wasm),
+    );
+    // A browser build that fails its checksum fails the command, after the
+    // binary is installed.
+    $this->assertSame(1, $tester->getStatusCode());
+    $this->assertStringContainsString('Installed Vale at', $tester->getDisplay());
+    $this->assertStringContainsString('vale_3.26.0_wasm.tar.gz', $tester->getErrorOutput());
+    $this->assertDirectoryDoesNotExist($this->valeDirectory . '/wasm');
   }
 
   /**
