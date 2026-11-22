@@ -50,6 +50,7 @@ parameters:
       messages:
         - '#^Attribute class Drupal\\Core\\Hook\\Attribute\\(Hook|LegacyHook|LegacyRequirementsHook) does not exist\.$#'
         - '#^Access to constant (OK|Warning) on an unknown class Drupal\\Core\\Extension\\Requirement\\RequirementSeverity\.$#'
+        - '#^Call to static method from\(\) on an unknown class Drupal\\Core\\Extension\\Requirement\\RequirementSeverity\.$#'
       reportUnmatched: false
 
   reportUnmatchedIgnoredErrors: false
