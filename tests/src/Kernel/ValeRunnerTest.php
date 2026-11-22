@@ -354,6 +354,8 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('datetime.time'),
       $this->container->get('file_url_generator'),
       $root ?? $this->root,
+      $this->container->get('file_system'),
+      $this->container->get('language_manager'),
     );
   }
 
@@ -384,6 +386,8 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('datetime.time'),
       $this->container->get('file_url_generator'),
       $this->root,
+      $this->container->get('file_system'),
+      $this->container->get('language_manager'),
     );
     return new ValeRunner(
       $environment,

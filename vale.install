@@ -31,10 +31,12 @@ function vale_requirements(string $phase): array {
     $requirement['severity'] = $requirement['severity'] ? 0 : 1;
   }
   $wasm = \Drupal::classResolver(ValeRequirements::class)->wasmRequirement();
+  $languages = \Drupal::classResolver(ValeRequirements::class)->languageRequirement();
   if (enum_exists(RequirementSeverity::class)) {
     $wasm['severity'] = RequirementSeverity::from($wasm['severity']);
+    $languages['severity'] = RequirementSeverity::from($languages['severity']);
   }
-  return ['vale' => $requirement, 'vale_wasm' => $wasm];
+  return ['vale' => $requirement, 'vale_wasm' => $wasm, 'vale_languages' => $languages];
 }
 
 /**

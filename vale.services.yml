@@ -18,6 +18,8 @@ services:
       - '@datetime.time'
       - '@file_url_generator'
       - '%app.root%'
+      - '@file_system'
+      - '@language_manager'
   Drupal\vale\ValeEnvironment: '@vale.environment'
   vale.runner:
     class: Drupal\vale\ValeRunner

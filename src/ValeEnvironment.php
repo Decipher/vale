@@ -10,7 +10,10 @@ use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
+use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
@@ -55,6 +58,11 @@ class ValeEnvironment {
   public const array WASM_FILES = ['vale.wasm', 'wasm_exec.js'];
 
   /**
+   * The first Vale version that reads a language other than English.
+   */
+  public const string LANG_MINIMUM = '3.27.0';
+
+  /**
    * The fingerprint for this request, once it has been worked out.
    */
   protected ?string $fingerprint = NULL;
@@ -72,6 +80,10 @@ class ValeEnvironment {
    *   The file URL generator.
    * @param string $appRoot
    *   The web root.
+   * @param \Drupal\Core\File\FileSystemInterface $fileSystem
+   *   The file system.
+   * @param \Drupal\Core\Language\LanguageManagerInterface $languageManager
+   *   The language manager.
    */
   public function __construct(
     protected CacheBackendInterface $cache,
@@ -79,6 +91,8 @@ class ValeEnvironment {
     protected TimeInterface $time,
     protected FileUrlGeneratorInterface $fileUrlGenerator,
     protected string $appRoot,
+    protected FileSystemInterface $fileSystem,
+    protected LanguageManagerInterface $languageManager,
   ) {}
 
   /**
@@ -145,6 +159,10 @@ class ValeEnvironment {
    *   The arguments after the binary.
    * @param string|null $input
    *   Text for Vale's standard input, or NULL.
+   * @param string|null $config
+   *   A configuration to use in place of the site's, such as one from
+   *   languageConfigPath(), or NULL. Vale still runs in the site
+   *   configuration's directory.
    *
    * @return \Symfony\Component\Process\Process
    *   The process, not yet started.
@@ -152,15 +170,15 @@ class ValeEnvironment {
    * @throws \LogicException
    *   When Vale is unavailable.
    */
-  public function process(array $arguments, ?string $input = NULL): Process {
+  public function process(array $arguments, ?string $input = NULL, ?string $config = NULL): Process {
     $binary = $this->binary();
-    $config = $this->configPath();
-    if ($binary === NULL || $config === NULL) {
+    $site = $this->configPath();
+    if ($binary === NULL || $site === NULL) {
       throw new \LogicException((string) $this->unavailableReason());
     }
     return new Process(
-      [$binary, '--no-global', '--config=' . $config, ...$arguments],
-      dirname($config),
+      [$binary, '--no-global', '--config=' . ($config ?? $site), ...$arguments],
+      dirname($site),
       NULL,
       $input,
       $this->timeout(),
@@ -199,6 +217,284 @@ class ValeEnvironment {
       $this->cache->set($cid, $version, $this->time->getRequestTime() + static::PROBE_LIFETIME);
     }
     return $version;
+  }
+
+  /**
+   * Says whether the Vale binary reads languages other than English.
+   *
+   * @return bool
+   *   TRUE from Vale 3.27.0, which has the Lang key.
+   */
+  public function supportsLanguages(): bool {
+    $version = $this->version();
+    return $version !== NULL && version_compare($version, static::LANG_MINIMUM, '>=');
+  }
+
+  /**
+   * Gives the Lang tag for a Drupal language, whatever the Vale version.
+   *
+   * @param string $langcode
+   *   The langcode, such as "fr" or "pt-br".
+   *
+   * @return string|null
+   *   The langcode, or NULL for English, "Not specified" and "Not
+   *   applicable", and for a langcode that is not a language tag.
+   */
+  protected function languageTag(string $langcode): ?string {
+    if (!preg_match('/^([a-z]{2,3})(?:[-_][a-z0-9]{1,8})*$/i', $langcode, $matches)) {
+      return NULL;
+    }
+    $base = strtolower($matches[1]);
+    $english = ['en', LanguageInterface::LANGCODE_NOT_SPECIFIED, LanguageInterface::LANGCODE_NOT_APPLICABLE];
+    return in_array($base, $english, TRUE) ? NULL : $langcode;
+  }
+
+  /**
+   * Gives the language Vale reads a value in.
+   *
+   * @param string $langcode
+   *   The langcode of the value's translation.
+   *
+   * @return string|null
+   *   The Lang tag, or NULL when the value is read as English with the site's
+   *   own configuration. That is so for English, "Not specified", "Not
+   *   applicable", and for any language with Vale older than 3.27.0.
+   */
+  public function valeLanguage(string $langcode): ?string {
+    $tag = $this->languageTag($langcode);
+    return $tag !== NULL && $this->supportsLanguages() ? $tag : NULL;
+  }
+
+  /**
+   * Splits the site's configuration into its StylesPath and the rest.
+   *
+   * @return array{0: string|null, 1: string}|null
+   *   The StylesPath, made absolute, or NULL when the configuration has none.
+   *   Then the configuration without its top-level StylesPath and Lang. NULL
+   *   when the configuration cannot be read.
+   */
+  protected function splitConfig(): ?array {
+    $config = $this->configPath();
+    if ($config === NULL) {
+      return NULL;
+    }
+    $styles = NULL;
+    $kept = [];
+    $top = TRUE;
+    foreach (preg_split('/(?<=\n)/', (string) file_get_contents($config)) ?: [] as $line) {
+      $top = $top && !preg_match('/^\s*\[/', $line);
+      if ($top && preg_match('/^\s*(StylesPath|Lang)\s*=\s*(.*?)\s*$/i', $line, $matches)) {
+        // Vale keeps the first of two keys, so this does too.
+        if (strcasecmp($matches[1], 'StylesPath') === 0 && $styles === NULL) {
+          $styles = trim($matches[2], '"\'');
+        }
+        continue;
+      }
+      $kept[] = $line;
+    }
+    // Vale reads a relative StylesPath from the configuration's directory.
+    if ($styles !== NULL && $styles !== '' && !str_starts_with($styles, '/')) {
+      $styles = dirname($config) . '/' . $styles;
+    }
+    return [$styles ?: NULL, implode('', $kept)];
+  }
+
+  /**
+   * Gives the configuration Vale reads a language with.
+   *
+   * It is the site's configuration with Lang set at the top, so a section
+   * that sets its own Lang still wins. The site's top-level Lang is left
+   * out, as Vale would keep the first of the two. The browser config route
+   * can call this with the StylesPath its build reads.
+   *
+   * @param string $langcode
+   *   The langcode of the text.
+   * @param string|null $stylesPath
+   *   The StylesPath to set, or NULL for the site's, made absolute.
+   *
+   * @return string|null
+   *   The configuration, or NULL when the text is read as English with the
+   *   site's own configuration.
+   */
+  public function languageConfig(string $langcode, ?string $stylesPath = NULL): ?string {
+    $language = $this->valeLanguage($langcode);
+    $split = $this->splitConfig();
+    if ($language === NULL || $split === NULL) {
+      return NULL;
+    }
+    [$styles, $rest] = $split;
+    $stylesPath ??= $styles;
+    $head = ($stylesPath === NULL ? '' : 'StylesPath = ' . $stylesPath . "\n") . 'Lang = ' . $language . "\n";
+    return $head . $rest;
+  }
+
+  /**
+   * Writes the configuration Vale reads a language with.
+   *
+   * The file goes in the temporary directory, as the code may be read-only.
+   * Its name holds the fingerprint, the site's configuration and the
+   * langcode, so a changed configuration or style gets a new file.
+   *
+   * @param string $langcode
+   *   The langcode of the text.
+   *
+   * @return string|null
+   *   The path to the file, or NULL when the text is read as English with the
+   *   site's own configuration.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be written.
+   */
+  public function languageConfigPath(string $langcode): ?string {
+    $ini = $this->languageConfig($langcode);
+    if ($ini === NULL) {
+      return NULL;
+    }
+    $key = hash('sha256', $this->fingerprint() . "\0" . $this->configPath());
+    return $this->writeConfig($key . '.' . $langcode . '.ini', $ini);
+  }
+
+  /**
+   * Gives the language codes of the site's languages that are not English.
+   *
+   * @return string[]
+   *   The codes, in the site's order.
+   */
+  public function siteLanguages(): array {
+    return array_values(array_filter(
+      array_keys($this->languageManager->getLanguages()),
+      fn (string $langcode): bool => $this->languageTag($langcode) !== NULL,
+    ));
+  }
+
+  /**
+   * Writes a configuration that names each of the site's languages.
+   *
+   * Vale's sync downloads the model for each language a configuration names,
+   * so .vale.ini need not name them. It has no Packages, so only the models
+   * are downloaded.
+   *
+   * @return string|null
+   *   The path to the file, or NULL when every language is read as English.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be written.
+   */
+  public function modelsConfigPath(): ?string {
+    $languages = $this->supportsLanguages() ? $this->siteLanguages() : [];
+    $split = $this->splitConfig();
+    if ($languages === [] || $split === NULL) {
+      return NULL;
+    }
+    $ini = $split[0] === NULL ? '' : 'StylesPath = ' . $split[0] . "\n";
+    foreach ($languages as $langcode) {
+      // The sections match no file. They only name the languages.
+      $ini .= "\n[*.vale-language-" . $langcode . "]\nLang = " . $langcode . "\n";
+    }
+    return $this->writeConfig('models-' . hash('sha256', $ini) . '.ini', $ini);
+  }
+
+  /**
+   * Writes a configuration to the temporary directory.
+   *
+   * An existing file is kept, as its name says what it holds. A new file is
+   * written beside it and moved into place, so Vale never reads half of it.
+   *
+   * @param string $name
+   *   The file name.
+   * @param string $ini
+   *   The configuration.
+   *
+   * @return string
+   *   The path to the file.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be written.
+   */
+  protected function writeConfig(string $name, string $ini): string {
+    $directory = $this->fileSystem->getTempDirectory() . '/vale';
+    $file = $directory . '/' . $name;
+    if (is_file($file)) {
+      return $file;
+    }
+    $partial = $file . '.' . bin2hex(random_bytes(6));
+    if ((!is_dir($directory) && !@mkdir($directory, 0775, TRUE) && !is_dir($directory))
+      || @file_put_contents($partial, $ini) === FALSE
+      || !@rename($partial, $file)) {
+      @unlink($partial);
+      throw new \RuntimeException(sprintf('The Vale configuration for a language could not be written to %s.', $directory));
+    }
+    return $file;
+  }
+
+  /**
+   * Describes the site's languages for the site status report.
+   *
+   * @return array{severity: int, value: string, description: string}
+   *   The severity, a short value and a longer description. The severity is
+   *   0 for OK and 1 for a warning, as in RequirementSeverity.
+   */
+  public function languageStatus(): array {
+    $names = [];
+    foreach ($this->languageManager->getLanguages() as $langcode => $language) {
+      $names[$langcode] = $language->getName();
+    }
+    $value = implode(', ', $names);
+    $others = $this->siteLanguages();
+    if ($others === []) {
+      return [
+        'severity' => 0,
+        'value' => $value,
+        'description' => (string) $this->t('Every value is checked in English.'),
+      ];
+    }
+    $list = static fn (array $codes): string => implode(', ', array_map(static fn (string $langcode): string => $names[$langcode], $codes));
+    if (!$this->supportsLanguages()) {
+      $version = $this->version();
+      $arguments = [
+        '@version' => (string) $version,
+        '@languages' => $list($others),
+        '@minimum' => static::LANG_MINIMUM,
+      ];
+      return [
+        'severity' => 1,
+        'value' => $value,
+        'description' => (string) ($version === NULL
+          ? $this->t('Vale did not report its version, so every value is checked in English. Checking @languages in their own language needs Vale @minimum or later.', $arguments)
+          : $this->t('Vale @version checks every value in English. Checking @languages in their own language needs Vale @minimum or later.', $arguments)),
+      ];
+    }
+    $models = [];
+    $dictionaries = [];
+    foreach ($others as $langcode) {
+      $base = strtolower(substr($langcode, 0, strcspn($langcode, '-_')));
+      $model = FALSE;
+      $dictionary = FALSE;
+      foreach ($this->stylesPaths() as $path) {
+        $model = $model || is_file($path . '/config/models/' . $base . '/model.json');
+        // A dictionary is named for the language, or for it and a region in
+        // Hunspell's way, such as de_DE.
+        $dictionary = $dictionary || is_file($path . '/config/dictionaries/' . $base . '.dic') || (glob($path . '/config/dictionaries/' . $base . '_*.dic') ?: []) !== [];
+      }
+      if (!$model) {
+        $models[] = $langcode;
+      }
+      if (!$dictionary) {
+        $dictionaries[] = $langcode;
+      }
+    }
+    $parts = [$this->t('Each value is checked in the language of its translation.')];
+    if ($models !== []) {
+      $parts[] = $this->t('Vale has no model for @languages, so it splits their sentences by punctuation. Run vale:sync to download the models Vale publishes.', ['@languages' => $list($models)]);
+    }
+    if ($dictionaries !== []) {
+      $parts[] = $this->t('There is no spelling dictionary for @languages in config/dictionaries, so Vale skips its spelling check in them.', ['@languages' => $list($dictionaries)]);
+    }
+    return [
+      'severity' => $models === [] ? 0 : 1,
+      'value' => $value,
+      'description' => implode(' ', array_map(strval(...), $parts)),
+    ];
   }
 
   /**

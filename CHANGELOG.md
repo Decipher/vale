@@ -27,6 +27,15 @@ and this project adheres to
   checksums. It goes in `libraries/vale` under the web root, or in the
   directory `$settings['vale_wasm']` names. The status report shows its
   version beside the binary's, and warns when they differ.
+- [#64](https://github.com/Decipher/vale/issues/64): Checks each value in
+  the language of its entity translation, with Vale 3.27.0 or later. The
+  module sets `Lang` at the top of the configuration it passes to Vale, and
+  a `.vale.ini` section that sets its own `Lang` still wins. English, "Not
+  specified" and "Not applicable" values are checked as before.
+  `vale:sync` also downloads the model for each of the site's languages. The
+  status report lists the site's languages, and names those with no model
+  and those with no spelling dictionary. With an older Vale, every value is
+  checked in English and the status report says why.
 - [#33](https://github.com/Decipher/vale/issues/33): The README shows how to
   run Vale on Lagoon, Acquia Cloud Platform, Pantheon, Platform.sh and Upsun,
   with a script that installs a pinned Vale and its styles in a build with no
