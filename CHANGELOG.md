@@ -27,6 +27,10 @@ and this project adheres to
   checksums. It goes in `libraries/vale` under the web root, or in the
   directory `$settings['vale_wasm']` names. The status report shows its
   version beside the binary's, and warns when they differ.
+- [#33](https://github.com/Decipher/vale/issues/33): The README shows how to
+  run Vale on Lagoon, Acquia Cloud Platform, Pantheon, Platform.sh and Upsun,
+  with a script that installs a pinned Vale and its styles in a build with no
+  database.
 
 ### Changed
 

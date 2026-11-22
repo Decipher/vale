@@ -140,6 +140,97 @@ and `system.action.node_vale_check_prose` with the rest of your
 configuration, or the report page and the **Check prose with Vale** bulk
 action are missing.
 
+### Hosting
+
+Vale runs wherever the site runs: on every web server, and wherever `dr` or
+Drush runs, such as cron and SSH. Most hosts make the code read-only once it
+is deployed, and give each server the same copy. So keep Vale, `.vale.ini`
+and the styles in the codebase, and install them before the code is
+deployed. The `settings.php` lines in step 4 then work on every server.
+
+Vale 3.27.0 and later is a static Linux binary, so it needs no other
+libraries, on Alpine too. Some earlier releases, such as 3.24.0, need glibc
+and libstdc++.
+
+`vale:install` and `vale:sync` need an installed site, so they cannot run in
+a build with no database. This script does the same job with Vale alone. It
+downloads a pinned release into `bin/`, checks its SHA-256, and downloads the
+styles. Save it as `scripts/vale.sh` and run it from the project root:
+
+```sh
+#!/bin/sh
+# Installs a pinned Vale into bin/ and downloads the styles .vale.ini names.
+set -e
+VERSION=3.28.1
+SHA256=068954ad869ebec24b8dec6ebcd1cbb1fd5f5a83e966a35baedfae8b2cdc093a
+ARCHIVE="vale_${VERSION}_Linux_64-bit.tar.gz"
+curl -fsSLo "/tmp/$ARCHIVE" \
+  "https://github.com/vale-cli/vale/releases/download/v$VERSION/$ARCHIVE"
+echo "$SHA256  /tmp/$ARCHIVE" | sha256sum -c -
+mkdir -p bin
+tar -xzf "/tmp/$ARCHIVE" -C bin vale
+bin/vale --no-global --config=.vale.ini sync
+chmod -R a+rX styles
+```
+
+Take the SHA-256 from the release's `vale_<version>_checksums.txt`. For an
+ARM server, use the `Linux_arm64` archive and its SHA-256. `uname -m` on the
+server tells you which: `x86_64` or `aarch64`. Vale's sync makes the style
+directories readable by their owner only, so the last line opens them to the
+web server.
+
+#### Lagoon
+
+Run the script in the Dockerfiles of both the CLI image and the PHP-FPM
+image, after the code is copied in. Drush runs in the CLI image and the site
+in the PHP-FPM image, so each needs Vale. On Alpine, a Vale release before
+3.27.0 also needs glibc support, such as the `gcompat` package.
+
+#### Acquia Cloud Platform
+
+You cannot install system packages on Acquia yourself, but you can add your
+own executables to the code repository. Git keeps a file's execute bit, so
+commit `bin/vale` with the bit set, with `.vale.ini` and the `styles`
+directory. Run the script on 64-bit Linux first. On another system, download
+the release and check it by hand, then run the sync with your own Vale:
+`vale --no-global --config=.vale.ini sync`.
+
+With Code Studio, you can run the script from `post-install-cmd` in
+`composer.json` instead, as Acquia shows for front-end builds:
+
+```json
+"scripts": {
+    "post-install-cmd": [
+        "sh scripts/vale.sh"
+    ]
+}
+```
+
+#### Pantheon
+
+Code is read-only on Test and Live. Integrated Composer runs
+`composer install`, and Pantheon's support does not cover Composer scripts.
+Quicksilver hooks run once the code is deployed and read-only. So commit `bin/vale`, with
+`.vale.ini` and the `styles` directory, as for Acquia. Keep them out of
+`vendor/`, which the build replaces. Pantheon does not document running your
+own binaries, so check the status report on Dev, Test and Live.
+
+#### Platform.sh and Upsun
+
+The build hook can write to the application directory and download files,
+and what it leaves there is deployed. It has no database, so run the script
+there, in `.platform.app.yaml` or the application in `.upsun/config.yaml`:
+
+```yaml
+hooks:
+  build: |
+    set -e
+    sh scripts/vale.sh
+```
+
+After the build, the application directory is read-only, so `vale:sync`
+cannot run there. Change `.vale.ini` and redeploy instead.
+
 ## Configuration
 
 ### Fields
