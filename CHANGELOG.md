@@ -21,6 +21,15 @@ and this project adheres to
 - [#3638310](https://www.drupal.org/project/vale/issues/3638310): `vale:sync` downloads
   the styles that the site's `.vale.ini` names, with Vale's sync, into its
   `StylesPath`.
+- [#64](https://github.com/Decipher/vale/issues/64): Checks each value in
+  the language of its entity translation, with Vale 3.27.0 or later. The
+  module sets `Lang` at the top of the configuration it passes to Vale, and
+  a `.vale.ini` section that sets its own `Lang` still wins. English, "Not
+  specified" and "Not applicable" values are checked as before.
+  `vale:sync` also downloads the model for each of the site's languages. The
+  status report lists the site's languages, and names those with no model
+  and those with no spelling dictionary. With an older Vale, every value is
+  checked in English and the status report says why.
 
 ### Changed
 

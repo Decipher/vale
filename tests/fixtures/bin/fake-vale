@@ -15,11 +15,20 @@
  * The FAKE_PROBE_FAIL environment variable makes --version and ls-config
  * fail, as a Vale that is out of memory or misconfigured would, and
  * FAKE_PROBE_SLOW makes them sleep past any time limit. The sync command
- * succeeds and adds the Synced.New rule to the styles directory, fails as with no network when FAKE_SYNC_FAIL is set, and is
- * killed by a signal when FAKE_SYNC_KILLED is set.
+ * succeeds and adds the Synced.New rule to the styles directory. It fails
+ * as with no network when FAKE_SYNC_FAIL is set, fails only the language
+ * models when FAKE_SYNC_MODELS_FAIL is set, and is killed by a signal when
+ * FAKE_SYNC_KILLED is set.
  *
- * Each lint run appends the --path value to calls.log beside the
- * configuration, so a test can count runs.
+ * Each lint run appends the --path value to calls.log beside the styles
+ * directory, so a test can count runs, and the path with the language it
+ * was read in to langs.log. FAKE_VERSION sets the version it reports.
+ *
+ * It reads Lang as Vale 3.27.0 does: the top-level key, unless a section
+ * that matches the path sets its own. In French it also flags "très" as an
+ * error (Demo.Tres). Its sync writes a model for each French, German or
+ * Spanish language the configuration names, as Vale's sync does, and warns
+ * about any other.
  */
 
 declare(strict_types=1);
@@ -45,12 +54,35 @@ if (isset($options['version']) || $command === 'ls-config') {
 }
 
 if (isset($options['version'])) {
-  print "vale version 0.0.0-fake\n";
+  print 'vale version ' . (getenv('FAKE_VERSION') ?: '0.0.0-fake') . "\n";
   exit(0);
 }
 
 $config = is_string($options['config'] ?? NULL) ? $options['config'] : '.vale.ini';
-$styles = dirname($config) . '/styles';
+
+// Read the keys at the top and in each section, in order.
+$top = [];
+$sections = [];
+$section = NULL;
+foreach ((is_file($config) ? file($config) : []) ?: [] as $line) {
+  if (preg_match('/^\s*\[(.+)\]\s*$/', $line, $matches)) {
+    $section = $matches[1];
+    $sections[$section] ??= [];
+  }
+  elseif (preg_match('/^\s*([A-Za-z.]+)\s*=\s*(.*?)\s*$/', $line, $matches)) {
+    if ($section === NULL) {
+      // Vale keeps the first of two keys at the top.
+      $top[$matches[1]] ??= $matches[2];
+    }
+    else {
+      $sections[$section][$matches[1]] = $matches[2];
+    }
+  }
+}
+$styles = $top['StylesPath'] ?? 'styles';
+if (!str_starts_with($styles, '/')) {
+  $styles = dirname($config) . '/' . $styles;
+}
 
 if ($command === 'ls-config') {
   print json_encode(['Paths' => [$styles]]);
@@ -66,16 +98,42 @@ if ($command === 'sync') {
     fwrite(STDERR, "E100 [sync] Runtime error\n\nPackage 'Microsoft' could not fetch: no network.\n");
     exit(2);
   }
-  // A synced package adds a rule, making the styles directory if need be.
-  @mkdir($styles . '/Synced', 0777, TRUE);
-  file_put_contents($styles . '/Synced/New.yml', "extends: existence\nmessage: \"Synced rule.\"\nlevel: warning\ntokens:\n  - synced\n");
-  print "SUCCESS  Synced 1 package(s) to '$styles'.\n";
+  $languages = array_filter([$top['Lang'] ?? NULL, ...array_map(static fn (array $keys): ?string => $keys['Lang'] ?? NULL, $sections)]);
+  if ($languages === []) {
+    // A synced package adds a rule, making the styles directory if need be.
+    @mkdir($styles . '/Synced', 0777, TRUE);
+    file_put_contents($styles . '/Synced/New.yml', "extends: existence\nmessage: \"Synced rule.\"\nlevel: warning\ntokens:\n  - synced\n");
+    print "SUCCESS  Synced 1 package(s) to '$styles'.\n";
+    exit(0);
+  }
+  if (getenv('FAKE_SYNC_MODELS_FAIL')) {
+    fwrite(STDERR, "E100 could not fetch the language models.\n");
+    exit(2);
+  }
+  $models = 0;
+  foreach (array_unique($languages) as $language) {
+    if (!in_array($language, ['fr', 'de', 'es'], TRUE)) {
+      print "WARNING  No model is published for language '$language'.\n";
+      continue;
+    }
+    @mkdir("$styles/config/models/$language", 0777, TRUE);
+    file_put_contents("$styles/config/models/$language/model.json", '{}');
+    $models++;
+  }
+  print "SUCCESS  Synced 0 package(s), $models language model(s) to '$styles'.\n";
   exit(0);
 }
 
 $path = is_string($options['path'] ?? NULL) ? $options['path'] : 'stdin.txt';
 $text = stream_get_contents(STDIN);
-file_put_contents(dirname($config) . '/calls.log', $path . "\n", FILE_APPEND);
+file_put_contents(dirname($styles) . '/calls.log', $path . "\n", FILE_APPEND);
+$language = $top['Lang'] ?? 'en';
+foreach ($sections as $glob => $keys) {
+  if (isset($keys['Lang']) && fnmatch($glob, $path)) {
+    $language = $keys['Lang'];
+  }
+}
+file_put_contents(dirname($styles) . '/langs.log', $path . ' ' . $language . "\n", FILE_APPEND);
 
 if (str_contains($text, 'FAKE_TIMEOUT')) {
   sleep(30);
@@ -97,13 +155,15 @@ $rules = [
   'very' => ['Demo.Very', 'error', "Avoid '%s'.", 'Intensifiers weaken prose.', 'https://example.com/very'],
   'delve' => ['Demo.Delve', 'warning', "'%s' is an AI tell.", '', ''],
   'really' => ['Demo.Really', 'suggestion', "Consider removing '%s'.", '', ''],
+  'très' => ['Demo.Tres', 'error', "Avoid '%s'.", '', ''],
 ];
+$words = $language === 'fr' ? 'very|delve|really|très' : 'very|delve|really';
 $alerts = [];
 $errors = FALSE;
 foreach (explode("\n", $text) as $index => $line) {
-  preg_match_all('/\b(very|delve|really)\b/i', $line, $found, PREG_OFFSET_CAPTURE);
+  preg_match_all('/\b(' . $words . ')\b/iu', $line, $found, PREG_OFFSET_CAPTURE);
   foreach ($found[1] as [$match, $offset]) {
-    [$check, $severity, $message, $description, $link] = $rules[strtolower($match)];
+    [$check, $severity, $message, $description, $link] = $rules[mb_strtolower($match)];
     $alerts[] = [
       'Action' => ['Name' => '', 'Params' => NULL],
       // Vale counts columns in characters, not bytes.
