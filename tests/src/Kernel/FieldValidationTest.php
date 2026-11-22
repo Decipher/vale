@@ -348,9 +348,12 @@ class FieldValidationTest extends KernelTestBase {
     $this->assertSame(['paragraph.field_text:Demo.Delve', 'paragraph.field_text:Demo.Very'], $this->collected());
     $this->container->get('vale.alert_collector')->reset();
 
-    // A draft host saves too.
+    // A draft host saves too, and collects its paragraph's findings, so
+    // its own save lists what publishing would refuse.
     $draft = $this->page(['status' => FALSE, 'field_content' => [$paragraph]]);
     $this->assertSame([], $this->violations($draft));
+    $this->assertSame(['paragraph.field_text:Demo.Delve', 'paragraph.field_text:Demo.Very'], $this->collected());
+    $this->container->get('vale.alert_collector')->reset();
 
     // Publishing the host is refused, naming the paragraph.
     $published = $this->page(['status' => TRUE, 'field_content' => [Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']), $paragraph]]);
@@ -569,6 +572,37 @@ class FieldValidationTest extends KernelTestBase {
     $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'FAKE_CRASH']);
     $this->assertSame([], $this->violations($this->page(['status' => TRUE, 'field_content' => [$paragraph]])));
     $this->assertSame(['Vale failed with exit code 2: Fake failure.'], $this->container->get('vale.alert_collector')->unchecked());
+  }
+
+  /**
+   * Tests a draft host whose paragraphs Vale could not check.
+   *
+   * Even with fail_closed, a draft saves. The text is noted as not checked.
+   */
+  public function testDraftParagraphTreeUnchecked(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->set('fail_closed', TRUE)->save();
+    ParagraphsType::create(['id' => 'docs_section', 'label' => 'Docs section'])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_children',
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference_revisions',
+      'cardinality' => -1,
+      'settings' => ['target_type' => 'paragraph'],
+    ])->save();
+    FieldConfig::create(['field_name' => 'field_children', 'entity_type' => 'paragraph', 'bundle' => 'docs_section'])->save();
+    $collector = $this->container->get('vale.alert_collector');
+
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'FAKE_CRASH']);
+    $this->assertSame([], $this->violations($this->page(['status' => FALSE, 'field_content' => [$paragraph]])));
+    $this->assertSame(['Vale failed with exit code 2: Fake failure.'], $collector->unchecked());
+
+    $collector->reset();
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    for ($i = 0; $i < 11; $i++) {
+      $paragraph = Paragraph::create(['type' => 'docs_section', 'field_children' => [$paragraph]]);
+    }
+    $this->assertSame([], $this->violations($this->page(['status' => FALSE, 'field_content' => [$paragraph]])));
+    $this->assertSame(['Components nested more than 10 levels deep were not checked.'], $collector->unchecked());
   }
 
   /**

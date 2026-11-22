@@ -30,6 +30,11 @@ and this project adheres to
 
 ### Changed
 
+- [#31](https://github.com/Decipher/vale/issues/31): In publish-only mode, a
+  draft's JSON:API response lists the alerts in its components, such as
+  paragraphs, in `meta.vale`. Before, only each paragraph's own response
+  listed them, so a client could not see from the page's save what
+  publishing would refuse.
 - [#3639107](https://www.drupal.org/project/vale/issues/3639107): The commands run under
   core's `dr` and Drush 15, as plain Symfony Console commands. Drush 12, 13
   and 14 still run them as `drush vale:...`. Their names, arguments, exit

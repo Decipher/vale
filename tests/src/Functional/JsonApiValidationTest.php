@@ -204,11 +204,12 @@ class JsonApiValidationTest extends BrowserTestBase {
     $paragraph->save();
     $page = $this->savedPage(['status' => FALSE, 'field_content' => [$paragraph]]);
 
-    // A draft with an error saves, and the error is in the meta.
+    // A draft with an error saves, and the errors in its paragraph and in
+    // its own text are in the meta.
     [$status, $document] = $this->patch($page, ['field_text' => ['value' => 'Very fine.', 'format' => 'plain_text']]);
     $this->assertSame(200, $status);
-    $this->assertSame(['field_text:error'], array_map(
-      static fn (array $alert): string => $alert['field'] . ':' . $alert['level'],
+    $this->assertSame(['paragraph.field_text:error', 'node.field_text:error'], array_map(
+      static fn (array $alert): string => $alert['entity_type'] . '.' . $alert['field'] . ':' . $alert['level'],
       $document['meta']['vale']['alerts'],
     ));
 
@@ -221,6 +222,67 @@ class JsonApiValidationTest extends BrowserTestBase {
     $this->assertSame([
       "Entity is not valid: Text: Demo.Very: Avoid 'Very'. (line 1: \"Very\")\nParagraph \"Docs text\", Text: Demo.Very: Avoid 'very'. (line 1: \"very\")",
     ], array_column($document['errors'], 'detail'));
+  }
+
+  /**
+   * Tests that a draft's response lists the findings in its paragraphs.
+   *
+   * A decoupled client saves each paragraph by itself, then the page that
+   * holds them. The page's response tells it what publishing will refuse.
+   */
+  public function testPublishOnlyDraftParagraphs(): void {
+    $this->config('vale.settings')->set('publish_only', TRUE)->save();
+    $paragraph = Paragraph::create(['type' => 'docs_text', 'field_text' => 'Fine.']);
+    $page = $this->savedPage(['status' => FALSE, 'field_content' => [$paragraph]]);
+
+    // A paragraph with no findings gives a checked meta with no alerts.
+    [$status, $document] = $this->patch($page, ['title' => 'Renamed']);
+    $this->assertSame(200, $status);
+    $this->assertSame(['checked' => TRUE, 'alerts' => []], $document['meta']['vale']);
+
+    // The client saves the paragraph with an error. The page is a draft, so
+    // it saves.
+    [$status, $document] = $this->request('PATCH', 'paragraph/docs_text/' . $paragraph->uuid(), [
+      'data' => [
+        'type' => 'paragraph--docs_text',
+        'id' => $paragraph->uuid(),
+        'attributes' => ['field_text' => ['value' => 'This is very good.', 'format' => 'plain_text']],
+      ],
+    ]);
+    $this->assertSame(200, $status);
+    $this->assertSame('Demo.Very', $document['meta']['vale']['alerts'][0]['rule']);
+
+    // Then the page that holds it. The page's response lists the error, and
+    // the paragraph, field and delta it is in.
+    [$status, $document] = $this->patch($page, ['title' => 'Renamed again']);
+    $this->assertSame(200, $status);
+    $this->assertTrue($document['meta']['vale']['checked']);
+    $this->assertSame([
+      [
+        'entity_type' => 'paragraph',
+        'bundle' => 'docs_text',
+        'id' => $paragraph->uuid(),
+        'field' => 'field_text',
+        'delta' => 0,
+        'rule' => 'Demo.Very',
+        'level' => 'error',
+        'message' => "Avoid 'very'.",
+        'line' => 1,
+        'start' => 9,
+        'end' => 12,
+        'match' => 'very',
+        'description' => 'Intensifiers weaken prose.',
+        'link' => 'https://example.com/very',
+      ],
+    ], $document['meta']['vale']['alerts']);
+
+    // Publishing is still refused.
+    [$status, $document] = $this->patch($page, ['status' => TRUE]);
+    $this->assertSame(422, $status);
+    $this->assertSame(
+      ["Entity is not valid: Paragraph \"Docs text\", Text: Demo.Very: Avoid 'very'. (line 1: \"very\")"],
+      array_column($document['errors'], 'detail'),
+    );
   }
 
   /**
