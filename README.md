@@ -303,6 +303,12 @@ mode a refused publish points at `/data`. Other alerts are in the response's
 and UUID, the field and delta, and the rule, level, message, matched text,
 line and columns. `checked` is false when Vale could not run.
 
+In publish-only mode, a draft's response also lists the alerts in its
+components, such as paragraphs, errors included. A paragraph's alert has the
+paragraph's type, bundle and UUID. So a client that saves each paragraph by
+itself, then the page that holds them, learns from the page's response what
+publishing will refuse.
+
 ### Check endpoint
 
 `POST /vale/check` with a JSON body of `entity_type`, `bundle`, `field`,

@@ -17,11 +17,16 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
 /**
- * Lints an entity and its components when the entity is published.
+ * Lints an entity and its components in publish-only mode.
  *
- * The violations are on the entity, not on a field. JSON:API keeps entity
- * violations on a PATCH that names only some fields, so a PATCH that only
- * changes the status is still refused.
+ * When the entity is published, its errors refuse the save. The violations
+ * are on the entity, not on a field. JSON:API keeps entity violations on a
+ * PATCH that names only some fields, so a PATCH that only changes the status
+ * is still refused.
+ *
+ * A draft saves whatever its components hold. Their findings are collected
+ * instead, so the response to the draft's save lists what publishing would
+ * refuse.
  */
 final class ValeTreeConstraintValidator extends ConstraintValidator implements ContainerInjectionInterface {
 
@@ -69,8 +74,12 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       !$value instanceof FieldableEntityInterface
       || !$constraint instanceof ValeTreeConstraint
       || !$this->configFactory->get('vale.settings')->get('publish_only')
-      || !$this->publishState->isPublishingSave($value)
     ) {
+      return;
+    }
+    if (!$this->publishState->isPublishingSave($value)) {
+      // ValeText collects the findings in the entity's own fields.
+      $this->checkComponents($value, $constraint, NULL, 1);
       return;
     }
     // ValeText collects the warnings in the entity's own fields, and leaves
@@ -124,12 +133,13 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
    *   The entity.
    * @param \Drupal\vale\Plugin\Validation\Constraint\ValeTreeConstraint $constraint
    *   The constraint.
-   * @param \Drupal\vale\Plugin\Validation\Constraint\FindingList $errors
-   *   The error-level findings so far.
+   * @param \Drupal\vale\Plugin\Validation\Constraint\FindingList|null $errors
+   *   The error-level findings so far, or NULL for a draft. A draft's errors
+   *   are collected, as its warnings are.
    * @param int $depth
    *   How deep the components are.
    */
-  protected function checkComponents(FieldableEntityInterface $entity, ValeTreeConstraint $constraint, FindingList $errors, int $depth): void {
+  protected function checkComponents(FieldableEntityInterface $entity, ValeTreeConstraint $constraint, ?FindingList $errors, int $depth): void {
     if ($depth > self::MAX_DEPTH) {
       foreach ($this->componentFields($entity) as $name) {
         // Only a component would have been checked, as ContentWalker::walk()
@@ -137,7 +147,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
         if ($this->holdsComponent($entity, $name)) {
           $reason = (string) new TranslatableMarkup('Components nested more than @depth levels deep were not checked.', ['@depth' => self::MAX_DEPTH]);
           // With fail_closed, unchecked text refuses the save, however deep.
-          if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
+          if ($errors && $this->configFactory->get('vale.settings')->get('fail_closed')) {
             $errors->add($constraint->uncheckedFieldMessage, [
               '@field' => $this->alertCollector->label($entity),
               '@reason' => $reason,
@@ -171,15 +181,15 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
    *   The component.
    * @param \Drupal\vale\Plugin\Validation\Constraint\ValeTreeConstraint $constraint
    *   The constraint.
-   * @param \Drupal\vale\Plugin\Validation\Constraint\FindingList $errors
-   *   The error-level findings so far.
+   * @param \Drupal\vale\Plugin\Validation\Constraint\FindingList|null $errors
+   *   The error-level findings so far, or NULL for a draft.
    */
-  protected function checkComponent(FieldableEntityInterface $component, ValeTreeConstraint $constraint, FindingList $errors): void {
+  protected function checkComponent(FieldableEntityInterface $component, ValeTreeConstraint $constraint, ?FindingList $errors): void {
     foreach ($component->getFieldDefinitions() as $name => $definition) {
       foreach ($this->fieldLinter->lint($component->get($name)) as $delta => $result) {
         $this->alertCollector->markLinted();
         if (!$result->isChecked()) {
-          if ($this->configFactory->get('vale.settings')->get('fail_closed')) {
+          if ($errors && $this->configFactory->get('vale.settings')->get('fail_closed')) {
             $errors->add($constraint->uncheckedMessage, [
               '@type' => (string) $component->getEntityType()->getLabel(),
               '@bundle' => $this->alertCollector->label($component),
@@ -193,7 +203,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
           continue;
         }
         foreach ($result->alerts as $alert) {
-          if ($alert->level !== Alert::ERROR) {
+          if (!$errors || $alert->level !== Alert::ERROR) {
             $this->alertCollector->add($component, $name, $delta, $alert);
             continue;
           }
