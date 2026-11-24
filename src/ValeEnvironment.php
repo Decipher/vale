@@ -63,6 +63,14 @@ class ValeEnvironment {
   public const string LANG_MINIMUM = '3.27.0';
 
   /**
+   * The StylesPath of the configuration served to browsers.
+   *
+   * The browser build reads its styles from an in-memory filesystem, and
+   * each zip the module serves is loaded into it at this path.
+   */
+  public const string BROWSER_STYLES_PATH = '/styles';
+
+  /**
    * The fingerprint for this request, once it has been worked out.
    */
   protected ?string $fingerprint = NULL;
@@ -268,10 +276,10 @@ class ValeEnvironment {
   /**
    * Splits the site's configuration into its StylesPath and the rest.
    *
-   * @return array{0: string|null, 1: string}|null
+   * @return array{0: string|null, 1: string, 2: string|null}|null
    *   The StylesPath, made absolute, or NULL when the configuration has none.
-   *   Then the configuration without its top-level StylesPath and Lang. NULL
-   *   when the configuration cannot be read.
+   *   Then the configuration without its top-level StylesPath and Lang, and
+   *   that Lang, or NULL. NULL when the configuration cannot be read.
    */
   protected function splitConfig(): ?array {
     $config = $this->configPath();
@@ -279,6 +287,7 @@ class ValeEnvironment {
       return NULL;
     }
     $styles = NULL;
+    $lang = NULL;
     $kept = [];
     $top = TRUE;
     foreach (preg_split('/(?<=\n)/', (string) file_get_contents($config)) ?: [] as $line) {
@@ -288,6 +297,9 @@ class ValeEnvironment {
         if (strcasecmp($matches[1], 'StylesPath') === 0 && $styles === NULL) {
           $styles = trim($matches[2], '"\'');
         }
+        elseif (strcasecmp($matches[1], 'Lang') === 0 && $lang === NULL) {
+          $lang = $matches[2];
+        }
         continue;
       }
       $kept[] = $line;
@@ -296,7 +308,7 @@ class ValeEnvironment {
     if ($styles !== NULL && $styles !== '' && !str_starts_with($styles, '/')) {
       $styles = dirname($config) . '/' . $styles;
     }
-    return [$styles ?: NULL, implode('', $kept)];
+    return [$styles ?: NULL, implode('', $kept), $lang];
   }
 
   /**
@@ -304,8 +316,7 @@ class ValeEnvironment {
    *
    * It is the site's configuration with Lang set at the top, so a section
    * that sets its own Lang still wins. The site's top-level Lang is left
-   * out, as Vale would keep the first of the two. The browser config route
-   * can call this with the StylesPath its build reads.
+   * out, as Vale would keep the first of the two.
    *
    * @param string $langcode
    *   The langcode of the text.
@@ -325,6 +336,34 @@ class ValeEnvironment {
     [$styles, $rest] = $split;
     $stylesPath ??= $styles;
     $head = ($stylesPath === NULL ? '' : 'StylesPath = ' . $stylesPath . "\n") . 'Lang = ' . $language . "\n";
+    return $head . $rest;
+  }
+
+  /**
+   * Gives the configuration the browser build reads a language with.
+   *
+   * It is what the CLI reads the language with, with StylesPath set to where
+   * the browser build's styles are. An English value gets the site's
+   * configuration with only StylesPath changed.
+   *
+   * @param string $langcode
+   *   The langcode of the text.
+   *
+   * @return string|null
+   *   The configuration, or NULL when it cannot be read.
+   */
+  public function browserConfig(string $langcode): ?string {
+    $split = $this->splitConfig();
+    if ($split === NULL) {
+      return NULL;
+    }
+    [$styles, $rest, $lang] = $split;
+    // With no StylesPath, Vale uses only its built-in style.
+    $head = $styles === NULL ? '' : 'StylesPath = ' . static::BROWSER_STYLES_PATH . "\n";
+    $lang = $this->valeLanguage($langcode) ?? $lang;
+    if ($lang !== NULL) {
+      $head .= 'Lang = ' . $lang . "\n";
+    }
     return $head . $rest;
   }
 

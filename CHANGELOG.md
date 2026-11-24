@@ -36,6 +36,16 @@ and this project adheres to
   status report lists the site's languages, and names those with no model
   and those with no spelling dictionary. With an older Vale, every value is
   checked in English and the status report says why.
+- [#65](https://github.com/Decipher/vale/issues/65): Serves the site's
+  Vale configuration to the browser build: the `.vale.ini` for each
+  language at `/vale/config/{langcode}`, the styles as a zip at
+  `/vale/styles`, and a language's model and dictionary as a zip at
+  `/vale/models/{langcode}`. They need the **Use the Vale check endpoint**
+  permission, and serve nothing outside the `.vale.ini` and `StylesPath`.
+  The zips are cached until the styles change, and a browser keeps a zip
+  it asked for with the styles' fingerprint. The status report and the
+  field settings link to the styles zip, which the Vale browser extension
+  imports as a package.
 - [#33](https://github.com/Decipher/vale/issues/33): The README shows how to
   run Vale on Lagoon, Acquia Cloud Platform, Pantheon, Platform.sh and Upsun,
   with a script that installs a pinned Vale and its styles in a build with no

@@ -21,6 +21,15 @@ services:
       - '@file_system'
       - '@language_manager'
   Drupal\vale\ValeEnvironment: '@vale.environment'
+  vale.packages:
+    class: Drupal\vale\ValePackages
+    arguments:
+      - '@vale.environment'
+      - '@cache.vale'
+      - '@file_system'
+      - '@datetime.time'
+      - '@language_manager'
+  Drupal\vale\ValePackages: '@vale.packages'
   vale.runner:
     class: Drupal\vale\ValeRunner
     arguments:

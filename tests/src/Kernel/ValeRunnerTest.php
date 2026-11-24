@@ -226,11 +226,13 @@ class ValeRunnerTest extends KernelTestBase {
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
     $this->assertFalse($requirement['severity']);
     $this->assertSame('Not available', $requirement['value']);
+    $this->assertIsString($requirement['description']);
     $this->assertStringEndsWith('Content is saved without being checked.', $requirement['description']);
 
     // With fail_closed, the same text is refused instead.
     $this->config('vale.settings')->set('fail_closed', TRUE)->save();
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
+    $this->assertIsString($requirement['description']);
     $this->assertStringEndsWith('Saves of text checked with Vale are refused until this is fixed.', $requirement['description']);
   }
 
@@ -254,7 +256,9 @@ class ValeRunnerTest extends KernelTestBase {
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
     $this->assertTrue($requirement['severity']);
     $this->assertSame('0.0.0-fake', $requirement['value']);
-    $this->assertStringContainsString('Its styles hold 3 rules.', $requirement['description']);
+    // The description varies by permission, so it is a render array.
+    $this->assertIsArray($requirement['description']);
+    $this->assertStringContainsString('Its styles hold 3 rules.', (string) $this->container->get('renderer')->renderInIsolation($requirement['description']));
 
     // Both hooks give the enum where it exists, and the integer before it.
     // The legacy hook says nothing outside the runtime phase.

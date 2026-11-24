@@ -329,7 +329,7 @@ them in **People > Permissions**.
 
 | Permission | What it allows |
 | --- | --- |
-| Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
+| Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved, and the configuration and styles the browser build reads |
 | View the prose linting report | The report and its CSV export, which quote text from all content, published or not |
 | Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
 
@@ -352,6 +352,37 @@ version gets new URLs. Let your web server cache them for a long time, and
 serve `vale.wasm` as `application/wasm`, compressed: it is about 38 MB, and
 9.5 MB with gzip. Drupal's `.htaccess` caches files for two weeks. On nginx,
 add `wasm` to the extensions your static file rule caches.
+
+### Configuration for browsers
+
+The browser build reads nothing from the server by itself, so the module
+serves it the site's configuration. Each route needs the **Use the Vale
+check endpoint** permission.
+
+| Route | What it gives |
+| --- | --- |
+| `/vale/config/{langcode}` | The `.vale.ini` for that language, with `StylesPath = /styles` and `Lang` set as for the CLI |
+| `/vale/styles` | The styles as a zip, as Vale packages them |
+| `/vale/models/{langcode}` | That language's model and spelling dictionary as a zip |
+
+A zip holds what `StylesPath` holds, at its top, so it loads at `/styles`
+in the browser build's filesystem. The styles zip leaves out
+`config/grammars`, which Vale uses only for source code, and the models and
+dictionaries of languages other than English, which come by language. Hidden
+files, and links that point out of `StylesPath`, are never served. Nothing
+else on the server is served, and the paths stay in `settings.php`.
+
+Each zip is cached until the styles change. Browsers get an `ETag`, so they
+download it again only when it changes. A zip asked for with the styles'
+fingerprint, as `?v=` on its URL, is kept by the browser without asking
+again, because changed styles have another fingerprint. The module's own
+pages ask for the zips that way.
+
+The status report and the field's **Prose checks** settings link to the
+styles zip. The [Vale browser extension](https://github.com/vale-cli/vale-web)
+imports it as a package, with **Upload archive**, so an editor can check
+their writing against the site's styles on any site. For its
+configuration, paste in what `/vale/config/en` gives, as it is.
 
 ### Site settings
 
