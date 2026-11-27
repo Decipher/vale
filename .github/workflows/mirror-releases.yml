@@ -1,0 +1,54 @@
+# Drupal.org is the source of truth for releases of this project. This
+# workflow only mirrors them: it copies the notes of each published Drupal.org
+# release into a GitHub Release for its tag. It never creates tags, never edits
+# or deletes a release, and sends nothing to Drupal.org.
+name: Mirror releases
+
+on:
+  push:
+    tags:
+      - '*'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print what would be created without creating it'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Two runs at once could both create the same release.
+concurrency:
+  group: mirror-releases
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.3'
+          tools: none
+          coverage: none
+
+      - name: Mirror Drupal.org releases to GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${DRY_RUN}" = "true" ]; then
+            php scripts/mirror-releases.php --dry-run
+          else
+            php scripts/mirror-releases.php
+          fi
