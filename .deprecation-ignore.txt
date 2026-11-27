@@ -44,3 +44,8 @@
 # Guzzle 8.5 deprecates the user agent helper that core's HTTP client calls.
 # vale does not call it.
 %^Since guzzlehttp/guzzle 8\.5: GuzzleHttp\\Utils::defaultUserAgent\(\) is deprecated%
+
+# Twig 3.31 adds a third argument to FilesystemLoader::addPath(), which
+# core's subclass does not declare yet. vale does not override it.
+# https://github.com/symfony/symfony/pull/66334
+%^The "Drupal\\Core\\Template\\Loader\\FilesystemLoader::addPath\(\)" method will require a new "bool \$check" argument%
