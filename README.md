@@ -95,6 +95,16 @@ None are required. These are supported when they are installed:
    [release](https://github.com/vale-cli/vale/releases) yourself and check its
    checksum.
 
+   From Vale 3.26.0 it also installs Vale's browser build, at the same
+   version. That is Vale compiled to WebAssembly: `vale.wasm` and the
+   `wasm_exec.js` that loads it. They go in `libraries/vale` under your web
+   root, where the site finds them with no setting, and they are checked
+   against the release's checksums file. `--wasm-dir` puts them somewhere
+   else, `--wasm-sha256` checks them against a hash you trust, and
+   `--no-wasm` installs the binary only. Older Vale versions have no browser
+   build, so only the binary is installed. Deploy `libraries/vale` with your
+   site, as you do the binary.
+
 3. Add a `.vale.ini` beside your web root, such as:
 
    ```ini
@@ -124,14 +134,108 @@ None are required. These are supported when they are installed:
    them. Deploy the `styles` directory with your site.
 
 6. Check **Reports > Status report**. The Vale entry shows the version and the
-   number of rules in your styles. The Vale languages entry lists the site's
-   languages, and names those with no model or no spelling dictionary.
+   number of rules in your styles. The Vale browser build entry shows the
+   browser build's version, and warns when it differs from the binary's, is
+   older than 3.26.0, or is not under the web root. The Vale languages entry
+   lists the site's languages, and names those with no model or no spelling
+   dictionary.
 
 If you enable the module through a config import, such as `drush deploy`,
 Drupal does not install its optional config. Export `views.view.vale_findings`
 and `system.action.node_vale_check_prose` with the rest of your
 configuration, or the report page and the **Check prose with Vale** bulk
 action are missing.
+
+### Hosting
+
+Vale runs wherever the site runs: on every web server, and wherever `dr` or
+Drush runs, such as cron and SSH. Most hosts make the code read-only once it
+is deployed, and give each server the same copy. So keep Vale, `.vale.ini`
+and the styles in the codebase, and install them before the code is
+deployed. The `settings.php` lines in step 4 then work on every server.
+
+Vale 3.27.0 and later is a static Linux binary, so it needs no other
+libraries, on Alpine too. Some earlier releases, such as 3.24.0, need glibc
+and libstdc++.
+
+`vale:install` and `vale:sync` need an installed site, so they cannot run in
+a build with no database. This script does the same job with Vale alone. It
+downloads a pinned release into `bin/`, checks its SHA-256, and downloads the
+styles. Save it as `scripts/vale.sh` and run it from the project root:
+
+```sh
+#!/bin/sh
+# Installs a pinned Vale into bin/ and downloads the styles .vale.ini names.
+set -e
+VERSION=3.28.1
+SHA256=068954ad869ebec24b8dec6ebcd1cbb1fd5f5a83e966a35baedfae8b2cdc093a
+ARCHIVE="vale_${VERSION}_Linux_64-bit.tar.gz"
+curl -fsSLo "/tmp/$ARCHIVE" \
+  "https://github.com/vale-cli/vale/releases/download/v$VERSION/$ARCHIVE"
+echo "$SHA256  /tmp/$ARCHIVE" | sha256sum -c -
+mkdir -p bin
+tar -xzf "/tmp/$ARCHIVE" -C bin vale
+bin/vale --no-global --config=.vale.ini sync
+chmod -R a+rX styles
+```
+
+Take the SHA-256 from the release's `vale_<version>_checksums.txt`. For an
+ARM server, use the `Linux_arm64` archive and its SHA-256. `uname -m` on the
+server tells you which: `x86_64` or `aarch64`. Vale's sync makes the style
+directories readable by their owner only, so the last line opens them to the
+web server.
+
+#### Lagoon
+
+Run the script in the Dockerfiles of both the CLI image and the PHP-FPM
+image, after the code is copied in. Drush runs in the CLI image and the site
+in the PHP-FPM image, so each needs Vale. On Alpine, a Vale release before
+3.27.0 also needs glibc support, such as the `gcompat` package.
+
+#### Acquia Cloud Platform
+
+You cannot install system packages on Acquia yourself, but you can add your
+own executables to the code repository. Git keeps a file's execute bit, so
+commit `bin/vale` with the bit set, with `.vale.ini` and the `styles`
+directory. Run the script on 64-bit Linux first. On another system, download
+the release and check it by hand, then run the sync with your own Vale:
+`vale --no-global --config=.vale.ini sync`.
+
+With Code Studio, you can run the script from `post-install-cmd` in
+`composer.json` instead, as Acquia shows for front-end builds:
+
+```json
+"scripts": {
+    "post-install-cmd": [
+        "sh scripts/vale.sh"
+    ]
+}
+```
+
+#### Pantheon
+
+Code is read-only on Test and Live. Integrated Composer runs
+`composer install`, and Pantheon's support does not cover Composer scripts.
+Quicksilver hooks run once the code is deployed and read-only. So commit `bin/vale`, with
+`.vale.ini` and the `styles` directory, as for Acquia. Keep them out of
+`vendor/`, which the build replaces. Pantheon does not document running your
+own binaries, so check the status report on Dev, Test and Live.
+
+#### Platform.sh and Upsun
+
+The build hook can write to the application directory and download files,
+and what it leaves there is deployed. It has no database, so run the script
+there, in `.platform.app.yaml` or the application in `.upsun/config.yaml`:
+
+```yaml
+hooks:
+  build: |
+    set -e
+    sh scripts/vale.sh
+```
+
+After the build, the application directory is read-only, so `vale:sync`
+cannot run there. Change `.vale.ini` and redeploy instead.
 
 ## Configuration
 
@@ -225,9 +329,60 @@ them in **People > Permissions**.
 
 | Permission | What it allows |
 | --- | --- |
-| Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved |
+| Use the Vale check endpoint | `POST /vale/check`, which checks text before it is saved, and the configuration and styles the browser build reads |
 | View the prose linting report | The report and its CSV export, which quote text from all content, published or not |
 | Scan content with Vale | The report's scan and the **Check prose with Vale** bulk action |
+
+### Browser build
+
+If you ship `vale.wasm` and `wasm_exec.js` yourself, put them in a
+directory under the web root and name it in `settings.php`:
+
+```php
+$settings['vale_wasm'] = 'libraries/vale-wasm';
+```
+
+The setting is a path from the web root, an absolute path under it, or a
+stream URI such as `public://vale`. Use the files from one release archive,
+`vale_<version>_wasm.tar.gz`. The status report reads the version from
+`vale.wasm` itself, so no other file is needed.
+
+Browsers load both files with `?v=` and the version on the URL, so a new
+version gets new URLs. Let your web server cache them for a long time, and
+serve `vale.wasm` as `application/wasm`, compressed: it is about 38 MB, and
+9.5 MB with gzip. Drupal's `.htaccess` caches files for two weeks. On nginx,
+add `wasm` to the extensions your static file rule caches.
+
+### Configuration for browsers
+
+The browser build reads nothing from the server by itself, so the module
+serves it the site's configuration. Each route needs the **Use the Vale
+check endpoint** permission.
+
+| Route | What it gives |
+| --- | --- |
+| `/vale/config/{langcode}` | The `.vale.ini` for that language, with `StylesPath = /styles` and `Lang` set as for the CLI |
+| `/vale/styles` | The styles as a zip, as Vale packages them |
+| `/vale/models/{langcode}` | That language's model and spelling dictionary as a zip |
+
+A zip holds what `StylesPath` holds, at its top, so it loads at `/styles`
+in the browser build's filesystem. The styles zip leaves out
+`config/grammars`, which Vale uses only for source code, and the models and
+dictionaries of languages other than English, which come by language. Hidden
+files, and links that point out of `StylesPath`, are never served. Nothing
+else on the server is served, and the paths stay in `settings.php`.
+
+Each zip is cached until the styles change. Browsers get an `ETag`, so they
+download it again only when it changes. A zip asked for with the styles'
+fingerprint, as `?v=` on its URL, is kept by the browser without asking
+again, because changed styles have another fingerprint. The module's own
+pages ask for the zips that way.
+
+The status report and the field's **Prose checks** settings link to the
+styles zip. The [Vale browser extension](https://github.com/vale-cli/vale-web)
+imports it as a package, with **Upload archive**, so an editor can check
+their writing against the site's styles on any site. For its
+configuration, paste in what `/vale/config/en` gives, as it is.
 
 ### Site settings
 
@@ -310,7 +465,9 @@ line and columns. `checked` is false when Vale could not run.
 that saving the text in that field would give. Each alert also has the
 sentence around it.
 
-Add `id` to check text for an entity that exists.
+Add `id` to check text for an entity that exists. Add `langcode`, one of
+the site's languages, to read the text in that language, as a save of that
+translation does. Without it, the text is read as English.
 
 The user needs the **Use the Vale check endpoint** permission and the right
 to edit that field. Without `id`, they also need the right to create that
@@ -318,6 +475,81 @@ bundle. With `id`, they need the right to edit that entity instead. With a
 cookie session, send an `X-CSRF-Token` header from `/session/token`. Too many
 requests from one user get a 429. At most four checks run at once across the
 site, and a check past that gets a 503.
+
+### Checking in the browser
+
+The `vale/browser` library checks text in the browser, with Vale's browser
+build, so an editor plugin can check as the author types. It loads
+`vale.wasm` in a Web Worker the first time it is used, with the
+configuration, styles and models the module serves for browsers. Each value
+is checked in its own language, with the same name, extension and field
+settings that a save uses, so it gets the alerts a save would give.
+
+The styles download while the browser build loads. A language's
+configuration and model are asked for together, the first time a value in
+that language is checked, and a language with no model is not asked for
+one. The browser keeps the styles and each model until the styles change.
+
+The library checks a value with `POST /vale/check` instead, in the value's
+language, when:
+
+- the browser build is missing;
+- the browser build fails to load;
+- the worker dies, or does not answer within 30 seconds;
+- the browser build fails to check that value, such as when a style or a
+  language's configuration fails to download.
+
+After any of the first three, the library sends every later value on the
+page to the server. After the last, it tries the browser build again with
+the next value, and downloads again what failed.
+
+An editor plugin attaches the library and a field's settings to its
+element, then lints a value:
+
+```php
+use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\vale\ValeBrowser;
+
+$element['#attached'] = BubbleableMetadata::mergeAttachments(
+  $element['#attached'] ?? [],
+  \Drupal::service(ValeBrowser::class)->attachments($field),
+);
+```
+
+```js
+const { checked, alerts } = await Drupal.vale.lint({
+  entityType: 'node',
+  bundle: 'page',
+  field: 'body',
+  format: 'basic_html',
+  langcode: 'fr',
+  text: '<p>Some text.</p>',
+});
+```
+
+`id` adds the entity's UUID to each alert, `entityId` lets the server check
+know the entity, and `delta` gives the value's delta. The alerts have the
+shape of `meta.vale` in JSON:API. The user needs the **Use the Vale check
+endpoint** permission.
+
+`Drupal.vale.lint()` rejects when:
+
+- the field is not attached with `ValeBrowser::attachments()`, or Vale does
+  not check it;
+- the value goes to `POST /vale/check` and that fails, such as with a 403
+  when the user may not check text for that field or entity, a 429 when
+  they have sent too many checks, or a 503 when Vale is busy.
+
+The error's message gives the HTTP status, such as `Vale check: HTTP 429`.
+Catch it, and try again later for a 429 or a 503.
+
+The save is still the authority. The server checks every save with the
+CLI, so text that skips the browser check cannot publish an error.
+
+In the browser, Vale reads a value as `input./<name>.<extension>`, so only
+a `.vale.ini` section that starts with `*`, such as `[*.field_summary.*]`,
+matches a field there. A section such as `[docs_callout.md]` or
+`[node.page.*]` matches on the server only.
 
 ## FAQ
 

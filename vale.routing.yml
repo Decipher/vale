@@ -9,6 +9,32 @@ vale.check:
   options:
     no_cache: TRUE
 
+# The configuration the browser build reads. Each needs the check endpoint's
+# permission, as both check text with the site's styles.
+vale.browser_config:
+  path: '/vale/config/{langcode}'
+  defaults:
+    _controller: '\Drupal\vale\Controller\BrowserConfigController::config'
+  methods: [GET]
+  requirements:
+    _permission: 'use vale check'
+
+vale.browser_styles:
+  path: '/vale/styles'
+  defaults:
+    _controller: '\Drupal\vale\Controller\BrowserConfigController::styles'
+  methods: [GET]
+  requirements:
+    _permission: 'use vale check'
+
+vale.browser_models:
+  path: '/vale/models/{langcode}'
+  defaults:
+    _controller: '\Drupal\vale\Controller\BrowserConfigController::models'
+  methods: [GET]
+  requirements:
+    _permission: 'use vale check'
+
 vale.report_scan:
   path: '/admin/reports/vale/scan'
   defaults:

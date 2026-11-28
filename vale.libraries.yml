@@ -1,0 +1,10 @@
+# Lints a value in the browser with Vale's WebAssembly build. Editor plugins
+# attach it with ValeBrowser::attachments(). js/vale-worker.js and
+# js/vale-engine.js run in the worker, which loads them itself.
+browser:
+  js:
+    js/vale-common.js: {}
+    js/vale-browser.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings

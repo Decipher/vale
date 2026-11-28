@@ -11,10 +11,12 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
+use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\vale\Traits\ValeContentTrait;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Alert;
 use Drupal\vale\Command\SyncCommand;
+use Drupal\vale\Controller\CheckController;
 use Drupal\vale\FieldLinter;
 use Drupal\vale\Hook\ValeRequirements;
 use Drupal\vale\ValeEnvironment;
@@ -22,6 +24,7 @@ use Drupal\vale\ValeRunner;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Tests that each value is checked in the language of its translation.
@@ -35,6 +38,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[RunTestsInSeparateProcesses]
 class LanguageTest extends KernelTestBase {
 
+  use UserCreationTrait;
   use ValeContentTrait;
   use ValeTestTrait;
 
@@ -109,6 +113,8 @@ class LanguageTest extends KernelTestBase {
       $this->container->get('cache.vale'),
       $this->container->get('config.factory'),
       $this->container->get('datetime.time'),
+      $this->container->get('file_url_generator'),
+      $this->root,
       $this->container->get('file_system'),
       $this->container->get('language_manager'),
     );
@@ -201,6 +207,47 @@ class LanguageTest extends KernelTestBase {
     $environment = $this->environment();
     $cid = 'lint:' . hash('sha256', $environment->fingerprint() . "\0node.page.field_text.txt\0Très very.");
     $this->assertNotFalse($this->container->get('cache.vale')->get($cid));
+  }
+
+  /**
+   * Tests that the check endpoint reads text in the language it is given.
+   *
+   * The browser build falls back to the endpoint, so a translation must get
+   * the alerts a save of it would give.
+   */
+  public function testCheckEndpoint(): void {
+    $this->setUpCurrentUser([], ['access content', 'create page content']);
+    $check = function (array $extra): array {
+      $body = ['entity_type' => 'node', 'bundle' => 'page', 'field' => 'field_text', 'format' => NULL, 'text' => 'Très very.'] + $extra;
+      $request = Request::create('/vale/check', 'POST', [], [], [], [], (string) json_encode($body));
+      $response = CheckController::create($this->container)->check($request);
+      return [$response->getStatusCode(), json_decode((string) $response->getContent(), TRUE)];
+    };
+
+    // French text is read in French, as a save of the translation is.
+    [$status, $response] = $check(['langcode' => 'fr']);
+    $this->assertSame(200, $status);
+    $this->assertSame(['Demo.Tres', 'Demo.Very'], array_column($response['alerts'], 'rule'));
+
+    // With no langcode, or an English one, the text is read as English.
+    foreach ([[], ['langcode' => NULL], ['langcode' => 'en'], ['langcode' => 'und']] as $extra) {
+      [$status, $response] = $check($extra);
+      $this->assertSame(200, $status);
+      $this->assertSame(['Demo.Very'], array_column($response['alerts'], 'rule'));
+    }
+    $this->assertSame(['fr', 'en', 'en', 'en', 'en'], $this->languages());
+
+    // Only a language of the site is accepted, and nothing is run for one
+    // that is not.
+    foreach ([
+      [['langcode' => 'de'], '"langcode" is not a language of the site.'],
+      [['langcode' => '../fr'], '"langcode" is not a language of the site.'],
+      [['langcode' => 5], '"langcode" must be a string or null.'],
+    ] as [$extra, $message]) {
+      [$status, $response] = $check($extra);
+      $this->assertSame([400, $message], [$status, $response['message']]);
+    }
+    $this->assertCount(5, $this->languages());
   }
 
   /**

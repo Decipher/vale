@@ -111,6 +111,15 @@ phpunit:
     VALE_BINARY: $CI_PROJECT_DIR/.vale-bin/vale
     DRUPAL_DEPRECATION_FILTER_CONFIG: '{"enableProjectIgnores":true,"projectIgnoreFile":"$CI_PROJECT_DIR/.deprecation-ignore.ci.txt"}'
 
+# The browser build's JavaScript runs in no PHPUnit test, so plain Node tests
+# what it shares with the page and the worker.
+node tests:
+  stage: test
+  image: node:22-alpine
+  needs: []
+  script:
+    - npm test
+
 # Drush 15 dropped its command API on 2026-11-16, in favour of core's dr
 # (https://github.com/drush-ops/drush/pull/6673). vale's commands and their
 # test still use it, so the next major jobs install the last Drush 15 commit

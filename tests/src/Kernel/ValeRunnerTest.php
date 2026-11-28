@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\vale\Kernel;
 
 use Drupal\Core\Extension\Requirement\RequirementSeverity;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\vale\Traits\ValeTestTrait;
 use Drupal\vale\Alert;
@@ -225,11 +226,13 @@ class ValeRunnerTest extends KernelTestBase {
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
     $this->assertFalse($requirement['severity']);
     $this->assertSame('Not available', $requirement['value']);
+    $this->assertIsString($requirement['description']);
     $this->assertStringEndsWith('Content is saved without being checked.', $requirement['description']);
 
     // With fail_closed, the same text is refused instead.
     $this->config('vale.settings')->set('fail_closed', TRUE)->save();
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
+    $this->assertIsString($requirement['description']);
     $this->assertStringEndsWith('Saves of text checked with Vale are refused until this is fixed.', $requirement['description']);
   }
 
@@ -253,7 +256,9 @@ class ValeRunnerTest extends KernelTestBase {
     $requirement = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class)->requirement();
     $this->assertTrue($requirement['severity']);
     $this->assertSame('0.0.0-fake', $requirement['value']);
-    $this->assertStringContainsString('Its styles hold 3 rules.', $requirement['description']);
+    // The description varies by permission, so it is a render array.
+    $this->assertIsArray($requirement['description']);
+    $this->assertStringContainsString('Its styles hold 3 rules.', (string) $this->container->get('renderer')->renderInIsolation($requirement['description']));
 
     // Both hooks give the enum where it exists, and the integer before it.
     // The legacy hook says nothing outside the runtime phase.
@@ -340,14 +345,19 @@ class ValeRunnerTest extends KernelTestBase {
   /**
    * Gives a Vale environment with nothing remembered in memory.
    *
+   * @param string|null $root
+   *   The web root, or NULL for the test site's.
+   *
    * @return \Drupal\vale\ValeEnvironment
    *   The environment.
    */
-  protected function freshEnvironment(): ValeEnvironment {
+  protected function freshEnvironment(?string $root = NULL): ValeEnvironment {
     return new ValeEnvironment(
       $this->container->get('cache.vale'),
       $this->container->get('config.factory'),
       $this->container->get('datetime.time'),
+      $this->container->get('file_url_generator'),
+      $root ?? $this->root,
       $this->container->get('file_system'),
       $this->container->get('language_manager'),
     );
@@ -378,6 +388,8 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('cache.vale'),
       $this->container->get('config.factory'),
       $this->container->get('datetime.time'),
+      $this->container->get('file_url_generator'),
+      $this->root,
       $this->container->get('file_system'),
       $this->container->get('language_manager'),
     );
@@ -388,6 +400,152 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('datetime.time'),
       $this->container->get('logger.channel.vale'),
     );
+  }
+
+  /**
+   * Writes a stand-in for Vale's browser build.
+   *
+   * @param string $directory
+   *   The directory to write it to.
+   * @param string|null $version
+   *   The version its module names, or NULL for none.
+   * @param int $padding
+   *   How many bytes come before the version.
+   */
+  protected function writeWasm(string $directory, ?string $version, int $padding = 0): void {
+    if (!is_dir($directory)) {
+      mkdir($directory, 0777, TRUE);
+    }
+    // Go writes the build's details into the module as lines like these.
+    $details = $version === NULL ? '' : "path\tgithub.com/vale-cli/vale/v3/cmd/vale\nmod\tgithub.com/vale-cli/vale/v3\tv$version\t\nbuild\tGOOS=js\n";
+    file_put_contents($directory . '/vale.wasm', "\0asm" . str_repeat("\0", $padding) . $details . "\0");
+    file_put_contents($directory . '/wasm_exec.js', '// Go.');
+  }
+
+  /**
+   * Points the site at a binary that reports a version.
+   *
+   * @param string $version
+   *   The version.
+   */
+  protected function setBinaryVersion(string $version): void {
+    $binary = $this->valeDirectory . '/vale-' . $version;
+    file_put_contents($binary, "#!/bin/sh\necho 'vale version $version'\n");
+    chmod($binary, 0755);
+    $this->setSetting('vale_binary', $binary);
+  }
+
+  /**
+   * Tests finding the browser build and its version.
+   */
+  public function testWasm(): void {
+    $root = $this->valeDirectory . '/web';
+    $this->setBinaryVersion('3.26.0');
+
+    // Nothing is installed, and no setting asks for it.
+    $environment = $this->freshEnvironment($root);
+    $this->assertSame('libraries/vale', $environment->wasmDirectory());
+    $this->assertNull($environment->wasmVersion());
+    $this->assertNull($environment->wasmUrls());
+    $status = $environment->wasmStatus();
+    $this->assertSame(-1, $status['severity']);
+    $this->assertSame('Not installed', $status['value']);
+    $this->assertStringContainsString('Run vale:install', $status['description']);
+
+    // A setting that names a directory without the files is a warning.
+    $this->setSetting('vale_wasm', $this->valeDirectory . '/missing/');
+    $status = $this->freshEnvironment($root)->wasmStatus();
+    $this->assertSame(1, $status['severity']);
+    $this->assertStringContainsString('is not in ' . $this->valeDirectory . '/missing.', $status['description']);
+    $this->setSetting('vale_wasm', NULL);
+
+    // The default directory, from the web root. The version is far enough
+    // in that it is split across two reads.
+    $this->writeWasm($root . '/libraries/vale', '3.26.0', 1048576 - 55);
+    $environment = $this->freshEnvironment($root);
+    $this->assertSame('3.26.0', $environment->wasmVersion());
+    $this->assertSame([
+      'module' => base_path() . 'libraries/vale/vale.wasm?v=3.26.0',
+      'loader' => base_path() . 'libraries/vale/wasm_exec.js?v=3.26.0',
+    ], $environment->wasmUrls());
+    $this->assertSame([
+      'severity' => 0,
+      'value' => '3.26.0',
+      'description' => 'Using the browser build in libraries/vale.',
+    ], $environment->wasmStatus());
+
+    // The version is cached until the module changes.
+    $this->writeWasm($root . '/libraries/vale', '3.27.0');
+    $this->assertSame('3.27.0', $this->freshEnvironment($root)->wasmVersion());
+
+    // An absolute path under the web root is served from it.
+    $this->setSetting('vale_wasm', $root . '/libraries/vale');
+    $this->assertSame(base_path() . 'libraries/vale/vale.wasm?v=3.27.0', $this->freshEnvironment($root)->wasmUrls()['module'] ?? NULL);
+
+    // A build at another version than the binary is a warning.
+    $status = $this->freshEnvironment($root)->wasmStatus();
+    $this->assertSame(1, $status['severity']);
+    $this->assertSame('3.27.0', $status['value']);
+    $this->assertStringContainsString('The binary is Vale 3.26.0.', $status['description']);
+
+    // So is one outside the web root, which browsers cannot load.
+    $this->writeWasm($this->valeDirectory . '/outside', '3.26.0');
+    $this->setSetting('vale_wasm', $this->valeDirectory . '/outside');
+    $environment = $this->freshEnvironment($root);
+    $this->assertNull($environment->wasmUrls());
+    $this->assertStringContainsString('not under the web root', $environment->wasmStatus()['description']);
+
+    // A build older than the first one Vale published.
+    $this->writeWasm($root . '/old', '3.25.0');
+    $this->setSetting('vale_wasm', 'old');
+    $this->setBinaryVersion('3.25.0');
+    $status = $this->freshEnvironment($root)->wasmStatus();
+    $this->assertSame(1, $status['severity']);
+    $this->assertStringContainsString('It needs Vale 3.26.0 or later.', $status['description']);
+    $this->assertStringNotContainsString('The binary is', $status['description']);
+
+    // A module that does not name its version.
+    $this->writeWasm($root . '/unknown', NULL);
+    $this->setSetting('vale_wasm', 'unknown');
+    $environment = $this->freshEnvironment($root);
+    $this->assertSame(base_path() . 'unknown/vale.wasm', $environment->wasmUrls()['module'] ?? NULL);
+    $status = $environment->wasmStatus();
+    $this->assertSame(1, $status['severity']);
+    $this->assertSame('Unknown', $status['value']);
+    $this->assertStringContainsString('does not say which Vale version built it', $status['description']);
+
+    // A stream URI, such as public files.
+    $this->writeWasm('public://vale', '3.25.0');
+    $this->setSetting('vale_wasm', 'public://vale');
+    $urls = $this->freshEnvironment($root)->wasmUrls();
+    $this->assertSame($this->container->get('file_url_generator')->generateString('public://vale/vale.wasm') . '?v=3.25.0', $urls['module'] ?? NULL);
+  }
+
+  /**
+   * Tests the browser build on the status report.
+   */
+  public function testWasmRequirement(): void {
+    $this->setBinaryVersion('3.26.0');
+    $this->writeWasm('public://vale', '3.26.0');
+    $this->setSetting('vale_wasm', 'public://vale');
+    // A built site may have a real browser build in libraries/vale, so the
+    // default directory is under an empty web root here.
+    $root = $this->valeDirectory . '/web';
+    $this->container->get('file_system')->prepareDirectory($root, FileSystemInterface::CREATE_DIRECTORY);
+    $this->container->set('vale.environment', $this->freshEnvironment($root));
+    $hooks = $this->container->get('class_resolver')->getInstanceFromDefinition(ValeRequirements::class);
+    $requirement = $hooks->wasmRequirement();
+    $this->assertSame('Vale browser build', (string) $requirement['title']);
+    $this->assertSame('3.26.0', $requirement['value']);
+    $this->assertSame(0, $requirement['severity']);
+
+    $this->container->get('module_handler')->loadInclude('vale', 'install');
+    $this->assertSame(enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : 0, vale_requirements('runtime')['vale_wasm']['severity']);
+    if (class_exists(RequirementSeverity::class)) {
+      $this->assertSame(RequirementSeverity::OK, $hooks->runtime()['vale_wasm']['severity']);
+    }
+    $this->setSetting('vale_wasm', NULL);
+    $this->assertSame(enum_exists(RequirementSeverity::class) ? RequirementSeverity::Info : -1, vale_requirements('runtime')['vale_wasm']['severity']);
   }
 
 }
