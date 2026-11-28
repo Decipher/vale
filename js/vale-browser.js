@@ -3,11 +3,13 @@
  * Lints a value in the browser, with Vale's WebAssembly build.
  *
  * Editor plugins call Drupal.vale.lint(). The first call starts a Web Worker
- * that loads vale.wasm and the site's configuration. A value is checked with
- * POST /vale/check instead when the browser build is missing, does not load,
- * or the worker dies or stops answering. Then every later value is too. A
- * value the browser build fails to check is also sent to the server. The
- * server still checks every save.
+ * that loads vale.wasm and the site's configuration. That takes a while, so
+ * until the build has loaded each value also goes to POST /vale/check, and
+ * the first to answer gives the findings. A value is checked on the server
+ * alone when the browser build is missing, does not
+ * load, or the worker dies or stops answering. Then every later value is
+ * too. A value the browser build fails to check is also sent to the server.
+ * The server still checks every save.
  */
 
 ((Drupal, drupalSettings, ValeCommon) => {
@@ -15,6 +17,26 @@
   let broken = false;
   let next = 0;
   const pending = {};
+
+  // The server runs only a few checks at once, and answers 503 to the rest.
+  // So at most this many checks are sent at once, and the others wait.
+  const IN_FLIGHT = 2;
+
+  // How long to wait before sending a check the server was too busy for
+  // again, in milliseconds, when its answer has no Retry-After header.
+  const RETRY_DELAY = 1000;
+
+  // The longest wait a Retry-After header can ask for, in milliseconds.
+  const RETRY_MAX = 10000;
+
+  // TRUE once the browser build has loaded.
+  let loaded = false;
+
+  // The CSRF token the server check needs, once it is asked for.
+  let token = null;
+
+  let sending = 0;
+  const queue = [];
 
   /**
    * How long to wait for the worker to answer, in milliseconds.
@@ -104,7 +126,72 @@
   }
 
   /**
+   * Runs a task once fewer than IN_FLIGHT tasks are running.
+   *
+   * @param {function(): Promise<*>} task
+   *   The task.
+   *
+   * @return {Promise<*>}
+   *   What the task gives.
+   */
+  function queued(task) {
+    return new Promise((resolve, reject) => {
+      queue.push(() => {
+        sending += 1;
+        task()
+          .then(resolve, reject)
+          .finally(() => {
+            sending -= 1;
+            if (queue.length > 0) {
+              queue.shift()();
+            }
+          });
+      });
+      if (sending < IN_FLIGHT) {
+        queue.shift()();
+      }
+    });
+  }
+
+  /**
+   * Waits a while.
+   *
+   * @param {number} ms
+   *   How long, in milliseconds.
+   *
+   * @return {Promise<void>}
+   *   Resolves once the time is up.
+   */
+  function wait(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  /**
+   * Gives how long to wait before a check the server was too busy for.
+   *
+   * @param {Response} response
+   *   The 503 answer.
+   *
+   * @return {number}
+   *   The wait, in milliseconds. It is the Retry-After header's seconds, up to
+   *   RETRY_MAX, or RETRY_DELAY when the header is missing or not a number.
+   */
+  function retryDelay(response) {
+    const header = response.headers.get('Retry-After');
+    if (header === null || !/^\s*\d+\s*$/.test(header)) {
+      return RETRY_DELAY;
+    }
+    return Math.min(Number(header) * 1000, RETRY_MAX);
+  }
+
+  /**
    * Checks a value with the server, as the browser build would.
+   *
+   * Only a few checks are sent at once. A check the server is too busy for
+   * is sent once more, after the wait its answer asks for. It waits out of
+   * the queue, so other checks are sent meanwhile.
    *
    * @param {object} value
    *   The value, as Drupal.vale.lint() takes it.
@@ -114,9 +201,16 @@
    */
   async function server(value) {
     const urls = drupalSettings.vale.browser;
-    const token = await fetch(urls.token, { credentials: 'same-origin' }).then(
-      (response) => response.text(),
-    );
+    // The token is the session's, so it is asked for once.
+    if (!token) {
+      token = fetch(urls.token, { credentials: 'same-origin' })
+        .then((response) => response.text())
+        .catch((e) => {
+          token = null;
+          throw e;
+        });
+    }
+    const header = await token;
     const body = {
       entity_type: value.entityType,
       bundle: value.bundle,
@@ -128,12 +222,18 @@
     if (value.entityId !== undefined && value.entityId !== null) {
       body.id = value.entityId;
     }
-    const response = await fetch(urls.check, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify(body),
-    });
+    const post = () =>
+      fetch(urls.check, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': header },
+        body: JSON.stringify(body),
+      });
+    let response = await queued(post);
+    if (response.status === 503) {
+      await wait(retryDelay(response));
+      response = await queued(post);
+    }
     if (!response.ok) {
       throw new Error(`Vale check: HTTP ${response.status}`);
     }
@@ -157,6 +257,36 @@
         link: alert.link,
       })),
     };
+  }
+
+  /**
+   * Gives the first result of two checks of one value.
+   *
+   * @param {Promise<object>} one
+   *   A check. When both fail, its error is the one given.
+   * @param {Promise<object>} other
+   *   The other check.
+   *
+   * @return {Promise<object>}
+   *   The result of whichever answers first. A check that fails leaves it
+   *   to the other.
+   */
+  function first(one, other) {
+    return new Promise((resolve, reject) => {
+      let failed = null;
+      let failures = 0;
+      const fail = (primary) => (error) => {
+        failures += 1;
+        if (primary || failed === null) {
+          failed = error;
+        }
+        if (failures === 2) {
+          reject(failed);
+        }
+      };
+      one.then(resolve, fail(true));
+      other.then(resolve, fail(false));
+    });
   }
 
   /**
@@ -204,14 +334,8 @@
       value.format === undefined ? null : value.format,
       settings,
     );
-    try {
-      await start();
-    } catch (e) {
-      // The browser build is missing or does not load.
-      broken = true;
-      return server(value);
-    }
-    try {
+    // Checks the value with the browser build.
+    const build = async () => {
       const { alerts } = await send({
         type: 'lint',
         text: ValeCommon.input(value.text, extension),
@@ -228,6 +352,32 @@
           delta: value.delta,
         }),
       };
+    };
+    if (!loaded) {
+      // The browser build takes a while to load, and how long depends on
+      // the network. So the server checks this value too, and the first of
+      // the two to answer gives the findings. The build goes on loading.
+      const ready = start().then(
+        () => {
+          loaded = true;
+        },
+        () => {
+          // The browser build is missing or does not load.
+          broken = true;
+        },
+      );
+      return first(
+        server(value),
+        ready.then(() => {
+          if (!loaded) {
+            throw new Error('The Vale browser build did not load.');
+          }
+          return build();
+        }),
+      );
+    }
+    try {
+      return await build();
     } catch (e) {
       // The browser build could not check this value.
       return server(value);

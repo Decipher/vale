@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldConfigInterface;
+use Drupal\Core\Field\WidgetInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\LegacyHook;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -22,6 +24,7 @@ use Drupal\vale\Hook\ValeFormHooks;
 use Drupal\vale\Hook\ValeHelpHooks;
 use Drupal\vale\Hook\ValeReportHooks;
 use Drupal\vale\Hook\ValeViewsHooks;
+use Drupal\vale\Hook\ValeWidgetHooks;
 
 /**
  * Implements hook_help().
@@ -81,6 +84,42 @@ function vale_entity_bundle_field_info_alter(array &$fields, EntityTypeInterface
 #[LegacyHook]
 function vale_form_alter(array &$form, FormStateInterface $form_state, string $form_id): void {
   \Drupal::service(ValeFormHooks::class)->formAlter($form, $form_state, $form_id);
+}
+
+/**
+ * Implements hook_field_widget_third_party_settings_form().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
+ */
+#[LegacyHook]
+function vale_field_widget_third_party_settings_form(WidgetInterface $plugin, FieldDefinitionInterface $field_definition, string $form_mode, array $form, FormStateInterface $form_state): array {
+  return \Drupal::service(ValeWidgetHooks::class)->settingsForm($plugin, $field_definition, $form_mode, $form, $form_state);
+}
+
+/**
+ * Implements hook_field_widget_settings_summary_alter().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
+ */
+#[LegacyHook]
+function vale_field_widget_settings_summary_alter(array &$summary, array $context): void {
+  \Drupal::service(ValeWidgetHooks::class)->settingsSummaryAlter($summary, $context);
+}
+
+/**
+ * Implements hook_field_widget_single_element_form_alter().
+ *
+ * Drupal 11.1 and later never call it, and coverage is measured there.
+ *
+ * @codeCoverageIgnore
+ */
+#[LegacyHook]
+function vale_field_widget_single_element_form_alter(array &$element, FormStateInterface $form_state, array $context): void {
+  \Drupal::service(ValeWidgetHooks::class)->singleElementFormAlter($element, $form_state, $context);
 }
 
 /**

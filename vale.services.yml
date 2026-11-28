@@ -89,6 +89,8 @@ services:
     autowire: true
   Drupal\vale\Hook\ValeFormHooks:
     autowire: true
+  Drupal\vale\Hook\ValeWidgetHooks:
+    autowire: true
   Drupal\vale\Hook\ValeViewsHooks:
     autowire: true
   vale.content_walker:

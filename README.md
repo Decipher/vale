@@ -40,6 +40,8 @@ Submit bug reports and feature suggestions, or track changes in the
   workspace publishing. Code that saves without validating, such as a
   migration, is not checked.
 - Lists every error in a value at once, on the field it came from.
+- Shows findings while the author types: marks in CKEditor 5, and a list
+  under text areas and text fields.
 - Reads Markdown as Markdown and HTML as HTML, so code is not checked as
   prose.
 - Checks each translation in its own language, with Vale 3.27.0 or later.
@@ -476,6 +478,48 @@ cookie session, send an `X-CSRF-Token` header from `/session/token`. Too many
 requests from one user get a 429. At most four checks run at once across the
 site, and a check past that gets a 503.
 
+### Findings while editing
+
+Authors see findings while they type, in each field Vale checks, so they
+can fix them before they save. Vale checks the text after a pause in
+typing, in the same language, text format and field settings that the save
+uses.
+
+- **CKEditor 5:** add the **Vale findings** button to the toolbar in the
+  text format's settings. Each finding is underlined in the text, and
+  hovering it, or moving the caret into it, shows the rule, the message and
+  a link about the rule. The button hides the marks and shows them again,
+  and says so while the first check runs.
+- **Text areas and text fields:** a section under the field says how many
+  findings there are, and how many are errors, warnings and suggestions. It
+  opens by itself only when the text has an error, and then stays as the
+  author leaves it. Open, it lists the findings in a table, with the errors
+  first, that scrolls after about five rows. Select a finding's text to
+  select it in the field. A text with no findings, a text being checked and
+  a text that could not be checked each get one line and no section. This
+  also covers a formatted field whose text format has no editor. A field
+  with a text editor has no section, as its findings are in the text.
+
+The first findings come from the server, or from Vale's browser build,
+whichever answers first, so the author does not wait for the build to
+download. A screen reader is told when a field's findings change, with
+`Drupal.announce()`. The section and the card use the admin theme's own
+markup and colours, so they follow Claro, and Gin's dark mode.
+
+Each widget of a checked field has a **Show findings while editing** setting
+on the form display, so a form mode can turn it off. It is on by default.
+The author needs the **Use the Vale check endpoint** permission. The summary
+of a text field with a summary is not checked while editing.
+
+The marks are advice. The save still checks every value on the server.
+
+Editors who use the [Vale browser
+extension](https://github.com/vale-cli/vale-web) would see each finding
+twice. Set the extension to **On demand** on the site, or load the site's
+styles into it from `/vale/styles` (see
+[Configuration for browsers](#configuration-for-browsers)), so both show
+the same findings.
+
 ### Checking in the browser
 
 The `vale/browser` library checks text in the browser, with Vale's browser
@@ -490,7 +534,10 @@ configuration and model are asked for together, the first time a value in
 that language is checked, and a language with no model is not asked for
 one. The browser keeps the styles and each model until the styles change.
 
-The library checks a value with `POST /vale/check` instead, in the value's
+Until the browser build has loaded, the library also sends each value to
+`POST /vale/check`, and takes whichever answers first.
+
+The library checks a value with `POST /vale/check` alone, in the value's
 language, when:
 
 - the browser build is missing;

@@ -13,6 +13,7 @@
         "Destructable",
         "Kato",
         "Synchronizable",
+        "Toggleable",
         "Validatable",
         "acquia",
         "ahoy",
@@ -29,6 +30,7 @@
         "checkstyle",
         "chromedriver",
         "chromium",
+        "ckeditor",
         "cloudflare",
         "cloudflared",
         "cobertura",
@@ -75,6 +77,8 @@
         "myextension",
         "nette",
         "nohup",
+        "noopener",
+        "noreferrer",
         "normalise",
         "noscript",
         "palantirnet",
@@ -124,7 +128,11 @@
         "webroot",
         "yoyodyne",
         "zizmor",
-        "zizmorcore"
+        "zizmorcore",
+        "colours",
+        "maximumred",
+        "absolutezero",
+        "lightninggreen"
     ],
     "ignorePaths": [
         ".git/",

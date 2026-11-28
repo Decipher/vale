@@ -6,6 +6,8 @@ namespace Drupal\Tests\vale\FunctionalJavascript;
 
 use PHPUnit\Framework\Attributes\Group;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use WebDriver\Service\CurlService;
+use WebDriver\ServiceFactory;
 
 /**
  * Base class for Vale JavaScript functional tests.
@@ -29,6 +31,12 @@ abstract class ValeFunctionalJavascriptTestBase extends WebDriverTestBase {
    * {@inheritdoc}
    */
   protected function setUp(): void {
+    // Drupal.org's CI and gitlab.local set the site's address themselves.
+    if (!$this->hasTooling()) {
+      parent::setUp();
+      return;
+    }
+
     // Point the browser at the host's PHP webserver. With the default
     // 'chromedriver' backend the browser runs on the host, so 'localhost'
     // is reachable as-is. With the 'selenium' backend the browser runs
@@ -50,10 +58,44 @@ abstract class ValeFunctionalJavascriptTestBase extends WebDriverTestBase {
 
   /**
    * {@inheritdoc}
+   *
+   * Drupal 10's driver sends its requests through core's
+   * WebDriverCurlService, and current Chrome answers those with a 400. Drupal
+   * 11 uses the WebDriver library's own curl service, so this does the same
+   * on Drupal 10. On Drupal 11 it changes nothing.
+   */
+  protected function getDefaultDriverInstance() {
+    $driver = parent::getDefaultDriverInstance();
+    ServiceFactory::getInstance()->setServiceClass('service.curl', CurlService::class);
+    return $driver;
+  }
+
+  /**
+   * Says whether the scaffold's tooling started the browser.
+   *
+   * Its commands and its GitHub workflow set one of these variables. No
+   * other CI does, and there the site's address and the WebDriver endpoint
+   * are left as that CI gives them.
+   *
+   * @return bool
+   *   TRUE when a WEBDRIVER_* variable is set.
+   */
+  protected function hasTooling(): bool {
+    foreach (['WEBDRIVER_BACKEND', 'WEBDRIVER_PORT', 'WEBDRIVER_HOST'] as $name) {
+      $value = getenv($name);
+      if ($value !== FALSE && $value !== '') {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * {@inheritdoc}
    */
   protected function getMinkDriverArgs(): string|false {
     $args = parent::getMinkDriverArgs();
-    if ($args === FALSE || $args === '') {
+    if ($args === FALSE || $args === '' || !$this->hasTooling()) {
       return $args;
     }
 

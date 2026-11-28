@@ -1,0 +1,8 @@
+/**
+ * @file
+ * The Vale findings button in the text format's toolbar settings.
+ */
+
+.ckeditor5-toolbar-button-valeFindings {
+  background-image: url(../icons/vale-findings.svg);
+}

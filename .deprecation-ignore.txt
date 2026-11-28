@@ -52,3 +52,9 @@
 # Guzzle 8.5 deprecates the user agent helper that core's HTTP client calls.
 # vale does not call it.
 %^Since guzzlehttp/guzzle 8\.5: GuzzleHttp\\Utils::defaultUserAgent\(\) is deprecated%
+
+# vale's own text editor plugin. It has no build step, so it gets its
+# CKEditor classes from CKEditor5.dll(), which Drupal 12 deprecates. It works
+# until Drupal 13.
+# https://github.com/Decipher/vale/issues/103
+%^Javascript Deprecation: CKEditor5\.dll\(\) is deprecated in drupal:12\.0\.0%

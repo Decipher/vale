@@ -1,0 +1,408 @@
+/**
+ * @file
+ * Vale's findings while an author edits: marks, their card and the list.
+ *
+ * The list is core's details and table markup, so the admin theme styles
+ * most of it. The colours here come from the admin theme where it names
+ * them, so they follow its dark mode. Claro and Gin each name theirs. The
+ * values after them are Claro's, for a theme that names none.
+ */
+
+.vale-mark,
+.vale-card,
+.vale-findings,
+.ck.ck-button.vale-findings-button {
+  --vale-error: var(--gin-color-danger, var(--color-maximumred, #dc2323));
+  --vale-warning: #b86e00;
+  --vale-warning-icon: var(--gin-color-warning, #e29700);
+  --vale-suggestion: var(--gin-color-primary, var(--color-absolutezero, #003ecc));
+  --vale-none: var(--gin-color-green, var(--color-lightninggreen, #26a769));
+  --vale-on-icon: #fff;
+  --vale-text: var(--gin-color-text, var(--color-text, #232429));
+  --vale-text-quiet: var(--gin-color-text-light, var(--color-gray-800, #55565b));
+  --vale-surface: var(--gin-bg-layer, var(--color-white, #fff));
+  --vale-surface-head: var(--gin-bg-layer2, var(--color-gray-050, #f3f4f9));
+  --vale-surface-on: var(--gin-bg-item, var(--color-bgblue-active, #e5edff));
+  --vale-border: var(--gin-border-color, var(--color-gray-200, #d3d4d9));
+  --vale-border-quiet: var(--gin-border-color, var(--color-gray-100, #dedfe4));
+  --vale-link: var(--gin-color-primary, var(--color-link, #003ecc));
+}
+
+/* A dark brown does not show on a dark surface. */
+.gin--dark-mode .vale-mark,
+.gin--dark-mode .vale-card,
+.gin--dark-mode .vale-findings {
+  --vale-warning: var(--gin-color-warning, #dec15f);
+}
+
+/* Vale's icons. Each has its own shape, and the word beside it its meaning. */
+.vale-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+}
+
+.vale-icon__fill {
+  fill: var(--vale-suggestion);
+}
+
+.vale-icon--error .vale-icon__fill {
+  fill: var(--vale-error);
+}
+
+.vale-icon--warning .vale-icon__fill {
+  fill: var(--vale-warning-icon);
+}
+
+.vale-icon--none .vale-icon__fill {
+  fill: var(--vale-none);
+}
+
+.vale-icon__on {
+  fill: var(--vale-on-icon);
+}
+
+.vale-icon__on-line {
+  fill: none;
+  stroke: var(--vale-on-icon);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vale-icon__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.vale-icon__track {
+  fill: none;
+  stroke: var(--vale-border);
+  stroke-width: 2;
+}
+
+.vale-icon--checking .vale-icon__line {
+  stroke: var(--vale-suggestion);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.vale-icon--external {
+  width: 0.6875rem;
+  height: 0.6875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vale-icon--checking {
+    animation: vale-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes vale-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The marks in a text editor. */
+.vale-mark {
+  text-decoration: underline wavy var(--vale-suggestion);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 4px;
+}
+
+.vale-mark--warning {
+  text-decoration-color: var(--vale-warning);
+}
+
+.vale-mark--error {
+  text-decoration-color: var(--vale-error);
+}
+
+/* The toolbar button, while the findings show. */
+.ck.ck-button.vale-findings-button.ck-on {
+  color: var(--vale-link);
+  background: var(--vale-surface-on);
+  box-shadow: inset 0 0 0 1px var(--vale-link);
+}
+
+/* The toolbar button, when the last check failed. */
+.ck.ck-button.vale-findings-button--unchecked {
+  color: var(--vale-warning);
+  outline: 1px dashed var(--vale-warning);
+}
+
+/* The toolbar button, until the first check answers. */
+@media (prefers-reduced-motion: no-preference) {
+  .ck.ck-button.vale-findings-button--checking .ck-icon {
+    animation: vale-checking 0.9s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes vale-checking {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* The card that explains a mark. */
+.vale-card {
+  position: absolute;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: 21.25rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.75rem 1rem;
+  color: var(--vale-text);
+  border: 1px solid var(--vale-border);
+  border-radius: 2px;
+  background-color: var(--vale-surface);
+  box-shadow: 0 4px 10px rgb(0, 0, 0, 0.1);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.vale-card[hidden] {
+  display: none;
+}
+
+.vale-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: bold;
+}
+
+.vale-card__message {
+  margin-block-start: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.vale-card__about {
+  margin-block-start: 0.375rem;
+}
+
+/* The rule and its link, in the style of a field's description. */
+.vale-card__about,
+.vale-findings__about {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  color: var(--vale-text-quiet);
+  font-size: 0.8125rem;
+  line-height: 1.0625rem;
+}
+
+.vale-card__rule,
+.vale-findings__rule {
+  margin: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+  color: inherit;
+  background: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.vale-card__link,
+.vale-findings__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  color: var(--vale-link);
+}
+
+/* The findings under a text area or text field. */
+.vale-findings[hidden],
+.vale-findings [hidden] {
+  display: none;
+}
+
+/* One line, as a field's description is, with no box. */
+.vale-findings__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.375rem;
+  color: var(--vale-text-quiet);
+  font-size: 0.8125rem;
+  line-height: 1.0625rem;
+}
+
+/* The admin theme draws the box. This is for a theme that draws none. */
+:where(.vale-findings__details) {
+  border: 1px solid var(--vale-border-quiet);
+  border-radius: 2px;
+  background-color: var(--vale-surface);
+}
+
+.vale-findings__details {
+  margin-block: 0.75rem 0;
+}
+
+.vale-findings__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding-block: 0.75rem;
+  cursor: pointer;
+  color: var(--vale-text-quiet);
+  font-size: 0.875rem;
+  font-weight: normal;
+  line-height: 1.25rem;
+}
+
+:where(.vale-findings__summary) {
+  padding-inline: 1rem;
+}
+
+.vale-findings__total {
+  color: var(--vale-text);
+  font-weight: bold;
+}
+
+.vale-findings__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+/*
+ * About five rows show, and the rest scroll under the headings. The admin
+ * theme pads the inside of a details element, and the table goes edge to
+ * edge, so the two classes outweigh the theme's one.
+ */
+.vale-findings .vale-findings__region {
+  overflow-y: auto;
+  max-height: 20.75rem;
+  margin: 0;
+  padding: 0;
+  border-block-start: 1px solid var(--vale-border-quiet);
+}
+
+.vale-findings__table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.vale-findings .vale-findings__heading {
+  position: sticky;
+  z-index: 1;
+  inset-block-start: 0;
+  height: auto;
+  padding: 0.5rem 1rem;
+  text-align: start;
+  font-weight: bold;
+}
+
+:where(.vale-findings__heading) {
+  color: var(--vale-text);
+  background: var(--vale-surface-head);
+}
+
+.vale-findings .vale-findings__heading:nth-child(-n + 2) {
+  width: 8.25rem;
+}
+
+.vale-findings .vale-findings__cell {
+  height: auto;
+  padding: 0.625rem 1rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+:where(.vale-findings__row) {
+  border-block-end: 1px solid var(--vale-border);
+}
+
+.vale-findings__level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  color: var(--vale-text);
+}
+
+/* The button that selects the text reads as a link. */
+.vale-findings__select {
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+  text-decoration: underline;
+  color: var(--vale-link);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: bold;
+}
+
+.vale-findings__message {
+  color: var(--vale-text);
+}
+
+.vale-findings__about {
+  margin-block-start: 0.125rem;
+}
+
+/* A narrow form stacks each row, so nothing scrolls sideways. */
+@media (max-width: 37.5em) {
+  .vale-findings__table,
+  .vale-findings__table tbody,
+  .vale-findings__row,
+  .vale-findings .vale-findings__cell {
+    display: block;
+  }
+
+  .vale-findings__table thead {
+    position: absolute;
+    overflow: hidden;
+    clip-path: inset(50%);
+    width: 1px;
+    height: 1px;
+  }
+
+  .vale-findings .vale-findings__cell {
+    padding-block: 0.25rem;
+  }
+
+  .vale-findings .vale-findings__cell:first-child {
+    padding-block-start: 0.625rem;
+  }
+
+  .vale-findings .vale-findings__cell:last-child {
+    padding-block-end: 0.625rem;
+  }
+}
+
+/* With forced colours, the icon's shape and the word say the level. */
+@media (forced-colors: active) {
+  .vale-icon__fill {
+    fill: CanvasText;
+  }
+
+  .vale-icon__on {
+    fill: Canvas;
+  }
+
+  .vale-icon__on-line {
+    stroke: Canvas;
+  }
+
+  .vale-icon__track {
+    stroke: GrayText;
+  }
+
+  .vale-icon--checking .vale-icon__line {
+    stroke: CanvasText;
+  }
+}

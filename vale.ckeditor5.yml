@@ -1,0 +1,14 @@
+# Marks Vale's findings in the text. A text format turns it on by adding its
+# button to the toolbar. The button hides the marks.
+vale_findings:
+  ckeditor5:
+    plugins:
+      - valeFindings.ValeFindings
+  drupal:
+    label: Vale findings
+    library: vale/ckeditor5.findings
+    admin_library: vale/ckeditor5.admin
+    toolbar_items:
+      valeFindings:
+        label: Vale findings
+    elements: false
