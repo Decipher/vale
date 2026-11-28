@@ -77,9 +77,12 @@ commands:
   test:
     usage: Run all tests.
     cmd: |
+      ahoy browser-start || exit 1
+      export WEBDRIVER_PORT="$(vendor/bin/eddy-info webdriver-port)"
       pushd "build" >/dev/null || exit 1
       ahoy title "Running PHPUnit"
       php -d pcov.directory=.. vendor/bin/phpunit "$@"
+      [ ! -d node_modules ] || (ahoy title "Running JavaScript tests" && npm test)
       popd >/dev/null || exit 1
 
   test-unit:
@@ -103,11 +106,37 @@ commands:
       php -d pcov.directory=.. vendor/bin/phpunit --testsuite functional "$@"
       popd >/dev/null || exit 1
 
+  test-functional-javascript:
+    usage: Run FunctionalJavascript tests.
+    cmd: |
+      ahoy browser-start || exit 1
+      export WEBDRIVER_PORT="$(vendor/bin/eddy-info webdriver-port)"
+      pushd "build" >/dev/null || exit 1
+      php -d pcov.directory=.. vendor/bin/phpunit --testsuite functional-javascript "$@"
+      popd >/dev/null || exit 1
+
+  test-javascript:
+    usage: Run JavaScript unit tests.
+    aliases: [test-js]
+    cmd: |
+      pushd "build" >/dev/null || exit 1
+      [ ! -d node_modules ] || npm test || { popd >/dev/null; exit 1; }
+      popd >/dev/null || exit 1
+
+  browser-start:
+    usage: Start the browser for FunctionalJavascript tests.
+    cmd: vendor/bin/eddy-browser-start
+
+  browser-stop:
+    usage: Stop the browser.
+    cmd: vendor/bin/eddy-browser-stop
+
   reset:
     usage: Reset project to the default state.
     aliases: [delete, destroy]
     cmd: |
       vendor/bin/eddy-stop > /dev/null 2>&1 || true
+      vendor/bin/eddy-browser-stop > /dev/null 2>&1 || true
       chmod -Rf 777 build .logs > /dev/null 2>&1 || true
       rm -Rf build > /dev/null 2>&1 || true
       rm -Rf .logs > /dev/null 2>&1 || true
@@ -138,7 +167,10 @@ entrypoint:
     if [ -z "${AHOY_EDDY_TOOLING_READY:-}" ] && [ "$1" != "reset" ]; then export AHOY_EDDY_TOOLING_READY=1; ./scripts/eddy-tooling >&2; fi
     extension="$(basename -s .info.yml -- ./*.info.yml)"
     export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/.logs/browser_output"
-    export SIMPLETEST_BASE_URL=http://${WEBSERVER_HOST:-localhost}:${WEBSERVER_PORT:-8000}
+    # Windows refuses a connection to 0.0.0.0, so a server bound to it is
+    # reached on 127.0.0.1.
+    webserver_host="${WEBSERVER_HOST:-localhost}"; if [ "$webserver_host" = "0.0.0.0" ]; then webserver_host=127.0.0.1; fi
+    export SIMPLETEST_BASE_URL="http://${webserver_host}:${WEBSERVER_PORT:-8000}"
     export SIMPLETEST_DB=sqlite://localhost/drupal_test_${extension}.sqlite
     bash -e -c "$0" "$@"
   - '{{cmd}}'

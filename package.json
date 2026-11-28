@@ -6,6 +6,7 @@
   "contributors": [],
   "scripts": {
     "lint-spell": "cspell --no-progress",
+    "test": "node -e \"require(require('fs').existsSync('web/modules/custom/vale/scripts/test-javascript.js') ? './web/modules/custom/vale/scripts/test-javascript.js' : './scripts/test-javascript.js')\"",
     "build": "echo Would run build"
   },
   "engines": {
