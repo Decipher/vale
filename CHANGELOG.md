@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.0 (unreleased)
+
+### Changed
+
+- [#3639107](https://www.drupal.org/project/vale/issues/3639107): The commands run under
+  core's `dr` and Drush 15, as plain Symfony Console commands. Drush 12, 13
+  and 14 still run them as `drush vale:...`. Their names, arguments, exit
+  codes and default fields are unchanged.
+
+### Removed
+
+- [#3639107](https://www.drupal.org/project/vale/issues/3639107): `--format` takes `table`,
+  `json` or `csv` only. Drush's other formats, such as `yaml`, `tsv`, `list`
+  and `var_export`, are gone, and so are Drush's other output options, such
+  as `--field` and `--filter`.
+
 ## 1.0.1 (2026-10-31)
 
 ### Fixed

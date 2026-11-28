@@ -68,14 +68,18 @@ None are required. These are supported when they are installed:
 
    ```bash
    composer require drupal/vale
-   drush en vale
+   vendor/bin/dr en vale
    ```
+
+   `dr en` comes with Drush 15. With Drush 12, 13 or 14, run `drush en vale`.
 
 2. Install Vale:
 
    ```bash
-   drush vale:install
+   vendor/bin/dr vale:install
    ```
+
+   On a Drupal version without `dr`, run `drush vale:install` instead.
 
    This downloads the latest Vale release for the machine it runs on, into
    `bin/` beside your web root, and checks it against the SHA-256 the release
@@ -165,19 +169,25 @@ There is no settings form. Set these in `settings.php`, such as
 
 ## Usage
 
-### Drush
+### Command line
 
-`drush vale:lint` checks stored content, such as every page with
-`drush vale:lint node:page`, or a workspace's changes with `--workspace`. It
+The commands run under core's `dr`, such as `vendor/bin/dr vale:lint`. On a
+Drupal version without `dr`, run them with Drush 12, 13 or 14 instead, such
+as `drush vale:lint`. They take the same arguments and options either way.
+
+`dr vale:lint` checks stored content, such as every page with
+`dr vale:lint node:page`, or a workspace's changes with `--workspace`. It
 exits with 1 on an error, so a deploy can depend on it. A bundle with no field
 checked by Vale is refused, so it never reads as a pass.
 
-![drush vale:lint lists alerts by entity, field and rule, and exits with 1](docs/screenshots/drush.png)
+![dr vale:lint lists alerts by entity, field and rule, and exits with 1](docs/screenshots/lint.png)
 
-`--format=json` gives one full record per alert. `drush vale:check
-node.page.body "Some text."` lints text, or standard input, as that field
-would, with `--text-format` for its format. `vale:rules` and `vale:status`
-show what is loaded.
+`--format` takes `table`, the default, `json` or `csv`. JSON and CSV give
+one full record per alert, and `--fields` picks the fields by name or label,
+such as `--fields=entity,rule,message`. `dr vale:check node.page.body "Some
+text."` lints text, or standard input, as that field would, with
+`--text-format` for its format. `vale:rules` and `vale:status` show what is
+loaded.
 
 ### Content report
 
@@ -186,7 +196,7 @@ filters for bundle, level and rule, a link to each item, and a CSV export of
 what the filters show. It needs Views.
 
 Fill it with **Check content** on that page, which scans the bundles you pick
-in a batch, or with `drush vale:lint --save` from cron or CI. You can also
+in a batch, or with `dr vale:lint --save` from cron or CI. You can also
 check selected items with the **Check prose with Vale** bulk action on the
 content overview. Saving or deleting content keeps its rows current.
 
@@ -248,7 +258,7 @@ overuse, and the module applies them like any other rule.
 **A:** Content saves, and the author is told it was not checked. When Vale
 is missing or its configuration cannot be read, the status report also shows
 a warning for the server it ran on. A timeout or a failed run shows only to
-the author. `drush vale:lint` and the workspace `block` mode fail, so an
+the author. `vale:lint` and the workspace `block` mode fail, so an
 unchecked deploy does not pass. To refuse the save as well, set
 `fail_closed`.
 
