@@ -19,6 +19,8 @@ use Drupal\vale\Command\InstallCommand;
 use Drupal\vale\Command\LintCommand;
 use Drupal\vale\Command\RulesCommand;
 use Drupal\vale\Command\StatusCommand;
+use Drupal\vale\Command\SyncCommand;
+use Drupal\vale\ValeEnvironment;
 use Drupal\vale\ValeInstaller;
 use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
@@ -31,6 +33,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 /**
  * Tests the console commands.
@@ -300,6 +303,62 @@ class ValeCommandsTest extends KernelTestBase {
   }
 
   /**
+   * Tests that vale:sync runs Vale's sync and reports the rules loaded.
+   */
+  public function testSync(): void {
+    // Before the first sync, the StylesPath may not exist yet. Asking for the
+    // rules then caches that no styles directory exists.
+    $environment = $this->container->get(ValeEnvironment::class);
+    rename($this->valeDirectory . '/styles', $this->valeDirectory . '/styles.old');
+    $this->assertCount(0, $environment->rules());
+
+    // The sync makes the directory and adds a rule, and the count reports it.
+    $tester = $this->runCommand(SyncCommand::class);
+    $this->assertSame(0, $tester->getStatusCode());
+    $this->assertStringContainsString('Synced 1 package(s)', $tester->getDisplay());
+    $this->assertStringContainsString('Vale now loads 1 rule.', $tester->getDisplay());
+    $this->assertSame(['Synced.New'], array_keys($environment->rules()));
+
+    // A sync into a directory that already holds rules adds to them.
+    (new Filesystem())->remove($this->valeDirectory . '/styles');
+    rename($this->valeDirectory . '/styles.old', $this->valeDirectory . '/styles');
+    $environment->resetStylesPaths();
+    $this->assertCount(3, $environment->rules());
+    $tester = $this->runCommand(SyncCommand::class);
+    $this->assertSame(0, $tester->getStatusCode());
+    $this->assertStringContainsString('Vale now loads 4 rules.', $tester->getDisplay());
+    $this->assertArrayHasKey('Synced.New', $environment->rules());
+
+    // A sync that Vale cannot finish, such as with no network, fails.
+    $_ENV['FAKE_SYNC_FAIL'] = '1';
+    try {
+      $tester = $this->runCommand(SyncCommand::class);
+      $this->assertSame(1, $tester->getStatusCode());
+      $this->assertStringContainsString('could not fetch', $tester->getErrorOutput());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_FAIL']);
+    }
+
+    // A sync that stops before Vale can answer, such as one that is killed,
+    // fails too.
+    $_ENV['FAKE_SYNC_KILLED'] = '1';
+    try {
+      $tester = $this->runCommand(SyncCommand::class);
+      $this->assertSame(1, $tester->getStatusCode());
+      $this->assertStringContainsString('signal', $tester->getErrorOutput());
+    }
+    finally {
+      unset($_ENV['FAKE_SYNC_KILLED']);
+    }
+
+    $this->setSetting('vale_binary', NULL);
+    $tester = $this->runCommand(SyncCommand::class);
+    $this->assertSame(1, $tester->getStatusCode());
+    $this->assertStringContainsString('Vale could not be run.', $tester->getErrorOutput());
+  }
+
+  /**
    * Tests vale:check.
    */
   public function testCheck(): void {
@@ -418,6 +477,7 @@ class ValeCommandsTest extends KernelTestBase {
       LintCommand::class,
       RulesCommand::class,
       StatusCommand::class,
+      SyncCommand::class,
     ];
     $module = dirname(__DIR__, 3);
     // A new command must be added to this test and to drush.services.yml.
@@ -432,7 +492,7 @@ class ValeCommandsTest extends KernelTestBase {
       // Configuring the command checks its arguments and options.
       $this->assertSame($names[$class], $this->command($class)->getName());
     }
-    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status'], array_values($names));
+    $this->assertSame(['vale:check', 'vale:install', 'vale:lint', 'vale:rules', 'vale:status', 'vale:sync'], array_values($names));
 
     $services = Yaml::decode((string) file_get_contents($module . '/drush.services.yml'))['services'];
     $this->assertEqualsCanonicalizing($classes, array_keys($services));
