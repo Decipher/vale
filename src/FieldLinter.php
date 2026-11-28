@@ -6,6 +6,7 @@ namespace Drupal\vale;
 
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
+use Drupal\vale\Canvas\ComponentTreeProse;
 
 /**
  * Lints the values of a field, with that field's settings applied.
@@ -41,9 +42,12 @@ class FieldLinter {
    *
    * @param \Drupal\vale\ValeRunnerInterface $runner
    *   The Vale runner.
+   * @param \Drupal\vale\Canvas\ComponentTreeProse|null $componentTreeProse
+   *   The reader of Canvas component trees, when Canvas is installed.
    */
   public function __construct(
     protected ValeRunnerInterface $runner,
+    protected ?ComponentTreeProse $componentTreeProse = NULL,
   ) {}
 
   /**
@@ -91,12 +95,14 @@ class FieldLinter {
    *   The text format, or NULL for plain text.
    * @param bool $store
    *   Whether to cache the result.
+   * @param bool $plain
+   *   Whether the text is plain text, whatever the field type.
    *
    * @return \Drupal\vale\LintResult
    *   The result.
    */
-  protected function lintWith(FieldSettings $settings, FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE): LintResult {
-    $extension = in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
+  protected function lintWith(FieldSettings $settings, FieldDefinitionInterface $field, string $text, ?string $format, bool $store = TRUE, bool $plain = FALSE): LintResult {
+    $extension = $plain || in_array($field->getType(), self::PLAIN_TYPES, TRUE) ? 'txt' : $this->runner->extensionForFormat($format);
     $name = $settings->name($field);
     $key = hash('sha256', $name . "\0" . $extension . "\0" . $text);
     $result = $this->failed[$key] ?? $this->runner->lint($text, $extension, $name, $store);
@@ -116,12 +122,13 @@ class FieldLinter {
    *   The field's values.
    *
    * @return array<int, \Drupal\vale\LintResult>
-   *   The results, keyed by delta. Empty when the field has not opted in.
+   *   The results, keyed by delta. Empty when the field has not opted in, or
+   *   holds more than one text per delta, as a component tree does.
    */
   public function lint(FieldItemListInterface $items): array {
     $field = $items->getFieldDefinition();
     $settings = FieldSettings::forField($field);
-    if (!$settings->enabled) {
+    if (!$settings->enabled || $field->getType() === FieldSettings::COMPONENT_TREE) {
       return [];
     }
     $results = [];
@@ -133,6 +140,39 @@ class FieldLinter {
       $format = $item->getProperties()['format'] ?? NULL;
       $format = $format?->getValue();
       $results[$delta] = $this->lintWith($settings, $field, $value, is_string($format) ? $format : NULL);
+    }
+    return $results;
+  }
+
+  /**
+   * Lints every value of a field, with where each value is.
+   *
+   * Unlike lint(), this covers a Canvas component tree, where one delta can
+   * hold several texts.
+   *
+   * @param \Drupal\Core\Field\FieldItemListInterface<\Drupal\Core\Field\FieldItemInterface> $items
+   *   The field's values.
+   *
+   * @return list<\Drupal\vale\ValueResult>
+   *   The results. Empty when the field has not opted in.
+   */
+  public function lintValues(FieldItemListInterface $items): array {
+    $field = $items->getFieldDefinition();
+    if ($field->getType() !== FieldSettings::COMPONENT_TREE) {
+      $results = [];
+      foreach ($this->lint($items) as $delta => $result) {
+        $results[] = new ValueResult($delta, $result);
+      }
+      return $results;
+    }
+    $settings = FieldSettings::forField($field);
+    if (!$settings->enabled || !$this->componentTreeProse) {
+      return [];
+    }
+    $results = [];
+    foreach ($this->componentTreeProse->values($items, $settings->skippedProps) as $value) {
+      $result = $this->lintWith($settings, $field, $value['text'], $value['format'], plain: $value['format'] === NULL);
+      $results[] = new ValueResult($value['delta'], $result, $value['uuid'], $value['prop'], $value['component']);
     }
     return $results;
   }

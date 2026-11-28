@@ -2,13 +2,15 @@
 # ignores. CI joins this file to core/.deprecation-ignore.txt, because a
 # project ignore file replaces core's.
 #
-# Paragraphs and Entity Reference Revisions are test-only dependencies of vale.
+# Paragraphs, Entity Reference Revisions and Canvas are test-only dependencies
+# of vale.
 # Remove each pattern when its upstream issue is in a release.
 
 # Native return types, from the DebugClassLoader.
 # Paragraphs: https://www.drupal.org/i/3615094
 # Entity Reference Revisions: https://www.drupal.org/i/3597771
-%might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drupal\\(paragraphs|entity_reference_revisions)\\%
+# Canvas: no upstream issue found (searched 2026-11-21).
+%might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drupal\\(paragraphs|entity_reference_revisions|canvas)\\%
 
 # paragraphs.install calls module_set_weight(). vale does not.
 # https://www.drupal.org/i/3615094
@@ -28,6 +30,11 @@
 %^Autoloading hooks in the file \(modules/contrib/entity_reference_revisions/entity_reference_revisions\.views\.inc\) is deprecated%
 %^views_field_default_views_data\(\) is deprecated in drupal:11\.2\.0%
 
+# canvas_requirements() has no #[LegacyRequirementsHook].
+# Change record: https://www.drupal.org/node/3549685
+# No upstream issue found (searched 2026-11-21).
+%^canvas_requirements without a #\[LegacyRequirementsHook\] attribute is deprecated%
+
 # Drush's own classes, from the DebugClassLoader. They are Drush's to fix.
 %might add "[^"]+" as a native return type declaration in the future\. Do the same in (implementation|child class) "Drush\\%
 
@@ -38,8 +45,9 @@
 
 # Procedural hooks in .module files, deprecated in drupal:11.5.0.
 # Change record: https://www.drupal.org/node/3619765
-# No upstream issue yet for either module (searched 2026-11-13).
-%^Code in (paragraphs|entity_reference_revisions)\.module is deprecated in drupal:11\.5\.0%
+# No upstream issue yet for any of them (searched 2026-11-13, Canvas
+# 2026-11-21).
+%^Code in (paragraphs|entity_reference_revisions|canvas)\.module is deprecated in drupal:11\.5\.0%
 
 # Guzzle 8.5 deprecates the user agent helper that core's HTTP client calls.
 # vale does not call it.

@@ -66,6 +66,8 @@ function vale_schema(): array {
         'langcode' => $string('The language of the translation that holds the value.', 12),
         'field' => $string('The field name.'),
         'delta' => $integer('The delta of the value.'),
+        'component' => $string('For a Canvas component tree, the UUID of the component instance.', 36),
+        'prop' => $string('For a Canvas component tree, the prop that holds the value.'),
         'rule' => $string('The Vale rule, such as Microsoft.Contractions.', 255),
         'level' => $string('error, warning, suggestion, or unchecked.', 16),
         'message' => [
@@ -89,4 +91,35 @@ function vale_schema(): array {
       ],
     ],
   ];
+}
+
+/**
+ * Adds the component and prop columns to the content report's table.
+ *
+ * They say where a finding in a Canvas component tree is. Other findings
+ * leave them empty.
+ */
+function vale_update_10101(): void {
+  $schema = \Drupal::database()->schema();
+  $columns = [
+    'component' => [
+      'type' => 'varchar',
+      'length' => 36,
+      'not null' => TRUE,
+      'default' => '',
+      'description' => 'For a Canvas component tree, the UUID of the component instance.',
+    ],
+    'prop' => [
+      'type' => 'varchar',
+      'length' => 128,
+      'not null' => TRUE,
+      'default' => '',
+      'description' => 'For a Canvas component tree, the prop that holds the value.',
+    ],
+  ];
+  foreach ($columns as $name => $spec) {
+    if (!$schema->fieldExists('vale_finding', $name)) {
+      $schema->addField('vale_finding', $name, $spec);
+    }
+  }
 }

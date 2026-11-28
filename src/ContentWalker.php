@@ -22,10 +22,12 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *
  * Each entity is linted in every translation, with the components it
  * references through entity_reference_revisions fields, such as paragraphs,
- * read in the same language. Outside a workspace, the revision linted is the
- * newest one that belongs to no workspace, which includes a forward draft:
- * what an editor is about to publish. The Drush command, the content report
- * and the workspace publish check all walk content through here.
+ * read in the same language. The props of a Canvas component tree are linted
+ * as part of the entity that holds the tree. Outside a workspace, the
+ * revision linted is the newest one that belongs to no workspace, which
+ * includes a forward draft: what an editor is about to publish. The Drush
+ * command, the content report and the workspace publish check all walk
+ * content through here.
  */
 class ContentWalker {
 
@@ -559,22 +561,35 @@ class ContentWalker {
     $translation = $entity instanceof TranslatableInterface && !$entity->isDefaultTranslation();
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
       $items = $entity->get($name);
-      $values = $translation && !$definition->isTranslatable() ? [] : $this->fieldLinter->lint($items);
-      foreach ($values as $delta => $result) {
-        $base = [
+      $values = $translation && !$definition->isTranslatable() ? [] : $this->fieldLinter->lintValues($items);
+      foreach ($values as $located) {
+        $result = $located->result;
+        $in_tree = $located->component !== '';
+        // A Canvas component instance belongs to the entity whose tree holds
+        // it, as a paragraph belongs to its host. Its label names the
+        // component and prop, as a paragraph's names the field that holds it,
+        // so the report shows where the text is.
+        $finding = static fn (?Alert $alert, string $reason = ''): Finding => new Finding(
           $entity->getEntityTypeId(),
           (string) $entity->id(),
-          $label,
+          $in_tree ? implode(' > ', [$label, $definition->getLabel(), $located->componentLabel, $located->prop]) : $label,
           $entity->bundle(),
           $name,
-          $delta,
-        ];
+          $located->delta,
+          $alert,
+          $reason,
+          $in_tree ? ($host ?? Finding::describe($entity)) : $host,
+          $langcode,
+          $located->component,
+          $located->prop,
+          $located->componentLabel,
+        );
         if (!$result->isChecked()) {
-          $findings[] = new Finding(...$base, alert: NULL, reason: $result->reason, host: $host, langcode: $langcode);
+          $findings[] = $finding(NULL, $result->reason);
           continue;
         }
         foreach ($result->alerts as $alert) {
-          $findings[] = new Finding(...$base, alert: $alert, host: $host, langcode: $langcode);
+          $findings[] = $finding($alert);
         }
       }
       if ($definition->getType() === 'entity_reference_revisions' && $depth < self::MAX_DEPTH && $items instanceof EntityReferenceFieldItemListInterface) {

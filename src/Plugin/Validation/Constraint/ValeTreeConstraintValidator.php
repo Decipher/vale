@@ -7,6 +7,7 @@ namespace Drupal\vale\Plugin\Validation\Constraint;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\vale\Alert;
 use Drupal\vale\AlertCollector;
@@ -22,6 +23,11 @@ use Symfony\Component\Validator\ConstraintValidator;
  * The violations are on the entity, not on a field. JSON:API keeps entity
  * violations on a PATCH that names only some fields, so a PATCH that only
  * changes the status is still refused.
+ *
+ * Canvas's API is the one exception. There an error in a component tree is
+ * on the tree's field, at its component instance and prop, as Canvas's
+ * review panel links to the component. Canvas validates the whole entity
+ * and keeps every violation, so the save is still refused.
  */
 final class ValeTreeConstraintValidator extends ConstraintValidator implements ContainerInjectionInterface {
 
@@ -41,12 +47,15 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
    *   The publish state service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The config factory.
+   * @param \Drupal\Core\Routing\RouteMatchInterface $routeMatch
+   *   The current route match.
    */
   public function __construct(
     protected FieldLinter $fieldLinter,
     protected AlertCollector $alertCollector,
     protected PublishState $publishState,
     protected ConfigFactoryInterface $configFactory,
+    protected RouteMatchInterface $routeMatch,
   ) {}
 
   /**
@@ -58,6 +67,7 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
       $container->get('vale.alert_collector'),
       $container->get('vale.publish_state'),
       $container->get('config.factory'),
+      $container->get('current_route_match'),
     );
   }
 
@@ -77,27 +87,41 @@ final class ValeTreeConstraintValidator extends ConstraintValidator implements C
     // their errors to this constraint. It runs after this one, as Drupal
     // validates the entity before its fields; FieldLinter remembers a failed
     // run, so the text is not run twice.
-    $errors = new FindingList();
+    $errors = FindingList::forRoute($this->routeMatch);
+    $canvas_api = FindingList::isCanvasApi($this->routeMatch);
+    $fail_closed = (bool) $this->configFactory->get('vale.settings')->get('fail_closed');
     foreach ($value->getFieldDefinitions() as $name => $definition) {
-      foreach ($this->fieldLinter->lint($value->get($name)) as $result) {
+      foreach ($this->fieldLinter->lintValues($value->get($name)) as $located) {
+        $result = $located->result;
+        // On Canvas's API, an error in a component tree is reported at its
+        // component instance and prop, so Canvas's review panel links to the
+        // component. Other errors are joined into one message on the entity,
+        // which names the component and prop.
+        $place = $located->place();
+        $list = $place !== '' && $canvas_api ? FindingList::forRoute($this->routeMatch) : $errors;
+        $field_label = (string) $definition->getLabel();
+        $named = $place === '' ? $field_label : $field_label . ' > ' . $place;
         // ValeText notes unchecked text in the entity's own fields, unless
         // it refuses the save.
-        if (!$result->isChecked() && $this->configFactory->get('vale.settings')->get('fail_closed')) {
-          $errors->add($constraint->uncheckedFieldMessage, [
-            '@field' => (string) $definition->getLabel(),
+        if (!$result->isChecked() && $fail_closed) {
+          $list->add($constraint->uncheckedFieldMessage, [
+            '@field' => $named,
             '@reason' => $result->reason,
           ]);
         }
         foreach ($result->isChecked() ? $result->alerts : [] as $alert) {
           if ($alert->level === Alert::ERROR) {
-            $errors->add($constraint->fieldMessage, [
-              '@field' => (string) $definition->getLabel(),
+            $list->add($constraint->fieldMessage, [
+              '@field' => $named,
               '@rule' => $alert->rule,
               '@message' => $alert->message,
               '@line' => $alert->line,
               '@match' => $alert->match,
             ]);
           }
+        }
+        if ($list !== $errors) {
+          $list->addTo($this->context, $constraint, $name . '.' . $located->path());
         }
       }
     }

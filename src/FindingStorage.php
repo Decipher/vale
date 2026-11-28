@@ -158,7 +158,7 @@ class FindingStorage {
       return;
     }
     $now = $this->time->getRequestTime();
-    // Each row binds 18 values, and a database caps the values in one
+    // Each row binds 21 values, and a database caps the values in one
     // query, so a large scan is inserted in batches.
     foreach (array_chunk($findings, self::INSERT_BATCH) as $batch) {
       $this->insert($batch, $now);
@@ -177,7 +177,7 @@ class FindingStorage {
     $insert = $this->database->insert(self::TABLE)->fields([
       'root_type', 'root_id', 'root_bundle', 'root_label',
       'entity_type', 'entity_id', 'bundle', 'label', 'langcode',
-      'field', 'delta', 'rule', 'level', 'message', 'matched', 'line', 'span_start', 'span_end', 'scanned',
+      'field', 'delta', 'component', 'prop', 'rule', 'level', 'message', 'matched', 'line', 'span_start', 'span_end', 'scanned',
     ]);
     foreach ($findings as $finding) {
       $root = $finding->root();
@@ -187,6 +187,7 @@ class FindingStorage {
         $finding->entityType, $finding->entityId, $finding->bundle, mb_substr($finding->label, 0, 255),
         $finding->langcode,
         $finding->field, $finding->delta,
+        $finding->component, mb_substr($finding->prop, 0, 128),
         $alert->rule ?? '',
         $alert->level ?? 'unchecked',
         // A text column holds 64 KB, and a character can take four bytes.

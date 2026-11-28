@@ -28,3 +28,14 @@ vale.report_export:
   options:
     _admin_route: TRUE
     no_cache: TRUE
+
+vale.canvas_settings:
+  path: '/admin/config/content/vale/canvas'
+  defaults:
+    _form: '\Drupal\vale\Form\CanvasSettingsForm'
+    _title: 'Canvas page prose checks'
+  requirements:
+    _permission: 'administer components'
+    _module_dependencies: 'canvas'
+  options:
+    _admin_route: TRUE
