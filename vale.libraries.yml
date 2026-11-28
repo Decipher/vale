@@ -8,3 +8,46 @@ browser:
   dependencies:
     - core/drupal
     - core/drupalSettings
+
+# Finds where an alert is in a value, and keeps it there while it changes.
+text:
+  js:
+    js/vale-text.js: {}
+
+# Lists the findings under a text area or text field while the author types.
+# ValeWidgetHooks attaches it to each widget that shows findings.
+findings:
+  js:
+    js/vale-findings.js: {}
+  css:
+    component:
+      css/vale-findings.css: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.announce
+    - core/drupal.debounce
+    - core/drupalSettings
+    - core/once
+    - vale/browser
+    - vale/text
+
+# The CKEditor 5 plugin that marks findings in the text.
+ckeditor5.findings:
+  js:
+    js/vale-card.js: {}
+    js/ckeditor5_plugins/valeFindings.js: {}
+  css:
+    component:
+      css/vale-findings.css: {}
+  dependencies:
+    - core/ckeditor5
+    - core/drupal
+    - core/drupal.debounce
+    - vale/browser
+    - vale/text
+
+# The toolbar button's icon in the text format's settings.
+ckeditor5.admin:
+  css:
+    theme:
+      css/vale-ckeditor5.admin.css: {}

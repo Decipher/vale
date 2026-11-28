@@ -127,3 +127,11 @@ core.base_field_override.canvas_page.canvas_page.components.third_party.vale:
 action.configuration.vale_check_prose:
   type: action_configuration_default
   label: 'Check prose with Vale'
+
+field.widget.third_party.vale:
+  type: mapping
+  label: 'Vale widget settings'
+  mapping:
+    show_findings:
+      type: boolean
+      label: 'Show findings while editing'

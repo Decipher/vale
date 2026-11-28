@@ -60,6 +60,17 @@ and this project adheres to
   run Vale on Lagoon, Acquia Cloud Platform, Pantheon, Platform.sh and Upsun,
   with a script that installs a pinned Vale and its styles in a build with no
   database.
+- [#19](https://github.com/Decipher/vale/issues/19): Shows findings while
+  the author types. A CKEditor 5 plugin marks each finding in the text, with
+  a card for its rule, message and link, and a toolbar button that hides the
+  marks. Text areas and text fields get a section under the field that
+  counts their findings by level, and lists them in a table when open. It
+  opens by itself only for an error. Until Vale's browser build has
+  loaded, the server checks each value too, and the first answer is shown.
+  The button and the field say when the text is still being checked. A
+  screen reader is told when a field's findings change. Each widget of a
+  checked field has a **Show findings while editing** setting on the form
+  display, on by default.
 
 ### Changed
 
