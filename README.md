@@ -42,6 +42,7 @@ Submit bug reports and feature suggestions, or track changes in the
 - Lists every error in a value at once, on the field it came from.
 - Reads Markdown as Markdown and HTML as HTML, so code is not checked as
   prose.
+- Checks each translation in its own language, with Vale 3.27.0 or later.
 - Caches results until the text or the styles change.
 
 ## Requirements
@@ -49,7 +50,8 @@ Submit bug reports and feature suggestions, or track changes in the
 - PHP 8.3 or later
 - Drupal 10.3, 11 or 12
 - Vale 3, on every web server and in the CLI container, with the styles your
-  `.vale.ini` uses
+  `.vale.ini` uses. Checking languages other than English needs Vale 3.27.0
+  or later.
 
 ## Recommended modules
 
@@ -117,10 +119,13 @@ None are required. These are supported when they are installed:
    ```
 
    This runs Vale's sync with the site's configuration, so the styles land
-   in its `StylesPath`. Deploy the `styles` directory with your site.
+   in its `StylesPath`. With Vale 3.27.0 or later, it also downloads the
+   model for each of the site's languages, so `.vale.ini` need not name
+   them. Deploy the `styles` directory with your site.
 
 6. Check **Reports > Status report**. The Vale entry shows the version and the
-   number of rules in your styles.
+   number of rules in your styles. The Vale languages entry lists the site's
+   languages, and names those with no model or no spelling dictionary.
 
 If you enable the module through a config import, such as `drush deploy`,
 Drupal does not install its optional config. Export `views.view.vale_findings`
@@ -149,6 +154,31 @@ field:
 [*.field_summary.*]
 Microsoft.Contractions = NO
 ```
+
+### Languages
+
+Vale reads English unless it is told otherwise. From Vale 3.27.0, the module
+checks each value in the language of its translation, so a French
+translation gets French sentence splitting and spelling. It sets
+[`Lang`](https://docs.vale.sh/keys/lang) at the top of the configuration it
+passes to Vale. A section of your `.vale.ini` that sets its own `Lang` still
+wins. Values in English, **Not specified** and **Not applicable** are checked
+with your `.vale.ini` as it is.
+
+The configuration for each language is written to the temporary directory,
+with an absolute `StylesPath`. Its file name holds a fingerprint of your
+configuration and styles, so a change gets a new file.
+
+Vale has models for French, German and Spanish. `vale:sync` downloads them
+into `<StylesPath>/config/models`. Vale splits the sentences of any other
+language by punctuation. Vale's spelling check needs a Hunspell dictionary
+for the language, such as `fr.dic` and `fr.aff`, in
+`<StylesPath>/config/dictionaries`. Without one, Vale skips the spelling
+check in that language. The status report names the languages with no model
+and those with no dictionary.
+
+With a Vale older than 3.27.0, every value is checked in English, and the
+status report says so.
 
 ### Canvas pages
 

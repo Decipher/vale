@@ -16,6 +16,8 @@ services:
       - '@cache.vale'
       - '@config.factory'
       - '@datetime.time'
+      - '@file_system'
+      - '@language_manager'
   Drupal\vale\ValeEnvironment: '@vale.environment'
   vale.runner:
     class: Drupal\vale\ValeRunner

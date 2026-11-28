@@ -56,7 +56,7 @@ class ValeRunner implements ValeRunnerInterface {
   /**
    * {@inheritdoc}
    */
-  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE): LintResult {
+  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE, ?string $langcode = NULL): LintResult {
     $reason = $this->environment->unavailableReason();
     if ($reason !== NULL) {
       return LintResult::unavailable($reason);
@@ -69,7 +69,11 @@ class ValeRunner implements ValeRunnerInterface {
     $name = preg_replace('/[^A-Za-z0-9_.-]/', '_', $name) ?: 'text';
     $path = $name . '.' . $extension;
 
-    $cid = 'lint:' . hash('sha256', $this->environment->fingerprint() . "\0" . $path . "\0" . $text);
+    // Text read as English keeps the key it had before languages were read,
+    // so existing results are still used.
+    $language = $langcode === NULL ? NULL : $this->environment->valeLanguage($langcode);
+    $key = $this->environment->fingerprint() . "\0" . $path . "\0" . $text;
+    $cid = 'lint:' . hash('sha256', $language === NULL ? $key : $language . "\0" . $key);
     if ($cached = $this->cache->get($cid)) {
       return LintResult::checked(array_map(Alert::fromArray(...), $cached->data));
     }
@@ -82,11 +86,12 @@ class ValeRunner implements ValeRunnerInterface {
     $input = $html ? "<html><body>\n" . $text . "\n</body></html>\n" : $text;
 
     try {
+      $config = $language === NULL ? NULL : $this->environment->languageConfigPath($language);
       $process = $this->environment->process([
         '--output=JSON',
         '--minAlertLevel=suggestion',
         '--path=' . $path,
-      ], $input);
+      ], $input, $config);
       $process->run();
     }
     catch (ProcessTimedOutException) {
@@ -97,7 +102,7 @@ class ValeRunner implements ValeRunnerInterface {
         (string) $this->formatPlural($seconds, 'Vale ran out of time after 1 second.', 'Vale ran out of time after @count seconds.'),
       );
     }
-    catch (ProcessException $e) {
+    catch (ProcessException | \RuntimeException $e) {
       return $this->failed('Vale could not be run: @message', ['@message' => $e->getMessage()], $this->t('Vale could not be run:') . ' ' . $e->getMessage());
     }
 

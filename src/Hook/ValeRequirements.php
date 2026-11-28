@@ -36,7 +36,9 @@ class ValeRequirements {
   public function runtime(): array {
     $requirement = $this->requirement();
     $requirement['severity'] = $requirement['severity'] ? RequirementSeverity::OK : RequirementSeverity::Warning;
-    return ['vale' => $requirement];
+    $languages = $this->languageRequirement();
+    $languages['severity'] = RequirementSeverity::from($languages['severity']);
+    return ['vale' => $requirement, 'vale_languages' => $languages];
   }
 
   /**
@@ -56,6 +58,23 @@ class ValeRequirements {
       'value' => $status['value'],
       'description' => $status['description'],
       'severity' => $status['available'],
+    ];
+  }
+
+  /**
+   * Builds the requirement for the site's languages.
+   *
+   * @return array{title: \Drupal\Core\StringTranslation\TranslatableMarkup, value: string, description: string, severity: int}
+   *   The requirement. Its severity is 0 for OK and 1 for a warning, which
+   *   are the values of both the enum and the older constants.
+   */
+  public function languageRequirement(): array {
+    $status = $this->environment->languageStatus();
+    return [
+      'title' => $this->t('Vale languages'),
+      'value' => $status['value'],
+      'description' => $status['description'],
+      'severity' => $status['severity'],
     ];
   }
 

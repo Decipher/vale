@@ -348,6 +348,8 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('cache.vale'),
       $this->container->get('config.factory'),
       $this->container->get('datetime.time'),
+      $this->container->get('file_system'),
+      $this->container->get('language_manager'),
     );
   }
 
@@ -376,6 +378,8 @@ class ValeRunnerTest extends KernelTestBase {
       $this->container->get('cache.vale'),
       $this->container->get('config.factory'),
       $this->container->get('datetime.time'),
+      $this->container->get('file_system'),
+      $this->container->get('language_manager'),
     );
     return new ValeRunner(
       $environment,

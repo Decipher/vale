@@ -24,11 +24,14 @@ interface ValeRunnerInterface {
    * @param bool $store
    *   Whether to cache the result. Text that is still being written, such as
    *   a check from the editor, is not worth keeping.
+   * @param string|null $langcode
+   *   The langcode of the text, or NULL for English. With Vale 3.27.0 or
+   *   later, text in a language other than English is read in that language.
    *
    * @return \Drupal\vale\LintResult
    *   Every alert Vale reported, at every level.
    */
-  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE): LintResult;
+  public function lint(string $text, string $extension = 'html', string $name = 'text', bool $store = TRUE, ?string $langcode = NULL): LintResult;
 
   /**
    * Gives the file extension for a text format.
