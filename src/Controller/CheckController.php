@@ -11,6 +11,7 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Flood\FloodInterface;
+use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\vale\FieldLinter;
@@ -33,7 +34,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
   /**
    * The keys a request may hold.
    */
-  private const array KEYS = ['entity_type', 'bundle', 'id', 'field', 'format', 'text'];
+  private const array KEYS = ['entity_type', 'bundle', 'id', 'field', 'format', 'langcode', 'text'];
 
   /**
    * How many checks may run Vale at once, across the site.
@@ -66,6 +67,8 @@ final readonly class CheckController implements ContainerInjectionInterface {
    *   The current user.
    * @param \Drupal\Core\Lock\LockBackendInterface $lockBackend
    *   The lock backend, which limits how many checks run at once.
+   * @param \Drupal\Core\Language\LanguageManagerInterface $languageManager
+   *   The language manager.
    */
   public function __construct(
     private EntityTypeManagerInterface $entityTypeManager,
@@ -77,6 +80,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
     private ConfigFactoryInterface $configFactory,
     private AccountInterface $account,
     private LockBackendInterface $lockBackend,
+    private LanguageManagerInterface $languageManager,
   ) {}
 
   /**
@@ -93,6 +97,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
       $container->get('config.factory'),
       $container->get('current_user'),
       $container->get('lock'),
+      $container->get('language_manager'),
     );
   }
 
@@ -101,7 +106,9 @@ final readonly class CheckController implements ContainerInjectionInterface {
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request, whose JSON body names the entity type, bundle and field,
-   *   and holds the text and its format.
+   *   and holds the text and its format. It may give the langcode of the
+   *   text's translation, which is read in that language, as a save reads
+   *   it. With no langcode, the text is read as English.
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
    *   The findings, or an error.
@@ -136,6 +143,13 @@ final readonly class CheckController implements ContainerInjectionInterface {
     $format = $body['format'] ?? NULL;
     if ($format !== NULL && !is_string($format)) {
       return $this->error('"format" must be a string or null.', 400);
+    }
+    $langcode = $body['langcode'] ?? NULL;
+    if ($langcode !== NULL && !is_string($langcode)) {
+      return $this->error('"langcode" must be a string or null.', 400);
+    }
+    if ($langcode !== NULL && $this->languageManager->getLanguage($langcode) === NULL) {
+      return $this->error('"langcode" is not a language of the site.', 400);
     }
     if (mb_strlen($body['text']) > self::MAX_LENGTH) {
       return $this->error(sprintf('"text" is longer than %d characters.', self::MAX_LENGTH), 400);
@@ -184,7 +198,7 @@ final readonly class CheckController implements ContainerInjectionInterface {
       return new JsonResponse(['message' => 'Vale is busy. Try again shortly.'], 503, ['Retry-After' => '1']);
     }
     try {
-      $result = $this->fieldLinter->lintText($field, $body['text'], $format, FALSE);
+      $result = $this->fieldLinter->lintText($field, $body['text'], $format, FALSE, $langcode);
     }
     finally {
       $this->lockBackend->release($slot);

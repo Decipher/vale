@@ -8,11 +8,14 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Serialization\Exception\InvalidDataTypeException;
 use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Site\Settings;
+use Drupal\Core\StreamWrapper\StreamWrapperManager;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
 use Symfony\Component\Process\Process;
@@ -40,9 +43,32 @@ class ValeEnvironment {
   protected const ENTRY_LIFETIME = 604800;
 
   /**
+   * The first Vale version with a browser build.
+   */
+  public const string WASM_MINIMUM = '3.26.0';
+
+  /**
+   * Where the browser build is, from the web root, unless a setting says.
+   */
+  public const string WASM_DIRECTORY = 'libraries/vale';
+
+  /**
+   * The files of the browser build: the module and the script that loads it.
+   */
+  public const array WASM_FILES = ['vale.wasm', 'wasm_exec.js'];
+
+  /**
    * The first Vale version that reads a language other than English.
    */
   public const string LANG_MINIMUM = '3.27.0';
+
+  /**
+   * The StylesPath of the configuration served to browsers.
+   *
+   * The browser build reads its styles from an in-memory filesystem, and
+   * each zip the module serves is loaded into it at this path.
+   */
+  public const string BROWSER_STYLES_PATH = '/styles';
 
   /**
    * The fingerprint for this request, once it has been worked out.
@@ -58,6 +84,10 @@ class ValeEnvironment {
    *   The config factory.
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time service.
+   * @param \Drupal\Core\File\FileUrlGeneratorInterface $fileUrlGenerator
+   *   The file URL generator.
+   * @param string $appRoot
+   *   The web root.
    * @param \Drupal\Core\File\FileSystemInterface $fileSystem
    *   The file system.
    * @param \Drupal\Core\Language\LanguageManagerInterface $languageManager
@@ -67,6 +97,8 @@ class ValeEnvironment {
     protected CacheBackendInterface $cache,
     protected ConfigFactoryInterface $configFactory,
     protected TimeInterface $time,
+    protected FileUrlGeneratorInterface $fileUrlGenerator,
+    protected string $appRoot,
     protected FileSystemInterface $fileSystem,
     protected LanguageManagerInterface $languageManager,
   ) {}
@@ -244,10 +276,10 @@ class ValeEnvironment {
   /**
    * Splits the site's configuration into its StylesPath and the rest.
    *
-   * @return array{0: string|null, 1: string}|null
+   * @return array{0: string|null, 1: string, 2: string|null}|null
    *   The StylesPath, made absolute, or NULL when the configuration has none.
-   *   Then the configuration without its top-level StylesPath and Lang. NULL
-   *   when the configuration cannot be read.
+   *   Then the configuration without its top-level StylesPath and Lang, and
+   *   that Lang, or NULL. NULL when the configuration cannot be read.
    */
   protected function splitConfig(): ?array {
     $config = $this->configPath();
@@ -255,6 +287,7 @@ class ValeEnvironment {
       return NULL;
     }
     $styles = NULL;
+    $lang = NULL;
     $kept = [];
     $top = TRUE;
     foreach (preg_split('/(?<=\n)/', (string) file_get_contents($config)) ?: [] as $line) {
@@ -264,6 +297,9 @@ class ValeEnvironment {
         if (strcasecmp($matches[1], 'StylesPath') === 0 && $styles === NULL) {
           $styles = trim($matches[2], '"\'');
         }
+        elseif (strcasecmp($matches[1], 'Lang') === 0 && $lang === NULL) {
+          $lang = $matches[2];
+        }
         continue;
       }
       $kept[] = $line;
@@ -272,7 +308,7 @@ class ValeEnvironment {
     if ($styles !== NULL && $styles !== '' && !str_starts_with($styles, '/')) {
       $styles = dirname($config) . '/' . $styles;
     }
-    return [$styles ?: NULL, implode('', $kept)];
+    return [$styles ?: NULL, implode('', $kept), $lang];
   }
 
   /**
@@ -280,8 +316,7 @@ class ValeEnvironment {
    *
    * It is the site's configuration with Lang set at the top, so a section
    * that sets its own Lang still wins. The site's top-level Lang is left
-   * out, as Vale would keep the first of the two. The browser config route
-   * can call this with the StylesPath its build reads.
+   * out, as Vale would keep the first of the two.
    *
    * @param string $langcode
    *   The langcode of the text.
@@ -301,6 +336,34 @@ class ValeEnvironment {
     [$styles, $rest] = $split;
     $stylesPath ??= $styles;
     $head = ($stylesPath === NULL ? '' : 'StylesPath = ' . $stylesPath . "\n") . 'Lang = ' . $language . "\n";
+    return $head . $rest;
+  }
+
+  /**
+   * Gives the configuration the browser build reads a language with.
+   *
+   * It is what the CLI reads the language with, with StylesPath set to where
+   * the browser build's styles are. An English value gets the site's
+   * configuration with only StylesPath changed.
+   *
+   * @param string $langcode
+   *   The langcode of the text.
+   *
+   * @return string|null
+   *   The configuration, or NULL when it cannot be read.
+   */
+  public function browserConfig(string $langcode): ?string {
+    $split = $this->splitConfig();
+    if ($split === NULL) {
+      return NULL;
+    }
+    [$styles, $rest, $lang] = $split;
+    // With no StylesPath, Vale uses only its built-in style.
+    $head = $styles === NULL ? '' : 'StylesPath = ' . static::BROWSER_STYLES_PATH . "\n";
+    $lang = $this->valeLanguage($langcode) ?? $lang;
+    if ($lang !== NULL) {
+      $head .= 'Lang = ' . $lang . "\n";
+    }
     return $head . $rest;
   }
 
@@ -675,6 +738,161 @@ class ValeEnvironment {
         'Using @binary with @config. Its styles hold @count rules.',
         ['@binary' => $this->binary(), '@config' => $this->configPath()],
       ),
+    ];
+  }
+
+  /**
+   * Gives the directory that holds Vale's browser build.
+   *
+   * @return string
+   *   The directory $settings['vale_wasm'] names, or libraries/vale. It is a
+   *   path from the web root, an absolute path or a stream URI, such as
+   *   public://vale.
+   */
+  public function wasmDirectory(): string {
+    $directory = Settings::get('vale_wasm');
+    return is_string($directory) && $directory !== '' ? rtrim($directory, '/') : static::WASM_DIRECTORY;
+  }
+
+  /**
+   * Gives where one file of the browser build is on disk.
+   *
+   * @param string $file
+   *   The file, such as vale.wasm.
+   *
+   * @return string
+   *   The path or stream URI.
+   */
+  protected function wasmPath(string $file): string {
+    $directory = $this->wasmDirectory();
+    if (StreamWrapperManager::getScheme($directory) !== FALSE || str_starts_with($directory, '/')) {
+      return $directory . '/' . $file;
+    }
+    return $this->appRoot . '/' . $directory . '/' . $file;
+  }
+
+  /**
+   * Says whether both files of the browser build are there.
+   *
+   * @return bool
+   *   TRUE when both can be read.
+   */
+  protected function wasmInstalled(): bool {
+    foreach (static::WASM_FILES as $file) {
+      if (!is_file($this->wasmPath($file)) || !is_readable($this->wasmPath($file))) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
+
+  /**
+   * Gives the Vale version the browser build was built from.
+   *
+   * Go writes the build's module versions into the module, as lines such as
+   * "mod github.com/vale-cli/vale/v3 v3.26.0". The module is read in parts,
+   * and the result is cached until the file changes.
+   *
+   * @return string|null
+   *   The version, such as "3.26.0", or NULL when the build is missing or
+   *   does not say.
+   */
+  public function wasmVersion(): ?string {
+    if (!$this->wasmInstalled()) {
+      return NULL;
+    }
+    $module = $this->wasmPath('vale.wasm');
+    $cid = 'wasm:' . hash('sha256', $module . ':' . filemtime($module) . ':' . filesize($module));
+    if ($cached = $this->cache->get($cid)) {
+      return $cached->data;
+    }
+    $version = NULL;
+    $handle = fopen($module, 'rb');
+    if ($handle !== FALSE) {
+      $tail = '';
+      while ($version === NULL && !feof($handle)) {
+        $chunk = $tail . fread($handle, 1048576);
+        if (preg_match('#\nmod\tgithub\.com/vale-cli/vale(?:/v\d+)?\tv(\d+\.\d+\.\d+)\s#', $chunk, $match)) {
+          $version = $match[1];
+        }
+        // Keep the end, so a line split across two parts is still found.
+        $tail = substr($chunk, -256);
+      }
+      fclose($handle);
+    }
+    $this->cache->set($cid, $version, $this->time->getRequestTime() + static::ENTRY_LIFETIME);
+    return $version;
+  }
+
+  /**
+   * Gives the URLs browsers load the browser build from.
+   *
+   * Each URL ends in ?v= and the version, so a browser can cache it for as
+   * long as the web server allows, and a new version gets new URLs.
+   *
+   * @return array{module: string, loader: string}|null
+   *   The URL of vale.wasm and of wasm_exec.js, or NULL when the build is
+   *   missing or is not under the web root.
+   */
+  public function wasmUrls(): ?array {
+    if (!$this->wasmInstalled()) {
+      return NULL;
+    }
+    $directory = $this->wasmDirectory();
+    if (str_starts_with($directory, '/')) {
+      if (!str_starts_with($directory, $this->appRoot . '/')) {
+        return NULL;
+      }
+      $directory = substr($directory, strlen($this->appRoot) + 1);
+    }
+    $version = $this->wasmVersion();
+    $query = $version === NULL ? '' : '?' . UrlHelper::buildQuery(['v' => $version]);
+    return [
+      'module' => $this->fileUrlGenerator->generateString($directory . '/vale.wasm') . $query,
+      'loader' => $this->fileUrlGenerator->generateString($directory . '/wasm_exec.js') . $query,
+    ];
+  }
+
+  /**
+   * Describes the browser build for the site status report.
+   *
+   * @return array{severity: int, value: string, description: string}
+   *   The severity, a short value and a longer description. The severity is
+   *   -1 for information, 0 for OK and 1 for a warning, as in
+   *   RequirementSeverity.
+   */
+  public function wasmStatus(): array {
+    $directory = $this->wasmDirectory();
+    if (!$this->wasmInstalled()) {
+      $set = is_string(Settings::get('vale_wasm'));
+      return [
+        'severity' => $set ? 1 : -1,
+        'value' => (string) $this->t('Not installed'),
+        'description' => $set
+          ? (string) $this->t('The browser build set in settings.php is not in @directory. It needs vale.wasm and wasm_exec.js.', ['@directory' => $directory])
+          : (string) $this->t("Run vale:install to put it in @directory, or set \$settings['vale_wasm'] in settings.php.", ['@directory' => $directory]),
+      ];
+    }
+    $version = $this->wasmVersion();
+    $binary = $this->version();
+    $problems = [];
+    if ($version === NULL) {
+      $problems[] = $this->t('Its vale.wasm does not say which Vale version built it.');
+    }
+    elseif (version_compare($version, static::WASM_MINIMUM, '<')) {
+      $problems[] = $this->t('It needs Vale @minimum or later.', ['@minimum' => static::WASM_MINIMUM]);
+    }
+    if ($version !== NULL && $binary !== NULL && $version !== $binary) {
+      $problems[] = $this->t('The binary is Vale @binary. Install both at the same version, so they give the same results.', ['@binary' => $binary]);
+    }
+    if ($this->wasmUrls() === NULL) {
+      $problems[] = $this->t('It is not under the web root, so browsers cannot load it.');
+    }
+    $using = $this->t('Using the browser build in @directory.', ['@directory' => $directory]);
+    return [
+      'severity' => $problems === [] ? 0 : 1,
+      'value' => $version ?? (string) $this->t('Unknown'),
+      'description' => implode(' ', array_map(strval(...), [$using, ...$problems])),
     ];
   }
 

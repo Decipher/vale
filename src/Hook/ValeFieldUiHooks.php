@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\vale\Hook;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Field\FieldConfigInterface;
+use Drupal\Core\Url;
 use Drupal\vale\Alert;
 use Drupal\vale\FieldSettings;
 use Drupal\vale\ValeEnvironment;
@@ -113,6 +115,18 @@ class ValeFieldUiHooks {
       ];
     }
     $element['rules'] = $this->rulesElement($rules, $settings, $levels) + ['#states' => $states];
+    if ($rules !== []) {
+      // The link depends on the user's permissions, so the form says so.
+      $download = Url::fromRoute('vale.browser_styles');
+      $access = $download->access(NULL, TRUE);
+      CacheableMetadata::createFromRenderArray($element)->addCacheableDependency($access)->applyTo($element);
+      if ($access->isAllowed()) {
+        $element['download'] = [
+          '#type' => 'item',
+          '#markup' => $this->t('<a href=":url">Download the styles</a> as a zip, to check your writing against them anywhere with the Vale browser extension.', [':url' => $download->toString()]),
+        ];
+      }
+    }
     return $element;
   }
 

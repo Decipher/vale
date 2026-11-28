@@ -16,9 +16,30 @@ services:
       - '@cache.vale'
       - '@config.factory'
       - '@datetime.time'
+      - '@file_url_generator'
+      - '%app.root%'
       - '@file_system'
       - '@language_manager'
   Drupal\vale\ValeEnvironment: '@vale.environment'
+  vale.packages:
+    class: Drupal\vale\ValePackages
+    arguments:
+      - '@vale.environment'
+      - '@cache.vale'
+      - '@file_system'
+      - '@datetime.time'
+      - '@language_manager'
+  Drupal\vale\ValePackages: '@vale.packages'
+  vale.browser:
+    class: Drupal\vale\ValeBrowser
+    arguments:
+      - '@vale.environment'
+      - '@config.factory'
+      - '@extension.list.module'
+      - '@file_url_generator'
+      - '@asset.query_string'
+      - '@vale.packages'
+  Drupal\vale\ValeBrowser: '@vale.browser'
   vale.runner:
     class: Drupal\vale\ValeRunner
     arguments:

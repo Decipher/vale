@@ -123,7 +123,7 @@ class CheckControllerTest extends KernelTestBase {
 
     $refusals = [
       ['not json', 400, 'The request body must be a JSON object.'],
-      [$this->body('Very.') + ['config' => '/etc/x.ini'], 400, 'Unknown keys: config. Only entity_type, bundle, id, field, format, text are accepted.'],
+      [$this->body('Very.') + ['config' => '/etc/x.ini'], 400, 'Unknown keys: config. Only entity_type, bundle, id, field, format, langcode, text are accepted.'],
       [['text' => 5] + $this->body(''), 400, '"text" must be a string.'],
       [['format' => 5] + $this->body('Very.'), 400, '"format" must be a string or null.'],
       [['id' => [1]] + $this->body('Very.'), 400, '"id" must be a string, an integer or null.'],

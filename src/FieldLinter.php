@@ -19,7 +19,7 @@ class FieldLinter {
   /**
    * Field types that hold plain text, which is linted as text.
    */
-  protected const array PLAIN_TYPES = ['string', 'string_long'];
+  public const array PLAIN_TYPES = ['string', 'string_long'];
 
   /**
    * How many failed runs are remembered for a request.

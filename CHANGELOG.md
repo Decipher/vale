@@ -21,6 +21,12 @@ and this project adheres to
 - [#3638310](https://www.drupal.org/project/vale/issues/3638310): `vale:sync` downloads
   the styles that the site's `.vale.ini` names, with Vale's sync, into its
   `StylesPath`.
+- [#63](https://github.com/Decipher/vale/issues/63): `vale:install` also
+  installs Vale's browser build, `vale.wasm` and `wasm_exec.js`, from Vale
+  3.26.0, at the binary's version and checked against the release's
+  checksums. It goes in `libraries/vale` under the web root, or in the
+  directory `$settings['vale_wasm']` names. The status report shows its
+  version beside the binary's, and warns when they differ.
 - [#64](https://github.com/Decipher/vale/issues/64): Checks each value in
   the language of its entity translation, with Vale 3.27.0 or later. The
   module sets `Lang` at the top of the configuration it passes to Vale, and
@@ -30,6 +36,30 @@ and this project adheres to
   status report lists the site's languages, and names those with no model
   and those with no spelling dictionary. With an older Vale, every value is
   checked in English and the status report says why.
+- [#65](https://github.com/Decipher/vale/issues/65): Serves the site's
+  Vale configuration to the browser build: the `.vale.ini` for each
+  language at `/vale/config/{langcode}`, the styles as a zip at
+  `/vale/styles`, and a language's model and dictionary as a zip at
+  `/vale/models/{langcode}`. They need the **Use the Vale check endpoint**
+  permission, and serve nothing outside the `.vale.ini` and `StylesPath`.
+  The zips are cached until the styles change, and a browser keeps a zip
+  it asked for with the styles' fingerprint. The status report and the
+  field settings link to the styles zip, which the Vale browser extension
+  imports as a package.
+- [#66](https://github.com/Decipher/vale/issues/66): The `vale/browser`
+  library checks text in the browser with Vale's WebAssembly build, in a
+  Web Worker, so editor plugins can check as the author types.
+  `Drupal.vale.lint()` lints a value in its own language with the field's
+  settings, and gives alerts in the shape of `meta.vale`. When the browser
+  build is missing, does not load, or cannot check a value, it uses
+  `POST /vale/check`, which now takes the value's `langcode`. The styles
+  download beside the build, and the browser keeps them and each
+  language's model until the styles change. The engine comes from the Vale
+  browser extension, under its MIT licence.
+- [#33](https://github.com/Decipher/vale/issues/33): The README shows how to
+  run Vale on Lagoon, Acquia Cloud Platform, Pantheon, Platform.sh and Upsun,
+  with a script that installs a pinned Vale and its styles in a build with no
+  database.
 
 ### Changed
 
